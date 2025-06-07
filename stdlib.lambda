@@ -1,0 +1,96 @@
+# Church encoding of lambda calculus
+
+# boolean
+id = λx.x 
+true = λx.λy.x 
+false = λx.λy.y 
+and = λp.λq.p q p 
+not = λp.p false true 
+or = λp.λq.p true q 
+xor = λp.λq.p (not q) q 
+if = λp.λa.λb.p a b 
+eq-bool = λx.λy.x y (not y)
+
+# Church numerals
+0 = λf.λx.x
+zero = λf.λx.x
+succ = λn.λf.λx.f (n f x)
+pred = λn.λf.λx.n (λg.λh.h (g f)) (λu.x) (λu.u)
+1 = succ 0    
+2 = succ 1    
+3 = succ 2    
+4 = succ 3    
+5 = succ 4    
+6 = succ 5    
+7 = succ 6    
+8 = succ 7    
+9 = succ 8    
+10 = succ 9   
+plus = λm.λn.λf.λx.m f (n f x)
+mult = λm.λn.λf.m (n f)    
+iszero = λn.n (λx.false) true
+exp = λm.λn.n m
+minus = λm.λn.n pred m
+
+# Division and Modulo (using Y combinator for recursion)
+# Helper for division: rec m n = if (m < n) then 0 else 1 + rec(m-n, n)
+DIV_HELPER = λrec. λm. λn. if (lt m n) 0 (succ (rec (minus m n) n))
+div = Y DIV_HELPER
+
+# Helper for modulo: rec m n = if (m < n) then m else rec(m-n, n)
+MOD_HELPER = λrec. λm. λn. if (lt m n) m (rec (minus m n) n)
+mod = Y MOD_HELPER
+
+leq = λm.λn.iszero (minus m n)
+eq = λm.λn.and (leq m n) (leq n m)
+gt = λm.λn.not (leq m n)
+geq = λm.λn.not (lt m n)
+lt = λm.λn.and (leq m n) (not (eq m n))
+
+# combinators
+K = λx.λy.x
+I = λx.x
+S = λx.λy.λz.x z (y z)
+B = λx.λy.λz.x (y z)
+C = λx.λy.λz.x z y
+Y = λf.(λx.f (x x)) (λx.f (x x))
+
+# pair
+pair = λx.λy.λf.f x y
+first = λp.p (λx.λy.x)
+second = λp.p (λx.λy.y)
+swap = λp.p (λx.λy.y x) (λx.λy.x y)
+
+# Basic list operations
+nil = λx.λy.x                           # Empty list
+cons = λx.λy.λf.f x y                   # Create a list node with head x and tail y
+head = λl.l (λx.λy.x)                   # Extract the first element
+tail = λl.l (λx.λy.y)                   # Extract the rest of the list
+
+# Higher-order list operations
+append = λl1.λl2.l1 (λx.λy.cons x (append y l2)) l2   # Append l2 to l1
+map = λf.λl.l (λx.λy.cons (f x) (map f y)) nil        # Apply f to each element
+filter = λf.λl.l (λx.λy.if (f x) (cons x (filter f y)) (filter f y)) nil  # Keep elements satisfying f
+foldr = λf.λz.λl.l (λx.λy.f x (foldr f z y)) z        # Fold from right with initial value z
+foldl = λf.λz.λl.l (λx.λy.y (f z x)) z                # Fold from left with initial value z
+length = λl.foldl (λx.λy.succ x) 0 l                  # Count elements
+reverse = λl.foldl (λx.λy.cons y x) nil l             # Reverse list order
+
+# arithmetic functions
+fact = λn.if (iszero n) 1 (mult n (fact (pred n)))
+fib = λn.if (iszero n) 0 (if (eq n 1) 1 (plus (fib (pred n)) (fib (pred (pred n)))))
+sum = λn.if (iszero n) 0 (plus n (sum (pred n)))
+
+# fixed-point combinators
+FIB = Y (λf.λn.if (iszero n) 0 (if (eq n 1) 1 (plus (f (pred n)) (f (pred (pred n))))))
+FACT = Y (λf.λn.if (iszero n) 1 (mult n (f (pred n))))
+
+# Helper that uses an accumulator for O(n) computation
+FACT_HELPER = Y (λf.λn.λacc.if (iszero n) acc (f (pred n) (mult n acc)))
+# Tail-recursive factorial with accumulator
+FACT_TR = λn.FACT_HELPER n 1
+
+# Iterate n times to build up Fibonacci value
+FIB_ITER_HELPER = λn.n (λp.pair (second p) (plus (first p) (second p))) (pair 0 1)
+# Extract the result from the pair
+FIB_ITER = λn.first (FIB_ITER_HELPER n)
