@@ -439,7 +439,7 @@ public class Interpreter(Logger logger)
 
     // Track recursion depth to use optimal substitution strategy
     private int _recursionDepth = 0;
-    private const int MaxRecursionDepth = 500; // Threshold for switching to stack-based approach    
+    private int _maxRecursionDepth = 100; // Default, can be set by user    
 
     // Aggressive substitution optimization: cache variable lookups
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
@@ -560,7 +560,8 @@ public class Interpreter(Logger logger)
     {
         var parts = input.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         var command = parts[0];
-        var arg = parts.Length > 1 ? parts[1].Trim() : ""; return command switch
+        var arg = parts.Length > 1 ? parts[1].Trim() : "";
+        return command switch
         {
             ":log" => await _logger.HandleLogCommandAsync(arg),
             ":load" => await LoadFileAsync(arg),
@@ -572,6 +573,7 @@ public class Interpreter(Logger logger)
             ":env" => ShowEnv(),
             ":exit" or ":quit" => "bye",
             ":perf" => ResetPerformanceCounters(),
+            ":depth" => HandleRecursionDepth(arg),
             _ => $"Unknown command: {command}"
         };
     }
@@ -580,6 +582,18 @@ public class Interpreter(Logger logger)
     {
         _showStep = arg == "on";
         return $"Step mode {(_showStep ? "enabled" : "disabled")}";
+    }
+
+    private string HandleRecursionDepth(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg))
+            return $"Current recursion depth limit: {_maxRecursionDepth}";
+        if (int.TryParse(arg, out int value) && value >= 10 && value <= 10000)
+        {
+            _maxRecursionDepth = value;
+            return $"Recursion depth limit set to {_maxRecursionDepth}";
+        }
+        return "Error: Please provide a number between 10 and 10000.";
     }
 
     private string MemoClear()
@@ -645,7 +659,8 @@ public class Interpreter(Logger logger)
         var totalTime = _timeInCacheLookup + _timeInSubstitution + _timeInEvaluation; return $"""
         === Lambda Interpreter Statistics ===
         Environment:              {_context.Count:#,##0} definitions
-        CEK normalization:        ({_normalizeCEKCount:#,##0} normalizations)                  
+        CEK normalization:        ({_normalizeCEKCount:#,##0} normalizations)   
+        Recursion depth:          {_maxRecursionDepth:#,##0}               
         Memoization:              
           Substitution cache:     {_substitutionCache.Count:#,##0} entries
           Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
@@ -687,6 +702,7 @@ public class Interpreter(Logger logger)
           :log clear             - Clear the current log file (if logging is enabled)
           :step (on|off)         - Toggle step-by-step evaluation logging (e.g., :step on)
           :stats                 - Show performance and environment statistics
+          :depth [number]       - Set or show the maximum recursion depth (default: 100, range: 10-10000)
           :perf reset            - Reset performance counters
           :env                   - Show current definitions in the environment
           :clear                 - Clear the environment and caches
@@ -948,7 +964,7 @@ public class Interpreter(Logger logger)
 
         // Check recursion depth and use appropriate strategy
         Expr result;
-        if (++_recursionDepth > MaxRecursionDepth)
+        if (++_recursionDepth > _maxRecursionDepth)
             result = SubstituteStackBased(root, var, val);
         else
         {
