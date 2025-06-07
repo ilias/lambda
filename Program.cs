@@ -194,7 +194,6 @@ public static class Parser
         {
             var ch = input[i];
             pos++;
-
             if (ch == '#') break; // Comments
 
             Token? nextToken = ch switch
@@ -207,25 +206,22 @@ public static class Parser
                 _ => null
             };
 
-            // Keep building a term or handle a token boundary
             if (nextToken is null && !char.IsWhiteSpace(ch) && ch != '.')
+            {
                 currentTerm.Append(ch);
+            }
             else
             {
-                // Add accumulated term if any
                 if (currentTerm.Length > 0)
                 {
                     result.Add(new Token(TokenType.Term, pos - currentTerm.Length, currentTerm.ToString()));
                     currentTerm.Clear();
                 }
-
-                // Add the token if we found one
                 if (nextToken is not null)
                     result.Add(nextToken);
             }
         }
 
-        // Add final term if any
         if (currentTerm.Length > 0)
             result.Add(new Token(TokenType.Term, pos - currentTerm.Length + 1, currentTerm.ToString()));
 
@@ -249,7 +245,7 @@ public static class Parser
         var tokens = Tokenize(input);
         if (tokens.Count == 0) return null;
 
-        // Check for assignment
+        // Assignment: name = expr
         if (tokens.Count > 2 && tokens[0].Type == TokenType.Term && tokens[1].Type == TokenType.Equals)
             return Statement.AssignmentStatement(
                 tokens[0].Value!,
@@ -262,24 +258,20 @@ public static class Parser
     private static Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
         var expressions = new List<Expr>();
-
         for (var i = start; i <= end; i++)
         {
             var token = tokens[i];
-
             expressions.Add(token.Type switch
             {
                 TokenType.LParen => ParseParenthesizedExpr(tokens, ref i, end),
                 TokenType.RParen => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
                 TokenType.Lambda => ParseLambdaExpr(tokens, ref i, end),
                 TokenType.Term => Expr.Var(token.Value!),
-                TokenType.Integer when int.TryParse(token.Value, out int value) =>
-                    CreateChurchNumeral(value),
+                TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
                 TokenType.Equals => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position),
                 _ => throw new ParseException(TreeErrorType.EmptyExprList, token.Position)
             });
         }
-
         return expressions.Count == 0
             ? throw new ParseException(TreeErrorType.EmptyExprList, tokens.Count > 0 ? tokens[0].Position : 0)
             : expressions.Aggregate(Expr.App);
@@ -287,26 +279,21 @@ public static class Parser
 
     private static Expr ParseParenthesizedExpr(List<Token> tokens, ref int i, int end)
     {
-        int start = i;
-        int nesting = 0;
-
-        // Find matching closing parenthesis
+        int start = i, nesting = 0;
         for (var j = i + 1; j <= end; j++)
         {
-            if (tokens[j].Type == TokenType.LParen)
-                nesting++;
+            if (tokens[j].Type == TokenType.LParen) nesting++;
             else if (tokens[j].Type == TokenType.RParen)
             {
                 if (nesting == 0)
                 {
                     var expr = BuildExpressionTree(tokens, start + 1, j - 1);
-                    i = j; // Move i to end of parenthesized expression
+                    i = j;
                     return expr;
                 }
                 nesting--;
             }
         }
-
         throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
     }
 
@@ -314,27 +301,20 @@ public static class Parser
     {
         if (i + 2 > end)
             throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i].Position);
-
         if (tokens[i + 1].Type != TokenType.Term)
             throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[i].Position);
-
         var varName = tokens[i + 1].Value!;
         var body = BuildExpressionTree(tokens, i + 2, end);
-        i = end; // Skip to end after processing lambda
-
+        i = end;
         return Expr.Abs(varName, body);
     }
 
-    private static Expr CreateChurchNumeral(int n) => n switch
-    {
-        < 1 => Expr.Abs("f", Expr.Abs("x", Expr.Var("x"))), // λf.λx.x
-        _ => Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n)))
-    };
+    private static Expr CreateChurchNumeral(int n) => n < 1
+        ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x")))
+        : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n)));
 
-    // Helper to generate f(f(...f(x)...)) chain using modern iteration
-    private static Expr GenerateApplicationChain(string funcVar, string baseVar, int count)
-        => Enumerable.Range(0, count)
-            .Aggregate(Expr.Var(baseVar), (acc, _) => Expr.App(Expr.Var(funcVar), acc));
+    private static Expr GenerateApplicationChain(string funcVar, string baseVar, int count) =>
+        Enumerable.Range(0, count).Aggregate(Expr.Var(baseVar), (acc, _) => Expr.App(Expr.Var(funcVar), acc));
 }
 
 public class Logger
@@ -435,7 +415,6 @@ public class Interpreter(Logger logger)
     private readonly Dictionary<Expr, Expr> _evaluationCache = new(8192, new ExprEqualityComparer());
     private readonly Dictionary<Expr, HashSet<string>> _freeVarCache = new(4096, new ExprEqualityComparer());
     private readonly Dictionary<string, Expr> _expressionPool = new(2048, StringComparer.Ordinal);
-    private readonly Dictionary<(Expr, Expr), Expr> _betaReductionCache = new(8192);
     private readonly Dictionary<(Expr, string), bool> _containsVarCache = new(2048);
     private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
     private readonly Logger _logger = logger;
