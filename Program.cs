@@ -115,9 +115,6 @@ public record Expr(ExprType Type, string? VarName = null,
     }
 }
 
-// Evaluation strategy enumeration for the interpreter
-public enum EvaluationStrategy : byte { Lazy, Eager, CEK }
-
 public readonly struct ExprEqualityComparer : IEqualityComparer<Expr>
 {
     public readonly bool Equals(Expr? x, Expr? y) => (x, y) switch
@@ -425,7 +422,6 @@ public class Interpreter(Logger logger)
     private long _timeInStructuralEquals = 0;
     private int _structuralEqualsCount = 0;
     private int _normalizeCEKCount = 0; // Count of CEK normalizations to track performance impact
-    private EvaluationStrategy _evaluationStrategy = EvaluationStrategy.Lazy;
     private int _cacheHits = 0;
     private int _cacheMisses = 0;
     private int _totalIterations = 0;
@@ -449,7 +445,6 @@ public class Interpreter(Logger logger)
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
 
     private bool _showStep = false;
-    private bool _useAutoCache = true;
 
     // Main entry point for processing input
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
@@ -469,8 +464,6 @@ public class Interpreter(Logger logger)
 
             var statement = Parser.Parse(input);
             if (statement is null) return (null, "");
-
-            if (_useAutoCache) MemoClear(); // Clear cache when processing new input
 
             // handle assignment before evaluation
             if (statement.Type == StatementType.Assignment)
@@ -652,7 +645,6 @@ public class Interpreter(Logger logger)
         var totalTime = _timeInCacheLookup + _timeInSubstitution + _timeInEvaluation; return $"""
         === Lambda Interpreter Statistics ===
         Environment:              {_context.Count:#,##0} definitions
-        Evaluation strategy:      {_evaluationStrategy.ToString().ToUpperInvariant()}
         CEK normalization:        ({_normalizeCEKCount:#,##0} normalizations)                  
         Memoization:              
           Substitution cache:     {_substitutionCache.Count:#,##0} entries
@@ -783,7 +775,6 @@ public class Interpreter(Logger logger)
         _timeInEvaluation += _perfStopwatch.ElapsedTicks;
         if (finalResult != null)
         {
-            // Optional normalization for CEK - can be disabled for performance
             var result = NormalizeExpression(finalResult);
             PutEvalCache(currentStep, expr, result);
             return result;
