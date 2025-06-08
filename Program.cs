@@ -52,8 +52,7 @@ public record Expr(ExprType Type, string? VarName = null,
             switch (left.Type)
             {
                 case ExprType.Var when left.VarName != right.VarName: return false;
-                case ExprType.Var:
-                    break;
+                case ExprType.Var: break;
 
                 case ExprType.Abs when left.AbsVarName != right.AbsVarName: return false;
                 case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: continue;
@@ -139,7 +138,6 @@ public readonly record struct SubstitutionCacheKey(Expr Root, string VarName, Ex
     public override int GetHashCode() => _hashCode;
 }
     
-// CEK Machine Evaluator - Control-Environment-Kontinuation
 public enum KontinuationType : byte { Empty, Arg, Fun }
 public record Kontinuation(KontinuationType Type, Expr? Expression = null, Dictionary<string, Expr>? Environment = null, Expr? Value = null, Kontinuation? Next = null)
 {
@@ -150,11 +148,8 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null, Dicti
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
 public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer }
-
 public record Token(TokenType Type, int Position, string? Value = null);
-
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
-
 public class ParseException(TreeErrorType errorType, int position)
     : Exception($"{errorType} at position {position}")
 {
@@ -439,7 +434,7 @@ public class Interpreter(Logger logger)
 
     // Track recursion depth to use optimal substitution strategy
     private int _recursionDepth = 0;
-    private int _maxRecursionDepth = 100; // Default, can be set by user    
+    private int _maxRecursionDepth = 20; // Default, can be set by user    
 
     // Aggressive substitution optimization: cache variable lookups
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
