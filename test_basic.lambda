@@ -1,0 +1,4 @@
+# Basic functionality test
+plus 2 3
+:stats
+:exit
