@@ -1,4 +1,4 @@
-﻿namespace LambdaCalculus;
+﻿namespace lambda_cek;
 
 // Type of lambda calculus expression.
 public enum ExprType : byte { Var, Abs, App }
@@ -1322,9 +1322,7 @@ public static class Program
                 filesProcessed++;
             }
             else
-            {
                 Console.WriteLine($"File not found: {filePath}");
-            }
         }
 
         return filesProcessed;
