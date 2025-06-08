@@ -1,6 +1,5 @@
-﻿namespace lambda_cek;
+﻿namespace LambdaCalculus;
 
-// Type of lambda calculus expression.
 public enum ExprType : byte { Var, Abs, App }
 
 public record Expr(ExprType Type, string? VarName = null,
@@ -10,8 +9,7 @@ public record Expr(ExprType Type, string? VarName = null,
     public static int HashCodeCount { get; private set; }
 
     public static Expr Var(string name) => new(ExprType.Var, VarName: name);
-    public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body);
-    public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
+    public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body); public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
 
     private int? _hashCode;
 
@@ -58,35 +56,38 @@ public record Expr(ExprType Type, string? VarName = null,
 
             switch (left.Type)
             {
-                case ExprType.Var when left.VarName != right.VarName: return false;
-                case ExprType.Var: break;
-
-                case ExprType.Abs when left.AbsVarName != right.AbsVarName: return false;
-                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: continue;
-                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null: return false;
+                case ExprType.Var when left.VarName != right.VarName:
+                    return false;
+                case ExprType.Var:
+                    break;
+                case ExprType.Abs when left.AbsVarName != right.AbsVarName:
+                    return false;
+                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null:
+                    continue;
+                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null:
+                    return false;
                 case ExprType.Abs:
                     stack.Push((left.AbsBody!, right.AbsBody!));
                     break;
-
-                case ExprType.App when AreApplicationsEmpty(left, right): continue;
-                case ExprType.App when HasMissingApplicationParts(left, right): return false;
+                case ExprType.App when AreApplicationsEmpty(left, right):
+                    continue;
+                case ExprType.App when HasMissingApplicationParts(left, right):
+                    return false;
                 case ExprType.App:
                     stack.Push((left.AppRight!, right.AppRight!));
                     stack.Push((left.AppLeft!, right.AppLeft!));
                     break;
-
-                default: return false;
+                default:
+                    return false;
             }
         }
         return true;
     }
 
-    // Checks if both applications have empty components.
     private static bool AreApplicationsEmpty(Expr left, Expr right) =>
         left.AppLeft is null && left.AppRight is null &&
         right.AppLeft is null && right.AppRight is null;
 
-    // Checks if any application has missing components.
     private static bool HasMissingApplicationParts(Expr left, Expr right) =>
         left.AppLeft is null || left.AppRight is null ||
         right.AppLeft is null || right.AppRight is null;
@@ -117,7 +118,7 @@ public record Expr(ExprType Type, string? VarName = null,
                     stack.Push(current);
                     stack.Push(current.AbsBody!);
                     break;
-                case ExprType.App when current.AppLeft?._hashCode is not null && current.AppRight?._hashCode is not null:
+                case ExprType.App when BothApplicationPartsHaveHashCodes(current):
                     current._hashCode = HashCode.Combine(current.Type,
                         current.AppLeft!._hashCode ?? 0, current.AppRight!._hashCode ?? 0);
                     break;
@@ -130,6 +131,9 @@ public record Expr(ExprType Type, string? VarName = null,
         }
         return _hashCode ?? 0;
     }
+
+    private static bool BothApplicationPartsHaveHashCodes(Expr expr) =>
+        expr.AppLeft?._hashCode is not null && expr.AppRight?._hashCode is not null;
 }
 
 public readonly struct ExprEqualityComparer : IEqualityComparer<Expr>
@@ -156,19 +160,17 @@ public readonly record struct SubstitutionCacheKey(Expr Root, string VarName, Ex
 }
 
 public enum KontinuationType : byte { Empty, Arg, Fun }
-
-public record Kontinuation(KontinuationType Type, Expr? Expression = null,
+public record Kontinuation(KontinuationType Type, Expr? Expression = null, 
     Dictionary<string, Expr>? Environment = null, Expr? Value = null, Kontinuation? Next = null)
 {
     public static readonly Kontinuation Empty = new(KontinuationType.Empty);
-
-    public static Kontinuation Arg(Expr expr, Dictionary<string, Expr> env, Kontinuation next) =>
+    
+    public static Kontinuation Arg(Expr expr, Dictionary<string, Expr> env, Kontinuation next) => 
         new(KontinuationType.Arg, expr, env, Next: next);
-
-    public static Kontinuation Fun(Expr value, Kontinuation next) =>
+    
+    public static Kontinuation Fun(Expr value, Kontinuation next) => 
         new(KontinuationType.Fun, Value: value, Next: next);
 }
-
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
 public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer }
@@ -182,7 +184,6 @@ public class ParseException(TreeErrorType errorType, int position)
 }
 
 public enum StatementType : byte { Expr, Assignment }
-
 public record Statement(StatementType Type, Expr Expression, string? VarName = null)
 {
     public static Statement ExprStatement(Expr expr) =>
@@ -223,7 +224,9 @@ public static class Parser
             };
 
             if (nextToken is null && !char.IsWhiteSpace(ch) && ch != '.')
+            {
                 currentTerm.Append(ch);
+            }
             else
             {
                 if (currentTerm.Length > 0)
@@ -325,17 +328,19 @@ public static class Parser
 
     private static Expr CreateChurchNumeral(int n) => n < 1
         ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x")))
-        : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n))); private static Expr GenerateApplicationChain(string funcVar, string baseVar, int count) =>
+        : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n)));
+
+    private static Expr GenerateApplicationChain(string funcVar, string baseVar, int count) =>
         Enumerable.Range(0, count).Aggregate(Expr.Var(baseVar), (acc, _) => Expr.App(Expr.Var(funcVar), acc));
 }
 
-public sealed class Logger : IAsyncDisposable
+public class Logger
 {
     private string _logFile = string.Empty;
     private StreamWriter? _logWriter;
     private readonly SemaphoreSlim _logFileLock = new(1);
 
-    private static readonly IReadOnlyDictionary<string, string> Colors = new Dictionary<string, string>(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> _colors = new(StringComparer.Ordinal)
     {
         ["red"] = "\u001b[31m",
         ["green"] = "\u001b[32m",
@@ -347,15 +352,14 @@ public sealed class Logger : IAsyncDisposable
         ["reset"] = "\u001b[0m"
     };
 
-    public string LogStatus => string.IsNullOrEmpty(_logFile) ? "DISABLED" : _logFile;
+    public static string Prompt(string txt) => $"{_colors["cyan"]}{txt}{_colors["reset"]} ";
+    public string LogStatus => _logFile == string.Empty ? "DISABLED" : _logFile;
 
-    public static string Prompt(string text) => $"{Colors["cyan"]}{text}{Colors["reset"]} ";
-
-    public async Task<string> HandleLogCommandAsync(string argument) => argument switch
+    public async Task<string> HandleLogCommandAsync(string arg) => arg switch
     {
         "off" or "" => (_logFile = string.Empty, "Logging is disabled.").Item2,
         "clear" => await ClearLogFileAsync(),
-        _ => (_logFile = argument, $"Logging is enabled to '{argument}'").Item2
+        _ => (_logFile = arg, $"Logging is enabled to '{arg}'").Item2
     };
 
     public async Task<string> ClearLogFileAsync()
@@ -363,8 +367,7 @@ public sealed class Logger : IAsyncDisposable
         try
         {
             await CloseLogFileAsync();
-            if (!string.IsNullOrEmpty(_logFile))
-                await File.WriteAllTextAsync(_logFile, string.Empty);
+            await File.WriteAllTextAsync(_logFile, string.Empty);
             return $"Log file '{_logFile}' cleared.";
         }
         catch (Exception ex)
@@ -379,6 +382,25 @@ public sealed class Logger : IAsyncDisposable
         await _logWriter.DisposeAsync();
         _logWriter = null;
     }
+
+    public static string GetColor(string message) => message switch
+    {
+        string s when s.StartsWith("Error:") => _colors["red"],
+        string s when s.StartsWith("#") => _colors["yellow"], // Comments
+        string s when s.StartsWith("->") => _colors["green"], // Results/Assignments
+        string s when s.StartsWith("Step") => _colors["yellow"], // Evaluation steps
+        string s when s.StartsWith("Time:") => _colors["magenta"], // Timing info
+        string s when s.StartsWith("Result ") => _colors["magenta"], // Final result details
+        string s when s.Contains("Loading") => _colors["cyan"], // loading files
+        string s when s.Contains("Memo clear") => _colors["cyan"], // Cache clear
+        string s when s.Contains("Memo put") => _colors["magenta"], // Cache puts
+        string s when s.Contains("<<") => _colors["yellow"], // reading file lines
+        string s when s.Contains(">>") => _colors["green"], // result of reading file lines
+        _ => _colors["reset"] // Default
+    };
+
+    public static void LogToConsole(string message) =>
+        Console.WriteLine(GetColor(message) + message.Replace("\t", _colors["reset"]) + _colors["reset"]);
 
     public async Task LogAsync(string message, bool toConsole = true)
     {
@@ -395,63 +417,16 @@ public sealed class Logger : IAsyncDisposable
         {
             LogToConsole($"Error: writing to log file: {ex.Message}");
         }
-        finally
-        {
-            _logFileLock.Release();
-        }
+        _logFileLock.Release();
     }
 
     public void Log(string message, bool toConsole = true) =>
         LogAsync(message, toConsole).GetAwaiter().GetResult();
-
-    public static string GetColor(string message) => message switch
-    {
-        string s when s.StartsWith("Error:") => Colors["red"],
-        string s when s.StartsWith("#") => Colors["yellow"], // Comments
-        string s when s.StartsWith("->") => Colors["green"], // Results/Assignments
-        string s when s.StartsWith("Step") => Colors["yellow"], // Evaluation steps
-        string s when s.StartsWith("Time:") => Colors["magenta"], // Timing info
-        string s when s.StartsWith("Result ") => Colors["magenta"], // Final result details
-        string s when s.Contains("Loading") => Colors["cyan"], // loading files
-        string s when s.Contains("Memo clear") => Colors["cyan"], // Cache clear
-        string s when s.Contains("Memo put") => Colors["magenta"], // Cache puts
-        string s when s.Contains("<<") => Colors["yellow"], // reading file lines
-        string s when s.Contains(">>") => Colors["green"], // result of reading file lines
-        _ => Colors["reset"] // Default
-    };
-
-    public static void LogToConsole(string message) =>
-        Console.WriteLine(GetColor(message) + message.Replace("\t", Colors["reset"]) + Colors["reset"]);
-
-    public async ValueTask DisposeAsync()
-    {
-        await CloseLogFileAsync();
-        _logFileLock.Dispose();
-        GC.SuppressFinalize(this);
-    }
 }
 
-public sealed class Interpreter(Logger logger) : IAsyncDisposable
+public class Interpreter(Logger logger)
 {
-    private static int _varCounter = 0;
-
-    private readonly Dictionary<string, Expr> _context = new(StringComparer.Ordinal);
-    private readonly Logger _logger = logger;
-    private bool _showStep = false;
-
-    private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
-    private long _timeInCacheLookup = 0;
-    private long _timeInSubstitution = 0;
-    private long _timeInEvaluation = 0;
-    private long _timeInStructuralEquals = 0;
-    private int _structuralEqualsCount = 0;
-    private int _normalizeCEKCount = 0;
-    private int _cacheHits = 0;
-    private int _cacheMisses = 0;
-    private int _totalIterations = 0;
-    private int _iterations = 0;
-    private int _substitutionExprCount = 0;
-
+    private static int _varCounter = 0; private readonly Dictionary<string, Expr> _context = new(StringComparer.Ordinal);
     // Optimized cache capacities and data structures
     private readonly Dictionary<SubstitutionCacheKey, Expr> _substitutionCache = new(8192);
     private readonly Dictionary<Expr, Expr> _evaluationCache = new(8192, new ExprEqualityComparer());
@@ -459,15 +434,22 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
     private readonly Dictionary<string, Expr> _expressionPool = new(2048, StringComparer.Ordinal);
     private readonly Dictionary<(Expr, string), bool> _containsVarCache = new(2048);
     private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
-    private readonly Dictionary<string, Expr> _variableCache = new(1024);
+    private readonly Logger _logger = logger;
+    private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
+    private long _timeInCacheLookup = 0;
+    private long _timeInSubstitution = 0;
+    private long _timeInEvaluation = 0;
+    private long _timeInStructuralEquals = 0;
+    private int _structuralEqualsCount = 0;
+    private int _normalizeCEKCount = 0; // Count of CEK normalizations to track performance impact
+    private int _cacheHits = 0;
+    private int _cacheMisses = 0;
+    private int _totalIterations = 0;
+    private int _iterations = 0;
+    private int _substitutionExprCount = 0;
 
-    private int _recursionDepth = 0;
-    private int _maxRecursionDepth = 20; // Default, can be set by user
-
-    /// <summary>Defines operations for stack-based substitution to avoid deep recursion.</summary>
+    // Stack-based substitution infrastructure for better performance
     private enum SubstOp { Evaluate, BuildAbs, BuildApp, SubstituteInBody }
-
-    /// <summary>Represents an entry in the substitution operation stack.</summary>
     private struct StackEntry(Expr node, SubstOp op, object? extra)
     {
         public Expr Node = node;
@@ -475,6 +457,16 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
         public object? Extra = extra;
     }
 
+    // Track recursion depth to use optimal substitution strategy
+    private int _recursionDepth = 0;
+    private int _maxRecursionDepth = 20; // Default, can be set by user    
+
+    // Aggressive substitution optimization: cache variable lookups
+    private readonly Dictionary<string, Expr> _variableCache = new(1024);
+
+    private bool _showStep = false;
+
+    // Main entry point for processing input
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
     {
         try
@@ -527,9 +519,11 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
                 : $"{elapsed.TotalMilliseconds:F1} ms";
             await _logger.LogAsync($"Time: {timeInfo}, iterations: {_iterations:#,##0}");
         }
+
         await _logger.LogAsync(result.str);
     }
 
+    // Run the interactive REPL
     public async Task RunInteractiveLoopAsync()
     {
         Console.WriteLine(ShowHelp());
@@ -582,7 +576,6 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
         }
     }
 
-    // Handles interpreter commands (prefixed with ':').
     private async Task<string> HandleCommandAsync(string input)
     {
         var parts = input.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
@@ -630,7 +623,8 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
         _freeVarCache.Clear();
         _expressionPool.Clear();
         _cacheHits = _cacheMisses = 0;
-        GC.Collect(); return "All caches cleared.";
+        GC.Collect();
+        return "All caches cleared.";
     }
 
     public async Task<string> LoadFileAsync(string path)
@@ -656,14 +650,16 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
     {
         _context.Clear();
         MemoClear(); // Reuse cache clearing logic
-        _totalIterations = 0; return "Environment cleared.";
+        _totalIterations = 0;
+        return "Environment cleared.";
     }
 
     private string ShowEnv()
     {
         _logger.Log("# Current environment:");
         foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
-            _logger.Log($"  {key} = {value}"); return $"# Displayed {_context.Count} definitions.";
+            _logger.Log($"  {key} = {value}");
+        return $"# Displayed {_context.Count} definitions.";
     }
 
     private string ResetPerformanceCounters()
@@ -680,31 +676,31 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
     private string ShowStats()
     {
         static string PerOfTotal(long value, long total) => total == 0 ? "0.0%" : $"{value * 100.0 / total:F1}%";
-        var totalTime = _timeInCacheLookup + _timeInSubstitution + _timeInEvaluation;
-        return $"""
-            === Lambda Interpreter Statistics ===
-            Environment:              {_context.Count:#,##0} definitions
-            CEK normalization:        ({_normalizeCEKCount:#,##0} normalizations)   
-            Recursion depth:          {_maxRecursionDepth:#,##0}               
-            Memoization:              
-              Substitution cache:     {_substitutionCache.Count:#,##0} entries
-              Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
-              Cache hits/misses:      {_cacheHits:#,##0} / {_cacheMisses:#,##0}
-              Hit rate:               {PerOfTotal(_cacheHits, _cacheHits + _cacheMisses)}%
-            Performance:
-              Total iterations:       {_totalIterations:#,##0}
-              Total hash code calls:  {Expr.HashCodeCount:#,##0}
-              Cache lookup time:      {_timeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInCacheLookup, totalTime)}%)
-              Substitution time:      {_timeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInSubstitution, totalTime)}%) (called {_substitutionExprCount:#,##0} times)
-              Evaluation time:        {_timeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInEvaluation, totalTime)}%)
-              Structural equals:      {_timeInStructuralEquals / 10000.0:#,##0.00} ms (called {_structuralEqualsCount:#,##0} times)
-              Total measured time:    {totalTime / 10000.0:#,##0.00} ms
-            System:
-              Unique var counter:     {_varCounter:#,##0}
-              Step-by-step mode:      {(_showStep ? "ENABLED" : "DISABLED")}
-              Logging:                {_logger.LogStatus}              Memory usage:           {GC.GetTotalMemory(false) / 1024:#,##0} KB
-              GC collections:         Gen0={GC.CollectionCount(0)} Gen1={GC.CollectionCount(1)} Gen2={GC.CollectionCount(2)}
-            """;
+        var totalTime = _timeInCacheLookup + _timeInSubstitution + _timeInEvaluation; return $"""
+        === Lambda Interpreter Statistics ===
+        Environment:              {_context.Count:#,##0} definitions
+        CEK normalization:        ({_normalizeCEKCount:#,##0} normalizations)   
+        Recursion depth:          {_maxRecursionDepth:#,##0}               
+        Memoization:              
+          Substitution cache:     {_substitutionCache.Count:#,##0} entries
+          Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
+          Cache hits/misses:      {_cacheHits:#,##0} / {_cacheMisses:#,##0}
+          Hit rate:               {PerOfTotal(_cacheHits, _cacheHits + _cacheMisses)}%
+        Performance:
+          Total iterations:       {_totalIterations:#,##0}
+          Total hash code calls:  {Expr.HashCodeCount:#,##0}
+          Cache lookup time:      {_timeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInCacheLookup, totalTime)}%)
+          Substitution time:      {_timeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInSubstitution, totalTime)}%) (called {_substitutionExprCount:#,##0} times)
+          Evaluation time:        {_timeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInEvaluation, totalTime)}%)
+          Structural equals:      {_timeInStructuralEquals / 10000.0:#,##0.00} ms (called {_structuralEqualsCount:#,##0} times)
+          Total measured time:    {totalTime / 10000.0:#,##0.00} ms
+        System:
+          Unique var counter:     {_varCounter:#,##0}
+          Step-by-step mode:      {(_showStep ? "ENABLED" : "DISABLED")}
+          Logging:                {_logger.LogStatus}
+          Memory usage:           {GC.GetTotalMemory(false) / 1024:#,##0} KB
+          GC collections:         Gen0={GC.CollectionCount(0)} Gen1={GC.CollectionCount(1)} Gen2={GC.CollectionCount(2)}
+        """;
     }
 
     private static string ShowHelp() =>
@@ -740,13 +736,13 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
           Any command line arguments are treated as files with commands to load
         """;
 
-    // Performs timed structural equality comparison between expressions.
     public bool TimedStructuralEquals(Expr expr, Expr other)
     {
         _perfStopwatch.Restart();
         _structuralEqualsCount++;
         var result = expr.StructuralEquals(other);
-        _timeInStructuralEquals += _perfStopwatch.ElapsedTicks; return result;
+        _timeInStructuralEquals += _perfStopwatch.ElapsedTicks;
+        return result;
     }
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
@@ -759,7 +755,8 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
         var hasResult = _evaluationCache.TryGetValue(expr, out var cachedResult);
         if (hasResult && cachedResult is not null)
             result = cachedResult;
-        _ = hasResult ? _cacheHits++ : _cacheMisses++; return hasResult;
+        _ = hasResult ? _cacheHits++ : _cacheMisses++;
+        return hasResult;
     }
 
     private Expr EvaluateCEK(Expr expr)
@@ -979,8 +976,8 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
         if (root.Type == ExprType.App && IsCommonPattern(root, var, val, out var fastResult)) return fastResult;
 
         // Always use substitution cache for all substitutions
-        Expr? cachedResult = GetSubCache(root, var, val);
-        if (cachedResult is not null) return cachedResult;
+            Expr? cachedResult = GetSubCache(root, var, val);
+            if (cachedResult is not null) return cachedResult;
 
 
         _perfStopwatch.Restart();
@@ -1183,7 +1180,7 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
                     break;
             }
         }
-
+ 
         return resultStack.Pop();
     }
 
@@ -1248,83 +1245,57 @@ public sealed class Interpreter(Logger logger) : IAsyncDisposable
         return Expr.App(left, right);
     }
 
-    private int? ExtractChurchNumeralValue(Expr expr)
+    private static int? ExtractChurchNumeralValue(Expr expr)
     {
-        if (expr is null || expr.Type == ExprType.Var) return null;
-
-        var (fVar, xVar, body) = ("f", "x", expr);
-
-        switch (body.Type)
-        {
-            case ExprType.App when FreeVars(body) is var varNames:
-                if (varNames.Count != 2) return null;
-                (fVar, xVar) = (varNames.ElementAt(0), varNames.ElementAt(1));
-                break;
-            case ExprType.Abs when body.AbsBody is not { Type: ExprType.Abs }: return null;
-            case ExprType.Abs:
-                (fVar, xVar) = (body.AbsVarName ?? fVar, body.AbsBody.AbsVarName ?? xVar);
-                body = body.AbsBody.AbsBody;
-                // Zero case: λf.λx.x
-                if (body is { Type: ExprType.Var } && body.VarName == xVar) return 0;
-                break;
-        }
-
-        int count = 0; // Count applications of fVar to xVar
-        while (body is { Type: ExprType.App } app && app.AppLeft is { Type: ExprType.Var } fNode && fNode.VarName == fVar)
+        // Must be λf.λx.body
+        if (expr is not { Type: ExprType.Abs, AbsBody: { Type: ExprType.Abs } abs2 })
+            return null;
+        var fVar = expr.AbsVarName;
+        var xVar = abs2.AbsVarName;
+        var body = abs2.AbsBody;
+        if (fVar is null || xVar is null || body is null)
+            return null;
+        // Zero: λf.λx.x
+        if (body.Type == ExprType.Var && body.VarName == xVar)
+            return 0;
+        // Count applications of fVar to xVar
+        int count = 0;
+        while (body is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: var fn }, AppRight: var next } && fn == fVar)
         {
             count++;
-            body = app.AppRight;
+            body = next;
         }
-        return body is { Type: ExprType.Var } && body.VarName == xVar ? count : null;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _logger.DisposeAsync();
-        GC.SuppressFinalize(this);
+        return body is { Type: ExprType.Var, VarName: var xn } && xn == xVar ? count : null;
     }
 }
 
-public static class Program
+public class Program
 {
     public static async Task Main(string[] args)
     {
-        // Configure console encoding for Unicode support (λ, etc.)
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
-        Console.InputEncoding = System.Text.Encoding.UTF8;
+        Console.OutputEncoding = System.Text.Encoding.UTF8; // Ensure console output supports UTF-8
+        Console.InputEncoding = System.Text.Encoding.UTF8; // Ensure console input supports UTF-8
 
-        await using var logger = new Logger();
-        await using var interpreter = new Interpreter(logger);
+        var interpreter = new Interpreter(logger: new());
 
         // Load standard library if available
         if (File.Exists("stdlib.lambda"))
             await interpreter.ProcessInputAsync(":load stdlib.lambda");
 
-        // Process command line files before starting interactive mode
-        var filesProcessed = await ProcessCommandLineFilesAsync(interpreter, args);
-
-        // If files were processed, exit; otherwise start interactive mode
-        if (filesProcessed > 0)
-            return;
-
-        await interpreter.RunInteractiveLoopAsync();
-    }
-
-    private static async Task<int> ProcessCommandLineFilesAsync(Interpreter interpreter, string[] args)
-    {
-        var filesProcessed = 0;
-
+        int filesCount = 0;
+        // Process any command line files before starting interactive mode
         foreach (var filePath in args)
         {
             if (File.Exists(filePath))
             {
                 await interpreter.LoadFileAsync(filePath);
-                filesProcessed++;
+                filesCount++;
             }
             else
                 Console.WriteLine($"File not found: {filePath}");
         }
+        if (filesCount > 0) return;
 
-        return filesProcessed;
+        await interpreter.RunInteractiveLoopAsync();
     }
 }
