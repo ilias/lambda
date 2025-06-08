@@ -1218,9 +1218,7 @@ public class Interpreter(Logger logger)
             var substituted = Substitute(left.AbsBody!, left.AbsVarName!, right);
             // Only continue normalizing if we haven't hit recursion limits
             if (depth < maxDepth - 5)
-            {
                 return NormalizeWithVisited(substituted, visited, depth + 1, maxDepth);
-            }
             return substituted;
         }
 
