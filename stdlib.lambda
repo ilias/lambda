@@ -79,7 +79,6 @@ reverse = λl.foldl (λx.λy.cons y x) nil l             # Reverse list order
 # arithmetic functions
 fact = λn.if (iszero n) 1 (mult n (fact (pred n)))
 fib = λn.if (iszero n) 0 (if (eq n 1) 1 (plus (fib (pred n)) (fib (pred (pred n)))))
-sum = λn.if (iszero n) 0 (plus n (sum (pred n)))
 
 # fixed-point combinators
 FIB = Y (λf.λn.if (iszero n) 0 (if (eq n 1) 1 (plus (f (pred n)) (f (pred (pred n))))))
