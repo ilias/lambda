@@ -7,11 +7,11 @@ public record Expr(ExprType Type, string? VarName = null,
                    Expr? AppLeft = null, Expr? AppRight = null)
 {
     public static int HashCodeCount { get; private set; }
+    private int? _hashCode;
 
     public static Expr Var(string name) => new(ExprType.Var, VarName: name);
-    public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body); public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
-
-    private int? _hashCode;
+    public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body);
+    public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
 
     public override string ToString() => ToStringLimited(1000);
 
@@ -56,29 +56,24 @@ public record Expr(ExprType Type, string? VarName = null,
 
             switch (left.Type)
             {
-                case ExprType.Var when left.VarName != right.VarName:
-                    return false;
-                case ExprType.Var:
-                    break;
-                case ExprType.Abs when left.AbsVarName != right.AbsVarName:
-                    return false;
-                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null:
-                    continue;
-                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null:
-                    return false;
+                case ExprType.Var when left.VarName != right.VarName: return false;
+                case ExprType.Var: break;
+
+                case ExprType.Abs when left.AbsVarName != right.AbsVarName: return false;
+                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: continue;
+                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null: return false;
                 case ExprType.Abs:
                     stack.Push((left.AbsBody!, right.AbsBody!));
                     break;
-                case ExprType.App when AreApplicationsEmpty(left, right):
-                    continue;
-                case ExprType.App when HasMissingApplicationParts(left, right):
-                    return false;
+
+                case ExprType.App when AreApplicationsEmpty(left, right): continue;
+                case ExprType.App when HasMissingApplicationParts(left, right): return false;
                 case ExprType.App:
                     stack.Push((left.AppRight!, right.AppRight!));
                     stack.Push((left.AppLeft!, right.AppLeft!));
                     break;
-                default:
-                    return false;
+
+                default: return false;
             }
         }
         return true;
@@ -684,14 +679,13 @@ public class Interpreter(Logger logger)
         Memoization:              
           Substitution cache:     {_substitutionCache.Count:#,##0} entries
           Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
-          Cache hits/misses:      {_cacheHits:#,##0} / {_cacheMisses:#,##0}
-          Hit rate:               {PerOfTotal(_cacheHits, _cacheHits + _cacheMisses)}%
+          Cache hits/misses:      {_cacheHits:#,##0} / {_cacheMisses:#,##0} ({PerOfTotal(_cacheHits, _cacheHits + _cacheMisses)})
         Performance:
           Total iterations:       {_totalIterations:#,##0}
           Total hash code calls:  {Expr.HashCodeCount:#,##0}
-          Cache lookup time:      {_timeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInCacheLookup, totalTime)}%)
-          Substitution time:      {_timeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInSubstitution, totalTime)}%) (called {_substitutionExprCount:#,##0} times)
-          Evaluation time:        {_timeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInEvaluation, totalTime)}%)
+          Cache lookup time:      {_timeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInCacheLookup, totalTime)})
+          Substitution time:      {_timeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInSubstitution, totalTime)}) (called {_substitutionExprCount:#,##0} times)
+          Evaluation time:        {_timeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInEvaluation, totalTime)})
           Structural equals:      {_timeInStructuralEquals / 10000.0:#,##0.00} ms (called {_structuralEqualsCount:#,##0} times)
           Total measured time:    {totalTime / 10000.0:#,##0.00} ms
         System:
@@ -722,7 +716,7 @@ public class Interpreter(Logger logger)
           :log clear             - Clear the current log file (if logging is enabled)
           :step (on|off)         - Toggle step-by-step evaluation logging (e.g., :step on)
           :stats                 - Show performance and environment statistics
-          :depth [number]       - Set or show the maximum recursion depth (default: 100, range: 10-10000)
+          :depth [number]        - Set or show the maximum recursion depth (default: 100, range: 10-10000)
           :perf reset            - Reset performance counters
           :env                   - Show current definitions in the environment
           :clear                 - Clear the environment and caches
@@ -976,9 +970,8 @@ public class Interpreter(Logger logger)
         if (root.Type == ExprType.App && IsCommonPattern(root, var, val, out var fastResult)) return fastResult;
 
         // Always use substitution cache for all substitutions
-            Expr? cachedResult = GetSubCache(root, var, val);
-            if (cachedResult is not null) return cachedResult;
-
+        Expr? cachedResult = GetSubCache(root, var, val);
+        if (cachedResult is not null) return cachedResult;
 
         _perfStopwatch.Restart();
 
@@ -992,8 +985,8 @@ public class Interpreter(Logger logger)
             {
                 // Abstraction with alpha conversion check
                 ExprType.Abs when val.Type != ExprType.Var &&
-                                 root.AbsVarName != var &&
-                                 QuickFreeVarCheck(val, root.AbsVarName!) =>
+                                  root.AbsVarName != var &&
+                                  QuickFreeVarCheck(val, root.AbsVarName!) =>
                     AlphaConvert(root.AbsVarName!, root.AbsBody!) is var (newVar, newBody)
                         ? Expr.Abs(newVar, Substitute(newBody, var, val))
                         : throw new InvalidOperationException("Alpha conversion failed"),
