@@ -598,17 +598,12 @@ public class Interpreter(Logger logger)
         return $"Step mode {(_showStep ? "enabled" : "disabled")}";
     }
 
-    private string HandleRecursionDepth(string arg)
-    {
-        if (string.IsNullOrWhiteSpace(arg))
-            return $"Current recursion depth limit: {_maxRecursionDepth}";
-        if (int.TryParse(arg, out int value) && value >= 10 && value <= 10000)
-        {
-            _maxRecursionDepth = value;
-            return $"Recursion depth limit set to {_maxRecursionDepth}";
-        }
-        return "Error: Please provide a number between 10 and 10000.";
-    }
+    private string HandleRecursionDepth(string arg)=>
+        string.IsNullOrWhiteSpace(arg)
+            ? $"Current recursion depth limit: {_maxRecursionDepth}" 
+            : int.TryParse(arg, out int value) && value >= 10 && value <= 10000
+                ? $"Recursion depth limit set to {_maxRecursionDepth = value}"
+                : "Error: Please provide a number between 10 and 10000.";
 
     private string MemoClear()
     {
