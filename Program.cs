@@ -1225,27 +1225,20 @@ public class Interpreter(Logger logger)
         return Expr.App(left, right);
     }
 
+    // Returns the integer value of a Church numeral (λf.λx.f^n(x)), or null if not valid.
     private static int? ExtractChurchNumeralValue(Expr expr)
     {
-        // Must be λf.λx.body
-        if (expr is not { Type: ExprType.Abs, AbsBody: { Type: ExprType.Abs } abs2 })
+        if (expr is not { Type: ExprType.Abs, AbsVarName: var f, AbsBody: { Type: ExprType.Abs, AbsVarName: var x, AbsBody: var body } })
             return null;
-        var fVar = expr.AbsVarName;
-        var xVar = abs2.AbsVarName;
-        var body = abs2.AbsBody;
-        if (fVar is null || xVar is null || body is null)
-            return null;
-        // Zero: λf.λx.x
-        if (body.Type == ExprType.Var && body.VarName == xVar)
+        if (body is { Type: ExprType.Var, VarName: var v } && v == x)
             return 0;
-        // Count applications of fVar to xVar
-        int count = 0;
-        while (body is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: var fn }, AppRight: var next } && fn == fVar)
+        int n = 0;
+        while (body is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: var fn }, AppRight: var next } && fn == f)
         {
-            count++;
+            n++;
             body = next;
         }
-        return body is { Type: ExprType.Var, VarName: var xn } && xn == xVar ? count : null;
+        return body is { Type: ExprType.Var, VarName: var v2 } && v2 == x ? n : null;
     }
 }
 
