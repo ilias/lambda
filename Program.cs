@@ -86,7 +86,7 @@ public record Expr(ExprType Type, string? VarName = null,
     private static bool HasMissingApplicationParts(Expr left, Expr right) =>
         left.AppLeft is null || left.AppRight is null ||
         right.AppLeft is null || right.AppRight is null;
-
+        
     public override int GetHashCode()
     {
         if (_hashCode.HasValue) return _hashCode.Value;
@@ -622,9 +622,9 @@ public class Interpreter(Logger logger)
         _logger.Log($"Loading commands from '{path}'");
         foreach (var line in await File.ReadAllLinesAsync(path))
         {
-            await _logger.LogAsync($"line {lineCount + 1} <<: {line}");
+            await _logger.LogAsync($"line {lineCount++} <<: {line}");
             var (_, str) = await ProcessInputAsync(line);
-            await _logger.LogAsync($"line {++lineCount} >>: {str}");
+            await _logger.LogAsync(str);
         }
         return $"Loaded {path}";
     }
@@ -717,7 +717,6 @@ public class Interpreter(Logger logger)
         Other Features:
           Line continuation: Use '\' at the end of a line to continue input on the next line.
           Comments: Lines starting with '#' are ignored.
-          Memo auto mode: automatically clears the cache before every new input.
           Any command line arguments are treated as files with commands to load
         """;
 
