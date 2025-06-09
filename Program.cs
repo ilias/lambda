@@ -171,7 +171,7 @@ public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Konti
 public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
-public class ParseException(TreeErrorType errorType, int position)
+public class ParseException(TreeErrorType errorType, int position) 
     : Exception($"{errorType} at position {position}")
 {
     public TreeErrorType ErrorType { get; } = errorType;
@@ -344,6 +344,7 @@ public class Logger
         ["magenta"] = "\u001b[35m",
         ["cyan"] = "\u001b[36m",
         ["white"] = "\u001b[37m",
+        ["gray"] = "\u001b[90m",
         ["reset"] = "\u001b[0m"
     };
 
@@ -389,7 +390,7 @@ public class Logger
         string s when s.Contains("Loading") => _colors["cyan"], // loading files
         string s when s.Contains("Memo clear") => _colors["cyan"], // Cache clear
         string s when s.Contains("Memo put") => _colors["magenta"], // Cache puts
-        string s when s.Contains("<<") => _colors["yellow"], // reading file lines
+        string s when s.Contains("<<") => _colors["gray"], // reading file lines
         string s when s.Contains(">>") => _colors["green"], // result of reading file lines
         _ => _colors["reset"] // Default
     };
@@ -434,8 +435,6 @@ public class Interpreter(Logger logger)
     private long _timeInCacheLookup = 0;
     private long _timeInSubstitution = 0;
     private long _timeInEvaluation = 0;
-    private long _timeInStructuralEquals = 0;
-    private int _structuralEqualsCount = 0;
     private int _normalizeCEKCount = 0; // Count of CEK normalizations to track performance impact
     private int _cacheHits = 0;
     private int _cacheMisses = 0;
@@ -502,7 +501,7 @@ public class Interpreter(Logger logger)
         if (result.expr is not null)
         {
             var number = ExtractChurchNumeralValue(result.expr);
-            string? resultName = _context.FirstOrDefault(kv => TimedStructuralEquals(kv.Value, result.expr)).Key;
+            string? resultName = _context.FirstOrDefault(kv => kv.Value.StructuralEquals(result.expr)).Key;
 
             if (number is not null || !string.IsNullOrEmpty(resultName))
                 await _logger.LogAsync("Result is" +
@@ -662,8 +661,6 @@ public class Interpreter(Logger logger)
         _timeInCacheLookup = 0;
         _timeInSubstitution = 0;
         _timeInEvaluation = 0;
-        _timeInStructuralEquals = 0;
-        _structuralEqualsCount = 0;
         _substitutionExprCount = 0;
         return "Performance counters reset.";
     }
@@ -686,7 +683,6 @@ public class Interpreter(Logger logger)
           Cache lookup time:      {_timeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInCacheLookup, totalTime)})
           Substitution time:      {_timeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInSubstitution, totalTime)}) (called {_substitutionExprCount:#,##0} times)
           Evaluation time:        {_timeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInEvaluation, totalTime)})
-          Structural equals:      {_timeInStructuralEquals / 10000.0:#,##0.00} ms (called {_structuralEqualsCount:#,##0} times)
           Total measured time:    {totalTime / 10000.0:#,##0.00} ms
         System:
           Unique var counter:     {_varCounter:#,##0}
@@ -729,15 +725,6 @@ public class Interpreter(Logger logger)
           Memo auto mode: automatically clears the cache before every new input.
           Any command line arguments are treated as files with commands to load
         """;
-
-    public bool TimedStructuralEquals(Expr expr, Expr other)
-    {
-        _perfStopwatch.Restart();
-        _structuralEqualsCount++;
-        var result = expr.StructuralEquals(other);
-        _timeInStructuralEquals += _perfStopwatch.ElapsedTicks;
-        return result;
-    }
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
 
