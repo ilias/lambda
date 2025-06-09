@@ -730,14 +730,15 @@ public class Interpreter(Logger logger)
 
     private bool GetEvalCache(Expr expr, out Expr result)
     {
-        result = null!; // Initialize result to null
-        if (expr is null) return false;
-
-        var hasResult = _evaluationCache.TryGetValue(expr, out var cachedResult);
-        if (hasResult && cachedResult is not null)
+        if (expr is not null && _evaluationCache.TryGetValue(expr, out var cachedResult) && cachedResult is not null)
+        {
+            _cacheHits++;
             result = cachedResult;
-        _ = hasResult ? _cacheHits++ : _cacheMisses++;
-        return hasResult;
+            return true;
+        }
+        _cacheMisses++;
+        result = null!;
+        return false;
     }
 
     private Expr EvaluateCEK(Expr expr)
@@ -847,13 +848,10 @@ public class Interpreter(Logger logger)
     private Expr Intern(Expr expr)
     {
         if (expr.Type != ExprType.Var) return expr;
-
         var key = $"var:{expr.VarName}";
-        if (_expressionPool.TryGetValue(key, out var existing))
-            return existing;
-
-        _expressionPool[key] = expr;
-        return expr;
+        return _expressionPool.TryGetValue(key, out var existing)
+            ? existing
+            : (_expressionPool[key] = expr);
     }
 
     // Optimized free variable analysis with caching
@@ -1043,41 +1041,36 @@ public class Interpreter(Logger logger)
 
     private bool ContainsVariable(Expr expr, string var)
     {
-        // Fast path for variables
         if (expr.Type == ExprType.Var)
             return expr.VarName == var;
 
-        // Use a simple cache for common variable checks
         var key = (expr, var);
         if (_containsVarCache.TryGetValue(key, out var cached))
             return cached;
 
-        // Stack-based implementation to avoid recursion
         var stack = new Stack<Expr>();
         stack.Push(expr);
-
         while (stack.Count > 0)
         {
             var current = stack.Pop();
-
-            switch (current.Type)
+            if (current.Type == ExprType.Var)
             {
-                case ExprType.Var:
-                    if (current.VarName != var) continue;
+                if (current.VarName == var)
+                {
                     _containsVarCache[key] = true;
                     return true;
-
-                case ExprType.Abs when current.AbsBody != null:
-                    stack.Push(current.AbsBody);
-                    continue;
-
-                case ExprType.App:
-                    if (current.AppRight is not null) stack.Push(current.AppRight);
-                    if (current.AppLeft is not null) stack.Push(current.AppLeft);
-                    continue;
+                }
+            }
+            else if (current.Type == ExprType.Abs && current.AbsBody != null)
+            {
+                stack.Push(current.AbsBody);
+            }
+            else if (current.Type == ExprType.App)
+            {
+                if (current.AppRight != null) stack.Push(current.AppRight);
+                if (current.AppLeft != null) stack.Push(current.AppLeft);
             }
         }
-
         _containsVarCache[key] = false;
         return false;
     }
