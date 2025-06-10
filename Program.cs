@@ -24,7 +24,6 @@ public record Expr(ExprType Type, string? VarName = null,
             _ => "?"
         };
 
-    // Formats function applications with appropriate parentheses.
     private string FormatApplication(int maxDepth)
     {
         var leftStr = AppLeft!.Type == ExprType.Abs
@@ -423,7 +422,6 @@ public class Logger
 public class Interpreter(Logger logger)
 {
     private static int _varCounter = 0; private readonly Dictionary<string, Expr> _context = new(StringComparer.Ordinal);
-    // Optimized cache capacities and data structures
     private readonly Dictionary<SubstitutionCacheKey, Expr> _substitutionCache = new(8192);
     private readonly Dictionary<Expr, Expr> _evaluationCache = new(8192, new ExprEqualityComparer());
     private readonly Dictionary<Expr, HashSet<string>> _freeVarCache = new(4096, new ExprEqualityComparer());
@@ -451,16 +449,13 @@ public class Interpreter(Logger logger)
         public object? Extra = extra;
     }
 
-    // Track recursion depth to use optimal substitution strategy
     private int _recursionDepth = 0;
     private int _maxRecursionDepth = 20; // Default, can be set by user    
 
-    // Aggressive substitution optimization: cache variable lookups
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
 
     private bool _showStep = false;
 
-    // Main entry point for processing input
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
     {
         try
@@ -517,7 +512,6 @@ public class Interpreter(Logger logger)
         await _logger.LogAsync(result.str);
     }
 
-    // Run the interactive REPL
     public async Task RunInteractiveLoopAsync()
     {
         Console.WriteLine(ShowHelp());
@@ -525,7 +519,6 @@ public class Interpreter(Logger logger)
 
         while (true)
         {
-            // Show prompt
             if (currentInput.Length == 0)
                 Console.WriteLine();
             Console.Write(Logger.Prompt(currentInput.Length == 0 ? "lambda> " : "......> "));
@@ -552,7 +545,6 @@ public class Interpreter(Logger logger)
             var input = currentInput.ToString();
             currentInput.Clear();
 
-            // Time the execution
             var timing = System.Diagnostics.Stopwatch.StartNew();
             var output = await ProcessInputAsync(input);
             timing.Stop();
@@ -755,7 +747,6 @@ public class Interpreter(Logger logger)
             if (_showStep)
                 _logger.Log($"Step {currentStep++}: CEK \tC: {control}, K: {kont.Type}");
 
-            // Check cache for the current control expression
             if (GetEvalCache(control, out var cachedResult))
             {
                 ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
@@ -765,17 +756,13 @@ public class Interpreter(Logger logger)
             switch (control.Type)
             {
                 case ExprType.Var:
-                    // Variable lookup
                     var value = env.TryGetValue(control.VarName!, out var envValue) ? envValue : control;
                     ApplyContinuation(value, env, kont, stateStack, ref finalResult);
                     break;
-
                 case ExprType.Abs:
-                    // Lambda abstraction - this is a value, apply continuation
                     ApplyContinuation(control, env, kont, stateStack, ref finalResult);
                     break;
                 case ExprType.App:
-                    // Function application - evaluate function with argument continuation
                     var argKont = Kontinuation.Arg(control.AppRight!, env, kont);
                     stateStack.Push(new CEKState(control.AppLeft!, env, argKont));
                     break;
@@ -848,12 +835,10 @@ public class Interpreter(Logger logger)
             : (_expressionPool[key] = expr);
     }
 
-    // Optimized free variable analysis with caching
     private HashSet<string> FreeVars(Expr expr, string? skipVar = null)
     {
         if (expr is null) return [];
 
-        // Check cache first
         if (_freeVarCache.TryGetValue(expr, out var cached))
             return skipVar is null ? cached : [.. cached.Where(v => v != skipVar)];
 
@@ -899,7 +884,6 @@ public class Interpreter(Logger logger)
         return freeVars;
     }
 
-    // Helper method to check if an expression contains variables that are in the current context
     private bool HasContextVariables(Expr? expr)
     {
         if (expr == null) return false;
@@ -915,7 +899,6 @@ public class Interpreter(Logger logger)
 
     private Expr? GetSubCache(Expr root, string var, Expr val)
     {
-        // Fast path - avoid stopwatch for simple lookups
         var cacheKey = new SubstitutionCacheKey(root, var, val);
         var hasResult = _substitutionCache.TryGetValue(cacheKey, out Expr? result);
 
@@ -954,7 +937,6 @@ public class Interpreter(Logger logger)
 
         _perfStopwatch.Restart();
 
-        // Check recursion depth and use appropriate strategy
         Expr result;
         if (++_recursionDepth > _maxRecursionDepth)
             result = SubstituteStackBased(root, var, val);
@@ -988,7 +970,6 @@ public class Interpreter(Logger logger)
         return result;
     }
 
-    // Ultra-fast pattern checking for common substitution patterns
     private bool IsCommonPattern(Expr app, string var, Expr val, out Expr result)
     {
         result = null!;
@@ -1007,10 +988,8 @@ public class Interpreter(Logger logger)
         return flag;
     }
 
-    // Ultra-fast free variable check using pre-computed sets
     private bool QuickFreeVarCheck(Expr expr, string varName)
     {
-        // Use cached free variables if available
         if (_freeVarCache.TryGetValue(expr, out var freeVars))
             return freeVars.Contains(varName);
 
@@ -1023,7 +1002,6 @@ public class Interpreter(Logger logger)
         };
     }
 
-    // Create optimized application with smart substitution
     private Expr CreateOptimizedApplication(Expr left, Expr right, string var, Expr val)
     => (ContainsVariable(left, var), ContainsVariable(right, var)) switch
     {
@@ -1071,7 +1049,6 @@ public class Interpreter(Logger logger)
 
     private Expr SubstituteStackBased(Expr root, string var, Expr val)
     {
-        // Preallocate stacks with larger capacity for efficiency
         var opStack = new Stack<StackEntry>(64);
         var resultStack = new Stack<Expr>(64);
 
@@ -1151,7 +1128,6 @@ public class Interpreter(Logger logger)
         return resultStack.Pop();
     }
 
-    // Normalize an expression by reducing under lambda abstractions
     private Expr NormalizeExpression(Expr expr)
     {
         if (_normalizationCache.TryGetValue(expr, out var cached))
@@ -1192,7 +1168,6 @@ public class Interpreter(Logger logger)
 
     private Expr NormalizeApplicationWithVisited(Expr app, HashSet<Expr> visited, int depth, int maxDepth)
     {
-        // Prevent infinite recursion
         if (depth > maxDepth)
             return app;
 
