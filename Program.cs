@@ -2,9 +2,13 @@
 
 public enum ExprType : byte { Var, Abs, App }
 
-public record Expr(ExprType Type, string? VarName = null,
-                   string? AbsVarName = null, Expr? AbsBody = null,
-                   Expr? AppLeft = null, Expr? AppRight = null)
+public record Expr(
+    ExprType Type,
+    string? VarName = null,
+    string? AbsVarName = null,
+    Expr? AbsBody = null,
+    Expr? AppLeft = null,
+    Expr? AppRight = null)
 {
     public static int HashCodeCount { get; private set; }
     private int? _hashCode;
@@ -439,6 +443,10 @@ public class Interpreter(Logger logger)
     private int _totalIterations = 0;
     private int _iterations = 0;
     private int _substitutionExprCount = 0;
+    private int _recursionDepth = 0;
+    private int _maxRecursionDepth = 20; // Default, can be set by user    
+    private readonly Dictionary<string, Expr> _variableCache = new(1024);
+    private bool _showStep = false;
 
     // Stack-based substitution infrastructure for better performance
     private enum SubstOp { Evaluate, BuildAbs, BuildApp, SubstituteInBody }
@@ -448,13 +456,6 @@ public class Interpreter(Logger logger)
         public SubstOp Op = op;
         public object? Extra = extra;
     }
-
-    private int _recursionDepth = 0;
-    private int _maxRecursionDepth = 20; // Default, can be set by user    
-
-    private readonly Dictionary<string, Expr> _variableCache = new(1024);
-
-    private bool _showStep = false;
 
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
     {
@@ -590,12 +591,19 @@ public class Interpreter(Logger logger)
         return $"Step mode {(_showStep ? "enabled" : "disabled")}";
     }
 
-    private string HandleRecursionDepth(string arg)=>
-        string.IsNullOrWhiteSpace(arg)
-            ? $"Current recursion depth limit: {_maxRecursionDepth}" 
-            : int.TryParse(arg, out int value) && value >= 10 && value <= 10000
-                ? $"Recursion depth limit set to {_maxRecursionDepth = value}"
-                : "Error: Please provide a number between 10 and 10000.";
+    private string HandleRecursionDepth(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg))
+            return $"Current recursion depth limit: {_maxRecursionDepth}";
+
+        if (int.TryParse(arg, out int value) && value >= 10 && value <= 10000)
+        {
+            _maxRecursionDepth = value;
+            return $"Recursion depth limit set to {_maxRecursionDepth}";
+        }
+        
+        return "Error: Please provide a number between 10 and 10000.";
+    }
 
     private string MemoClear()
     {
@@ -784,34 +792,34 @@ public class Interpreter(Logger logger)
 
     private void ApplyContinuation(Expr value, Dictionary<string, Expr> env, Kontinuation kont, Stack<CEKState> stateStack, ref Expr? finalResult)
     {
-        switch (kont.Type)
+        switch (kont)
         {
-            case KontinuationType.Empty:
+            case { Type: KontinuationType.Empty }:
                 // Final result - no more continuation
                 finalResult = value;
                 return;
 
-            case KontinuationType.Arg:
+            case { Type: KontinuationType.Arg, Expression: var expr, Environment: var kenv, Next: var next }:
                 // We have evaluated the function, now evaluate the argument
-                var funKont = Kontinuation.Fun(value, kont.Next!);
-                stateStack.Push(new CEKState(kont.Expression!, kont.Environment!, funKont));
+                var funKont = Kontinuation.Fun(value, next!);
+                stateStack.Push(new CEKState(expr!, kenv!, funKont));
                 break;
-            case KontinuationType.Fun:
+
+            case { Type: KontinuationType.Fun, Value: var function, Next: var next }:
                 // We have evaluated the argument, now apply the function (stored in kont.Value)
-                var function = kont.Value!;
                 var argument = value;
 
-                if (function.Type == ExprType.Abs)
+                if (function!.Type == ExprType.Abs)
                 {
                     // Beta reduction - substitute argument for parameter in function body
                     var substituted = Substitute(function.AbsBody!, function.AbsVarName!, argument);
-                    stateStack.Push(new CEKState(substituted, env, kont.Next!));
+                    stateStack.Push(new CEKState(substituted, env, next!));
                 }
                 else
                 {
                     // Not a function - create application and continue
                     var app = Expr.App(function, argument);
-                    stateStack.Push(new CEKState(app, env, kont.Next!));
+                    stateStack.Push(new CEKState(app, env, next!));
                 }
                 break;
         }
@@ -1143,7 +1151,6 @@ public class Interpreter(Logger logger)
         _normalizeCEKCount++;
         if (_normalizationCache.TryGetValue(expr, out var cached))
             return cached;
-        // Prevent infinite recursion
         if (depth > maxDepth || visited.Contains(expr))
             return expr;
 
@@ -1217,19 +1224,16 @@ public class Program
         if (File.Exists("stdlib.lambda"))
             await interpreter.ProcessInputAsync(":load stdlib.lambda");
 
-        int filesCount = 0;
         // Process any command line files before starting interactive mode
-        foreach (var filePath in args)
-        {
-            if (File.Exists(filePath))
-            {
-                await interpreter.LoadFileAsync(filePath);
-                filesCount++;
-            }
-            else
-                Console.WriteLine($"File not found: {filePath}");
-        }
-        if (filesCount > 0) return;
+        var filesToLoad = args.Where(File.Exists).ToArray();
+        foreach (var filePath in filesToLoad)
+            await interpreter.LoadFileAsync(filePath);
+
+        // Optionally, print missing files
+        foreach (var missing in args.Except(filesToLoad))
+            Console.WriteLine($"File not found: {missing}");
+
+        if (filesToLoad.Length > 0) return;
 
         await interpreter.RunInteractiveLoopAsync();
     }
