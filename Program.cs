@@ -20,7 +20,7 @@ public record Expr(
     public static Expr Var(string name) => new(ExprType.Var, VarName: name);
     public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body);
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
-    public static Expr CreateThunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
+    public static Expr Thunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
 
     public override string ToString() => ToStringLimited(1000);
 
@@ -508,7 +508,7 @@ public class Interpreter(Logger logger)
                 return (null, $"-> {statement.VarName} = {statement.Expression}");
             }
             var result = EvaluateCEK(statement.Expression);
-            _totalIterations += _iterations; // Update total iterations 
+            _totalIterations += _iterations; 
 
             return (result, $"-> {result}");
         }
@@ -827,7 +827,6 @@ public class Interpreter(Logger logger)
                     stateStack.Push(new CEKState(control.AppLeft!, env, argKont));
                     break;
                 case ExprType.Thunk:
-                    // Force thunk evaluation
                     var forcedValue = Force(control);
                     ApplyContinuation(forcedValue, env, kont, stateStack, ref finalResult);
                     break;
@@ -863,7 +862,7 @@ public class Interpreter(Logger logger)
                 // In lazy evaluation, wrap the argument in a thunk instead of evaluating it immediately
                 if (_lazyEvaluation)
                 {
-                    var thunk = Expr.CreateThunk(expr!, kenv!);
+                    var thunk = Expr.Thunk(expr!, kenv!);
                     stateStack.Push(new CEKState(thunk, env, funKont));
                 }
                 else
@@ -1302,9 +1301,7 @@ public class Interpreter(Logger logger)
     {
         // Force evaluation if it's a thunk
         if (expr.Type == ExprType.Thunk)
-        {
             expr = expr.ThunkValue?.IsForced == true ? expr.ThunkValue.ForcedValue! : expr;
-        }
 
         if (expr is not { Type: ExprType.Abs, AbsVarName: var f, AbsBody: { Type: ExprType.Abs, AbsVarName: var x, AbsBody: var body } })
             return null;
