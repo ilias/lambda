@@ -391,8 +391,6 @@ public class Logger
         string s when s.StartsWith("Time:") => _colors["magenta"], // Timing info
         string s when s.StartsWith("Result ") => _colors["magenta"], // Final result details
         string s when s.Contains("Loading") => _colors["cyan"], // loading files
-        string s when s.Contains("Memo clear") => _colors["cyan"], // Cache clear
-        string s when s.Contains("Memo put") => _colors["magenta"], // Cache puts
         string s when s.Contains("<<") => _colors["gray"], // reading file lines
         string s when s.Contains(">>") => _colors["green"], // result of reading file lines
         _ => _colors["reset"] // Default
@@ -579,7 +577,6 @@ public class Interpreter(Logger logger)
             ":help" => ShowHelp(),
             ":env" => ShowEnv(),
             ":exit" or ":quit" => "bye",
-            ":perf" => ResetPerformanceCounters(),
             ":depth" => HandleRecursionDepth(arg),
             _ => $"Unknown command: {command}"
         };
@@ -612,7 +609,6 @@ public class Interpreter(Logger logger)
         _freeVarCache.Clear();
         _expressionPool.Clear();
         _cacheHits = _cacheMisses = 0;
-        GC.Collect();
         return "All caches cleared.";
     }
 
@@ -640,6 +636,10 @@ public class Interpreter(Logger logger)
         _context.Clear();
         MemoClear(); // Reuse cache clearing logic
         _totalIterations = 0;
+        _timeInCacheLookup = 0;
+        _timeInSubstitution = 0;
+        _timeInEvaluation = 0;
+        _substitutionExprCount = 0;
         return "Environment cleared.";
     }
 
@@ -649,15 +649,6 @@ public class Interpreter(Logger logger)
         foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
             _logger.Log($"  {key} = {value}");
         return $"# Displayed {_context.Count} definitions.";
-    }
-
-    private string ResetPerformanceCounters()
-    {
-        _timeInCacheLookup = 0;
-        _timeInSubstitution = 0;
-        _timeInEvaluation = 0;
-        _substitutionExprCount = 0;
-        return "Performance counters reset.";
     }
 
     private string ShowStats()
@@ -708,9 +699,7 @@ public class Interpreter(Logger logger)
           :step (on|off)         - Toggle step-by-step evaluation logging (e.g., :step on)
           :stats                 - Show performance and environment statistics
           :depth [number]        - Set or show the maximum recursion depth (default: 100, range: 10-10000)
-          :perf reset            - Reset performance counters
           :env                   - Show current definitions in the environment
-          :clear                 - Clear the environment and caches
           :help                  - Show this help message
           :exit                  - Exit the interpreter
 
@@ -1033,22 +1022,24 @@ public class Interpreter(Logger logger)
         while (stack.Count > 0)
         {
             var current = stack.Pop();
-            if (current.Type == ExprType.Var)
+            switch (current.Type)
             {
-                if (current.VarName == var)
-                {
-                    _containsVarCache[key] = true;
-                    return true;
-                }
-            }
-            else if (current.Type == ExprType.Abs && current.AbsBody != null)
-            {
-                stack.Push(current.AbsBody);
-            }
-            else if (current.Type == ExprType.App)
-            {
-                if (current.AppRight != null) stack.Push(current.AppRight);
-                if (current.AppLeft != null) stack.Push(current.AppLeft);
+                case ExprType.Var:
+                    if (current.VarName == var)
+                    {
+                        _containsVarCache[key] = true;
+                        return true;
+                    }
+                    break;
+                    
+                case ExprType.Abs when current.AbsBody != null:
+                    stack.Push(current.AbsBody);
+                    break;
+                    
+                case ExprType.App:
+                    if (current.AppRight != null) stack.Push(current.AppRight);
+                    if (current.AppLeft != null) stack.Push(current.AppLeft);
+                    break;
             }
         }
         _containsVarCache[key] = false;
@@ -1225,15 +1216,11 @@ public class Program
             await interpreter.ProcessInputAsync(":load stdlib.lambda");
 
         // Process any command line files before starting interactive mode
-        var filesToLoad = args.Where(File.Exists).ToArray();
-        foreach (var filePath in filesToLoad)
-            await interpreter.LoadFileAsync(filePath);
-
-        // Optionally, print missing files
-        foreach (var missing in args.Except(filesToLoad))
-            Console.WriteLine($"File not found: {missing}");
-
-        if (filesToLoad.Length > 0) return;
+        foreach (var filePath in args.ToArray())
+            if (File.Exists(filePath))
+                await interpreter.LoadFileAsync(filePath);
+            else
+                Console.WriteLine($"File not found: {filePath}");
 
         await interpreter.RunInteractiveLoopAsync();
     }
