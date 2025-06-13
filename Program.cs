@@ -1,6 +1,9 @@
 ﻿namespace LambdaCalculus;
 
-public enum ExprType : byte { Var, Abs, App }
+public enum ExprType : byte { Var, Abs, App, Thunk }
+
+// Thunk represents a delayed computation
+public record Thunk(Expr Expression, Dictionary<string, Expr> Environment, bool IsForced = false, Expr? ForcedValue = null);
 
 public record Expr(
     ExprType Type,
@@ -8,7 +11,8 @@ public record Expr(
     string? AbsVarName = null,
     Expr? AbsBody = null,
     Expr? AppLeft = null,
-    Expr? AppRight = null)
+    Expr? AppRight = null,
+    Thunk? ThunkValue = null)
 {
     public static int HashCodeCount { get; private set; }
     private int? _hashCode;
@@ -16,6 +20,7 @@ public record Expr(
     public static Expr Var(string name) => new(ExprType.Var, VarName: name);
     public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body);
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
+    public static Expr CreateThunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
 
     public override string ToString() => ToStringLimited(1000);
 
@@ -25,6 +30,9 @@ public record Expr(
             ExprType.Var => VarName!,
             ExprType.Abs => $"λ{AbsVarName}.{AbsBody?.ToStringLimited(maxDepth - 1) ?? "null"}",
             ExprType.App => FormatApplication(maxDepth),
+            ExprType.Thunk => ThunkValue!.IsForced ?
+                $"<forced:{ThunkValue.ForcedValue?.ToStringLimited(maxDepth - 1) ?? "null"}>" :
+                $"<thunk:{ThunkValue.Expression.ToStringLimited(maxDepth - 1)}>",
             _ => "?"
         };
 
@@ -47,7 +55,6 @@ public record Expr(
     {
         if (ReferenceEquals(this, other)) return true;
         if (other is null || Type != other.Type) return false;
-
         var stack = new Stack<(Expr Left, Expr Right)>();
         stack.Push((this, other));
 
@@ -76,6 +83,18 @@ public record Expr(
                     stack.Push((left.AppLeft!, right.AppLeft!));
                     break;
 
+                case ExprType.Thunk when left.ThunkValue is null && right.ThunkValue is null: continue;
+                case ExprType.Thunk when left.ThunkValue is null || right.ThunkValue is null: return false;
+                case ExprType.Thunk:
+                    // For thunks, compare the forced values if both are forced, otherwise compare expressions
+                    if (left.ThunkValue!.IsForced && right.ThunkValue!.IsForced)
+                        stack.Push((left.ThunkValue.ForcedValue!, right.ThunkValue.ForcedValue!));
+                    else if (!left.ThunkValue.IsForced && !right.ThunkValue.IsForced)
+                        stack.Push((left.ThunkValue.Expression, right.ThunkValue.Expression));
+                    else
+                        return false; // One forced, one not - not equal
+                    break;
+
                 default: return false;
             }
         }
@@ -89,7 +108,7 @@ public record Expr(
     private static bool HasMissingApplicationParts(Expr left, Expr right) =>
         left.AppLeft is null || left.AppRight is null ||
         right.AppLeft is null || right.AppRight is null;
-        
+
     public override int GetHashCode()
     {
         if (_hashCode.HasValue) return _hashCode.Value;
@@ -125,6 +144,13 @@ public record Expr(
                     if (current.AppLeft?._hashCode is null) stack.Push(current.AppLeft!);
                     if (current.AppRight?._hashCode is null) stack.Push(current.AppRight!);
                     break;
+                case ExprType.Thunk when current.ThunkValue is not null:
+                    // For thunks, use the forced value if available, otherwise the expression
+                    var thunkHash = current.ThunkValue.IsForced && current.ThunkValue.ForcedValue is not null
+                        ? current.ThunkValue.ForcedValue.GetHashCode()
+                        : current.ThunkValue.Expression.GetHashCode();
+                    current._hashCode = HashCode.Combine(current.Type, thunkHash);
+                    break;
             }
         }
         return _hashCode ?? 0;
@@ -158,15 +184,15 @@ public readonly record struct SubstitutionCacheKey(Expr Root, string VarName, Ex
 }
 
 public enum KontinuationType : byte { Empty, Arg, Fun }
-public record Kontinuation(KontinuationType Type, Expr? Expression = null, 
+public record Kontinuation(KontinuationType Type, Expr? Expression = null,
     Dictionary<string, Expr>? Environment = null, Expr? Value = null, Kontinuation? Next = null)
 {
     public static readonly Kontinuation Empty = new(KontinuationType.Empty);
-    
-    public static Kontinuation Arg(Expr expr, Dictionary<string, Expr> env, Kontinuation next) => 
+
+    public static Kontinuation Arg(Expr expr, Dictionary<string, Expr> env, Kontinuation next) =>
         new(KontinuationType.Arg, expr, env, Next: next);
-    
-    public static Kontinuation Fun(Expr value, Kontinuation next) => 
+
+    public static Kontinuation Fun(Expr value, Kontinuation next) =>
         new(KontinuationType.Fun, Value: value, Next: next);
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
@@ -174,7 +200,7 @@ public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Konti
 public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
-public class ParseException(TreeErrorType errorType, int position) 
+public class ParseException(TreeErrorType errorType, int position)
     : Exception($"{errorType} at position {position}")
 {
     public TreeErrorType ErrorType { get; } = errorType;
@@ -428,13 +454,13 @@ public class Interpreter(Logger logger)
     private readonly Dictionary<Expr, Expr> _evaluationCache = new(8192, new ExprEqualityComparer());
     private readonly Dictionary<Expr, HashSet<string>> _freeVarCache = new(4096, new ExprEqualityComparer());
     private readonly Dictionary<string, Expr> _expressionPool = new(2048, StringComparer.Ordinal);
-    private readonly Dictionary<(Expr, string), bool> _containsVarCache = new(2048);
-    private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
+    private readonly Dictionary<(Expr, string), bool> _containsVarCache = new(2048); private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
     private readonly Logger _logger = logger;
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private long _timeInCacheLookup = 0;
     private long _timeInSubstitution = 0;
     private long _timeInEvaluation = 0;
+    private long _timeInForcing = 0; // Track time spent forcing thunks
     private int _normalizeCEKCount = 0; // Count of CEK normalizations to track performance impact
     private int _cacheHits = 0;
     private int _cacheMisses = 0;
@@ -445,6 +471,8 @@ public class Interpreter(Logger logger)
     private int _maxRecursionDepth = 20; // Default, can be set by user    
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
     private bool _showStep = false;
+    private bool _lazyEvaluation = true; // Enable lazy evaluation by default
+    private int _thunkForceCount = 0; // Track how many thunks are forced
 
     // Stack-based substitution infrastructure for better performance
     private enum SubstOp { Evaluate, BuildAbs, BuildApp, SubstituteInBody }
@@ -572,6 +600,7 @@ public class Interpreter(Logger logger)
             ":load" => await LoadFileAsync(arg),
             ":save" => await SaveFileAsync(arg),
             ":step" => HandleStep(arg),
+            ":lazy" => HandleLazy(arg),
             ":clear" => ClearEnvironment(),
             ":stats" => ShowStats(),
             ":help" => ShowHelp(),
@@ -588,6 +617,12 @@ public class Interpreter(Logger logger)
         return $"Step mode {(_showStep ? "enabled" : "disabled")}";
     }
 
+    private string HandleLazy(string arg)
+    {
+        _lazyEvaluation = arg != "off";
+        return $"Lazy evaluation {(_lazyEvaluation ? "enabled" : "disabled")}";
+    }
+
     private string HandleRecursionDepth(string arg)
     {
         if (string.IsNullOrWhiteSpace(arg))
@@ -598,8 +633,29 @@ public class Interpreter(Logger logger)
             _maxRecursionDepth = value;
             return $"Recursion depth limit set to {_maxRecursionDepth}";
         }
-        
+
         return "Error: Please provide a number between 10 and 10000.";
+    }
+
+    // Force evaluation of a thunk (lazy value)
+    private Expr Force(Expr expr)
+    {
+        if (expr.Type != ExprType.Thunk || expr.ThunkValue is null)
+            return expr;
+
+        if (expr.ThunkValue.IsForced)
+            return expr.ThunkValue.ForcedValue!;
+
+        _perfStopwatch.Restart();
+        _thunkForceCount++;
+
+        // Evaluate the thunk's expression in its captured environment
+        var forced = EvaluateCEK(expr.ThunkValue.Expression, expr.ThunkValue.Environment);
+        _timeInForcing += _perfStopwatch.ElapsedTicks;
+
+        // Update the thunk to cache the forced value
+        var updatedThunk = expr.ThunkValue with { IsForced = true, ForcedValue = forced };
+        return expr with { ThunkValue = updatedThunk };
     }
 
     private string MemoClear()
@@ -639,7 +695,9 @@ public class Interpreter(Logger logger)
         _timeInCacheLookup = 0;
         _timeInSubstitution = 0;
         _timeInEvaluation = 0;
+        _timeInForcing = 0;
         _substitutionExprCount = 0;
+        _thunkForceCount = 0;
         return "Environment cleared.";
     }
 
@@ -654,11 +712,14 @@ public class Interpreter(Logger logger)
     private string ShowStats()
     {
         static string PerOfTotal(long value, long total) => total == 0 ? "0.0%" : $"{value * 100.0 / total:F1}%";
-        var totalTime = _timeInCacheLookup + _timeInSubstitution + _timeInEvaluation; return $"""
+        var totalTime = _timeInCacheLookup + _timeInSubstitution + _timeInEvaluation + _timeInForcing;
+        return $"""
         === Lambda Interpreter Statistics ===
         Environment:              {_context.Count:#,##0} definitions
         CEK normalization:        ({_normalizeCEKCount:#,##0} normalizations)   
         Recursion depth:          {_maxRecursionDepth:#,##0}               
+        Lazy evaluation:          {(_lazyEvaluation ? "ENABLED" : "DISABLED")}
+        Thunk forcing:            {_thunkForceCount:#,##0} thunks forced
         Memoization:              
           Substitution cache:     {_substitutionCache.Count:#,##0} entries
           Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
@@ -669,6 +730,7 @@ public class Interpreter(Logger logger)
           Cache lookup time:      {_timeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInCacheLookup, totalTime)})
           Substitution time:      {_timeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInSubstitution, totalTime)}) (called {_substitutionExprCount:#,##0} times)
           Evaluation time:        {_timeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInEvaluation, totalTime)})
+          Thunk forcing time:     {_timeInForcing / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInForcing, totalTime)})
           Total measured time:    {totalTime / 10000.0:#,##0.00} ms
         System:
           Unique var counter:     {_varCounter:#,##0}
@@ -697,6 +759,7 @@ public class Interpreter(Logger logger)
           :log (<filename>|off)  - Log output to a file or disable logging (e.g., :log session.log, :log off)
           :log clear             - Clear the current log file (if logging is enabled)
           :step (on|off)         - Toggle step-by-step evaluation logging (e.g., :step on)
+          :lazy (on|off)         - Toggle lazy evaluation (default: on)
           :stats                 - Show performance and environment statistics
           :depth [number]        - Set or show the maximum recursion depth (default: 100, range: 10-10000)
           :env                   - Show current definitions in the environment
@@ -724,11 +787,11 @@ public class Interpreter(Logger logger)
         return false;
     }
 
-    private Expr EvaluateCEK(Expr expr)
+    private Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
     {
         _perfStopwatch.Restart();
 
-        var environment = new Dictionary<string, Expr>(_context, StringComparer.Ordinal);
+        var environment = new Dictionary<string, Expr>(initialEnv ?? _context, StringComparer.Ordinal);
         var state = new CEKState(expr, environment, Kontinuation.Empty);
         var stateStack = new Stack<CEKState>();
         stateStack.Push(state);
@@ -739,7 +802,7 @@ public class Interpreter(Logger logger)
         while (stateStack.Count > 0)
         {
             _iterations++;
-            var (control, env, kont) = stateStack.Pop(); ;
+            var (control, env, kont) = stateStack.Pop();
 
             if (_showStep)
                 _logger.Log($"Step {currentStep++}: CEK \tC: {control}, K: {kont.Type}");
@@ -762,6 +825,11 @@ public class Interpreter(Logger logger)
                 case ExprType.App:
                     var argKont = Kontinuation.Arg(control.AppRight!, env, kont);
                     stateStack.Push(new CEKState(control.AppLeft!, env, argKont));
+                    break;
+                case ExprType.Thunk:
+                    // Force thunk evaluation
+                    var forcedValue = Force(control);
+                    ApplyContinuation(forcedValue, env, kont, stateStack, ref finalResult);
                     break;
             }
 
@@ -791,7 +859,17 @@ public class Interpreter(Logger logger)
             case { Type: KontinuationType.Arg, Expression: var expr, Environment: var kenv, Next: var next }:
                 // We have evaluated the function, now evaluate the argument
                 var funKont = Kontinuation.Fun(value, next!);
-                stateStack.Push(new CEKState(expr!, kenv!, funKont));
+
+                // In lazy evaluation, wrap the argument in a thunk instead of evaluating it immediately
+                if (_lazyEvaluation)
+                {
+                    var thunk = Expr.CreateThunk(expr!, kenv!);
+                    stateStack.Push(new CEKState(thunk, env, funKont));
+                }
+                else
+                {
+                    stateStack.Push(new CEKState(expr!, kenv!, funKont));
+                }
                 break;
 
             case { Type: KontinuationType.Fun, Value: var function, Next: var next }:
@@ -873,6 +951,11 @@ public class Interpreter(Logger logger)
                     stack.Push((current.AppRight, true, null));
                     stack.Push((current.AppLeft, true, null));
                     break;
+
+                case ExprType.Thunk when current.ThunkValue is not null:
+                    // For thunks, analyze the expression inside
+                    stack.Push((current.ThunkValue.Expression, true, null));
+                    break;
             }
         }
         if (skipVar is null)
@@ -890,6 +973,7 @@ public class Interpreter(Logger logger)
             ExprType.Var => _context.ContainsKey(expr.VarName!),
             ExprType.Abs => HasContextVariables(expr.AbsBody),
             ExprType.App => HasContextVariables(expr.AppLeft) || HasContextVariables(expr.AppRight),
+            ExprType.Thunk => HasContextVariables(expr.ThunkValue?.Expression),
             _ => false,
         };
     }
@@ -924,6 +1008,14 @@ public class Interpreter(Logger logger)
 
         // Fast path for abstractions that shadow the variable
         if (root.Type == ExprType.Abs && root.AbsVarName == var) return root;
+
+        // Handle thunks
+        if (root.Type == ExprType.Thunk && root.ThunkValue is not null)
+        {
+            var substitutedExpr = Substitute(root.ThunkValue.Expression, var, val);
+            var newThunk = root.ThunkValue with { Expression = substitutedExpr };
+            return root with { ThunkValue = newThunk };
+        }
 
         // Ultra-fast application patterns for common Church numeral operations
         if (root.Type == ExprType.App && IsCommonPattern(root, var, val, out var fastResult)) return fastResult;
@@ -995,6 +1087,7 @@ public class Interpreter(Logger logger)
         {
             ExprType.Var => expr.VarName == varName,
             ExprType.Abs => expr.AbsVarName != varName && QuickFreeVarCheck(expr.AbsBody!, varName),
+            ExprType.Thunk => expr.ThunkValue is not null && QuickFreeVarCheck(expr.ThunkValue.Expression, varName),
             _ => FreeVars(expr).Contains(varName),// Fall back to full computation for complex cases
         };
     }
@@ -1031,14 +1124,18 @@ public class Interpreter(Logger logger)
                         return true;
                     }
                     break;
-                    
+
                 case ExprType.Abs when current.AbsBody != null:
                     stack.Push(current.AbsBody);
                     break;
-                    
+
                 case ExprType.App:
                     if (current.AppRight != null) stack.Push(current.AppRight);
                     if (current.AppLeft != null) stack.Push(current.AppLeft);
+                    break;
+
+                case ExprType.Thunk when current.ThunkValue != null:
+                    stack.Push(current.ThunkValue.Expression);
                     break;
             }
         }
@@ -1069,6 +1166,20 @@ public class Interpreter(Logger logger)
                 case SubstOp.Evaluate when node.Type == ExprType.Abs && node.AbsVarName == currentVar:
                     // Fast path for shadowed variables
                     resultStack.Push(node);
+                    continue;
+
+                case SubstOp.Evaluate when node.Type == ExprType.Thunk:
+                    // Handle thunk substitution
+                    if (node.ThunkValue is not null)
+                    {
+                        var substitutedExpr = Substitute(node.ThunkValue.Expression, currentVar, currentVal);
+                        var newThunk = node.ThunkValue with { Expression = substitutedExpr };
+                        resultStack.Push(node with { ThunkValue = newThunk });
+                    }
+                    else
+                    {
+                        resultStack.Push(node);
+                    }
                     continue;
 
                 case SubstOp.Evaluate:
@@ -1123,7 +1234,7 @@ public class Interpreter(Logger logger)
                     break;
             }
         }
- 
+
         return resultStack.Pop();
     }
 
@@ -1153,6 +1264,7 @@ public class Interpreter(Logger logger)
                 ExprType.Var => expr,
                 ExprType.Abs => Expr.Abs(expr.AbsVarName!, NormalizeWithVisited(expr.AbsBody!, visited, depth + 1, maxDepth)),
                 ExprType.App => NormalizeApplicationWithVisited(expr, visited, depth, maxDepth),
+                ExprType.Thunk => Force(expr), // Force thunks during normalization
                 _ => expr
             };
             _normalizationCache[expr] = result;
@@ -1188,6 +1300,12 @@ public class Interpreter(Logger logger)
     // Returns the integer value of a Church numeral (λf.λx.f^n(x)), or null if not valid.
     private static int? ExtractChurchNumeralValue(Expr expr)
     {
+        // Force evaluation if it's a thunk
+        if (expr.Type == ExprType.Thunk)
+        {
+            expr = expr.ThunkValue?.IsForced == true ? expr.ThunkValue.ForcedValue! : expr;
+        }
+
         if (expr is not { Type: ExprType.Abs, AbsVarName: var f, AbsBody: { Type: ExprType.Abs, AbsVarName: var x, AbsBody: var body } })
             return null;
         if (body is { Type: ExprType.Var, VarName: var v } && v == x)

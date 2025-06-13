@@ -1,0 +1,4 @@
+:load lazy_test.lambda
+test_lazy
+:stats
+:exit

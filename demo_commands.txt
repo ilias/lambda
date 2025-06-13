@@ -1,0 +1,6 @@
+:load lazy_demo.lambda
+lazy_choice
+:stats
+conditional_test
+:stats
+:exit
