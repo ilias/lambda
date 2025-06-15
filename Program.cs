@@ -723,6 +723,9 @@ public class Interpreter(Logger logger)
         Memoization:              
           Substitution cache:     {_substitutionCache.Count:#,##0} entries
           Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
+          Free variable cache:    {_freeVarCache.Count:#,##0} entries
+          variable cache:         {_variableCache.Count:#,##0} entries
+          Expression pool:        {_expressionPool.Count:#,##0} entries
           Cache hits/misses:      {_cacheHits:#,##0} / {_cacheMisses:#,##0} ({PerOfTotal(_cacheHits, _cacheHits + _cacheMisses)})
         Performance:
           Total iterations:       {_totalIterations:#,##0}
@@ -904,9 +907,13 @@ public class Interpreter(Logger logger)
     {
         if (expr.Type != ExprType.Var) return expr;
         var key = $"var:{expr.VarName}";
-        return _expressionPool.TryGetValue(key, out var existing)
-            ? existing
-            : (_expressionPool[key] = expr);
+        if (_expressionPool.TryGetValue(key, out var existing))
+        {
+            _cacheHits++;
+            return existing;
+        }
+        _cacheMisses++;
+        return _expressionPool[key] = expr;
     }
 
     private HashSet<string> FreeVars(Expr expr, string? skipVar = null)
