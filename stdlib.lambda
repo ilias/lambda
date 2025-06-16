@@ -103,15 +103,13 @@ sub = λm.λn.n pred m                       # Alias for minus
 isone = λn.eq n 1                          # Is one predicate
 map-pair = λf.λp. pair (f (first p)) (f (second p))   # Applies f to both elements of a pair
 
-# Iterate n times to build up Fibonacci value
+# Iterative functions (using helper functions, no Y combinator)
 FIB_ITER_HELPER = λn.n (λp.pair (second p) (plus (first p) (second p))) (pair 0 1)
 FIB_ITER = λn.first (FIB_ITER_HELPER n)
 
-# Iterative factorial (like FIB_ITER)
 FACT_ITER_HELPER = λp. pair (pred (first p)) (mult (first p) (second p))
 FACT_ITER = λn. second (n FACT_ITER_HELPER (pair n 1))
 
-# Iterative division and modulo (no Y combinator)
 DIV_ITER_HELPER = λn.λp. if (lt (first p) n) p (pair (minus (first p) n) (succ (second p)))
 div = λm.λn. second (m (DIV_ITER_HELPER n) (pair m 0))
 
