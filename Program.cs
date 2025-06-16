@@ -508,7 +508,7 @@ public class Interpreter(Logger logger)
                 return (null, $"-> {statement.VarName} = {statement.Expression}");
             }
             var result = EvaluateCEK(statement.Expression);
-            _totalIterations += _iterations;
+            _totalIterations += _iterations; 
 
             return (result, $"-> {result}");
         }
@@ -593,7 +593,8 @@ public class Interpreter(Logger logger)
     {
         var parts = input.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         var command = parts[0];
-        var arg = parts.Length > 1 ? parts[1].Trim() : ""; return command switch
+        var arg = parts.Length > 1 ? parts[1].Trim() : "";
+        return command switch
         {
             ":log" => await _logger.HandleLogCommandAsync(arg),
             ":load" => await LoadFileAsync(arg),
@@ -606,8 +607,6 @@ public class Interpreter(Logger logger)
             ":env" => ShowEnv(),
             ":exit" or ":quit" => "bye",
             ":depth" => HandleRecursionDepth(arg),
-            ":combinators" => ShowCombinators(arg),
-            ":loadcomb" => LoadStandardCombinators(),
             _ => $"Unknown command: {command}"
         };
     }
@@ -636,26 +635,6 @@ public class Interpreter(Logger logger)
         }
 
         return "Error: Please provide a number between 10 and 10000.";
-    }
-
-    private string ShowCombinators(string comb = "")
-    {
-        var combinators = CombinatorReducer.GetStandardCombinators();
-        _logger.Log("# Standard Combinators:");
-        var list = combinators.Where(p => comb == "" || p.Key == comb).OrderBy(kv => kv.Key);
-        foreach (var (name, (expr, description)) in list)
-            _logger.Log($"  {name} = {expr}  # {description}");
-        return $"# Displayed {combinators.Count} standard combinators.";
-    }
-
-    private string LoadStandardCombinators()
-    {
-        var combinators = CombinatorReducer.GetStandardCombinators();
-        foreach (var (name, (expr, _)) in combinators)
-        {
-            _context[name] = expr;
-        }
-        return $"Loaded {combinators.Count} standard combinators into environment.";
     }
 
     // Force evaluation of a thunk (lazy value)
@@ -764,6 +743,7 @@ public class Interpreter(Logger logger)
           GC collections:         Gen0={GC.CollectionCount(0)} Gen1={GC.CollectionCount(1)} Gen2={GC.CollectionCount(2)}
         """;
     }
+
     private static string ShowHelp() =>
         """
         Lambda Calculus Interpreter Help:
@@ -786,23 +766,8 @@ public class Interpreter(Logger logger)
           :stats                 - Show performance and environment statistics
           :depth [number]        - Set or show the maximum recursion depth (default: 100, range: 10-10000)
           :env                   - Show current definitions in the environment
-          :combinators           - Show all standard combinators (S, K, I, B, C, W, M, Y, Ω)
-          :combinator <name>     - Show definition of a specific combinator (e.g., :combinator S)
-          :loadcomb              - Load all standard combinators into the environment
           :help                  - Show this help message
           :exit                  - Exit the interpreter
-
-        Combinator Reduction:
-          The interpreter automatically recognizes and reduces standard combinators:
-          - I (Identity): I x → x
-          - K (Constant): K x y → x  
-          - S (Substitution): S x y z → x z (y z)
-          - B (Composition): B x y z → x (y z)
-          - C (Flip): C x y z → x z y
-          - W (Duplication): W x y → x y y
-          - M (Mockingbird): M x → x x
-          - Y (Y-combinator): Fixed-point combinator
-          - Ω (Omega): Infinite loop combinator
 
         Other Features:
           Line continuation: Use '\' at the end of a line to continue input on the next line.
@@ -861,19 +826,8 @@ public class Interpreter(Logger logger)
                     ApplyContinuation(control, env, kont, stateStack, ref finalResult);
                     break;
                 case ExprType.App:
-                    // Try combinator reduction first
-                    var combinatorReduction = CombinatorReducer.TryReduceCombinator(control);
-                    if (combinatorReduction != null)
-                    {
-                        if (_showStep)
-                            _logger.Log($"    Combinator reduction: {control} → {combinatorReduction}");
-                        stateStack.Push(new CEKState(combinatorReduction, env, kont));
-                    }
-                    else
-                    {
-                        var argKont = Kontinuation.Arg(control.AppRight!, env, kont);
-                        stateStack.Push(new CEKState(control.AppLeft!, env, argKont));
-                    }
+                    var argKont = Kontinuation.Arg(control.AppRight!, env, kont);
+                    stateStack.Push(new CEKState(control.AppLeft!, env, argKont));
                     break;
                 case ExprType.Thunk:
                     var forcedValue = Force(control);
@@ -1370,148 +1324,6 @@ public class Interpreter(Logger logger)
     }
 }
 
-// Combinator reduction system
-public static class CombinatorReducer
-{
-    // Standard combinators
-    private static readonly Dictionary<string, (Expr Expr, string Description)> StandardCombinators = new()
-    {
-        // Identity: I = λx.x
-        // also defined as I = S K K
-        ["I"] = (Expr.Abs("x", Expr.Var("x")), "Identity combinator"),
-
-        // Konstant: K = λx.λy.x  
-        ["K"] = (Expr.Abs("x", Expr.Abs("y", Expr.Var("x"))), "Constant combinator"),
-
-        // Substitution: S = λx.λy.λz.x z (y z)
-        ["S"] = (Expr.Abs("x", Expr.Abs("y", Expr.Abs("z",
-                 Expr.App(Expr.App(Expr.Var("x"), Expr.Var("z")),
-                         Expr.App(Expr.Var("y"), Expr.Var("z")))))), "Substitution combinator"),
-
-        // Composition: B = λx.λy.λz.x (y z)
-        // also defined as B = B = S (K S) K
-        ["B"] = (Expr.Abs("x", Expr.Abs("y", Expr.Abs("z",
-                 Expr.App(Expr.Var("x"), Expr.App(Expr.Var("y"), Expr.Var("z")))))), "Composition combinator"),
-
-        // Flip: C = λx.λy.λz.x z y
-        // also defined as C = S (B B S) (K K)
-        ["C"] = (Expr.Abs("x", Expr.Abs("y", Expr.Abs("z",
-                 Expr.App(Expr.App(Expr.Var("x"), Expr.Var("z")), Expr.Var("y"))))), "Flip combinator"),
-
-        // Duplication: W = λx.λy.x y y
-        // also defined as W = S S (K I)
-        ["W"] = (Expr.Abs("x", Expr.Abs("y",
-                 Expr.App(Expr.App(Expr.Var("x"), Expr.Var("y")), Expr.Var("y")))), "Duplication combinator"),
-
-        // Mockingbird: M = λx.x x
-        // also defined as M = S I I
-        ["M"] = (Expr.Abs("x", Expr.App(Expr.Var("x"), Expr.Var("x"))), "Mockingbird combinator"),
-
-        // Y-combinator: Y = λf.(λx.f (x x)) (λx.f (x x))
-        // also defined as Y = S (K (S I I)) (S (S (K S) K) (K (S I I)))
-        ["Y"] = (Expr.Abs("f",
-                 Expr.App(
-                     Expr.Abs("x", Expr.App(Expr.Var("f"), Expr.App(Expr.Var("x"), Expr.Var("x")))),
-                     Expr.Abs("x", Expr.App(Expr.Var("f"), Expr.App(Expr.Var("x"), Expr.Var("x")))))),
-                 "Y-combinator (fixed-point)"),
-
-        // Ω-combinator: Ω = (λx.x x) (λx.x x) 
-        // also defined as Ω = (S I I) (S I I)
-        ["Ω"] = (Expr.App(
-                 Expr.Abs("x", Expr.App(Expr.Var("x"), Expr.Var("x"))),
-                 Expr.Abs("x", Expr.App(Expr.Var("x"), Expr.Var("x")))), "Omega combinator (infinite loop)")
-    };
-
-    // Combinator reduction patterns
-    private static readonly List<CombinatorPattern> ReductionPatterns =
-    [
-        // I x → x
-        new("I", 1, args => args[0]),
-        
-        // K x y → x
-        new("K", 2, args => args[0]),
-        
-        // S x y z → x z (y z)
-        new("S", 3, args => Expr.App(Expr.App(args[0], args[2]), Expr.App(args[1], args[2]))),
-        
-        // B x y z → x (y z)
-        new("B", 3, args => Expr.App(args[0], Expr.App(args[1], args[2]))),
-        
-        // C x y z → x z y
-        new("C", 3, args => Expr.App(Expr.App(args[0], args[2]), args[1])),
-        
-        // W x y → x y y
-        new("W", 2, args => Expr.App(Expr.App(args[0], args[1]), args[1])),
-        
-        // M x → x x
-        new("M", 1, args => Expr.App(args[0], args[0]))
-    ];
-
-    public static Dictionary<string, (Expr Expr, string Description)> GetStandardCombinators()
-        => new(StandardCombinators);
-
-    public static Expr? TryReduceCombinator(Expr expr)
-    {
-        // Try to match combinator patterns
-        foreach (var pattern in ReductionPatterns)
-        {
-            if (TryMatchPattern(expr, pattern, out var reducedExpr))
-                return reducedExpr;
-        }
-        return null;
-    }
-
-    private static bool TryMatchPattern(Expr expr, CombinatorPattern pattern, out Expr? result)
-    {
-        result = null;
-        var args = new List<Expr>();
-        var current = expr;
-
-        // Try to extract the combinator and its arguments
-        for (int i = pattern.Arity - 1; i >= 0; i--)
-        {
-            if (current.Type != ExprType.App)
-                return false;
-
-            args.Insert(0, current.AppRight!);
-            current = current.AppLeft!;
-        }
-
-        // Check if the function is the expected combinator
-        if (current.Type != ExprType.Var || current.VarName != pattern.Name)
-            return false;
-
-        result = pattern.Reducer(args);
-        return true;
-    }
-
-    public static bool IsCombinator(Expr expr, out string? combinatorName)
-    {
-        combinatorName = null;
-        if (expr.Type != ExprType.Var)
-            return false;
-
-        if (StandardCombinators.ContainsKey(expr.VarName!))
-        {
-            combinatorName = expr.VarName;
-            return true;
-        }
-        return false;
-    }
-
-    public static Expr? GetCombinatorDefinition(string name)
-    {
-        return StandardCombinators.TryGetValue(name, out var combinator) ? combinator.Expr : null;
-    }
-
-    public static string GetCombinatorDescription(string name)
-    {
-        return StandardCombinators.TryGetValue(name, out var combinator) ? combinator.Description : "Unknown combinator";
-    }
-}
-
-public record CombinatorPattern(string Name, int Arity, Func<List<Expr>, Expr> Reducer);
-
 public class Program
 {
     public static async Task Main(string[] args)
@@ -1524,7 +1336,6 @@ public class Program
         // Load standard library if available
         if (File.Exists("stdlib.lambda"))
             await interpreter.ProcessInputAsync(":load stdlib.lambda");
-        await interpreter.ProcessInputAsync(":loadcomb");
 
         // Process any command line files before starting interactive mode
         foreach (var filePath in args.ToArray())

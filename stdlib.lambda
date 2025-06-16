@@ -1,67 +1,78 @@
 # Church encoding of lambda calculus
 
-# boolean
-id = λx.x 
-true = λx.λy.x 
-false = λx.λy.y 
-and = λp.λq.p q p 
-not = λp.p false true 
-or = λp.λq.p true q 
-xor = λp.λq.p (not q) q 
-if = λp.λa.λb.p a b 
+# Logical/Boolean functions
+true = λx.λy.x
+false = λx.λy.y
+not = λp.p false true
+and = λp.λq.p q p
+or = λp.λq.p true q
+xor = λp.λq.p (not q) q
+nand = λp.λq.not (and p q)         # NAND
+nor = λp.λq.not (or p q)          # NOR
+implies = λp.λq.or (not p) q      # Implication (p → q)
+if = λp.λa.λb.p a b
 eq-bool = λx.λy.x y (not y)
+neq-bool = λx.λy.not (eq-bool x y) # Boolean not-equal
 
-# Church numerals
+# Church numerals and arithmetic
 0 = λf.λx.x
+1 = λf.λx.f x
+2 = λf.λx.f (f x)
+3 = λf.λx.f (f (f x))
+4 = λf.λx.f (f (f (f x)))
+5 = λf.λx.f (f (f (f (f x))))
+6 = λf.λx.f (f (f (f (f (f x)))))
+7 = λf.λx.f (f (f (f (f (f (f x))))))
+8 = λf.λx.f (f (f (f (f (f (f (f x)))))))
+9 = λf.λx.f (f (f (f (f (f (f (f (f x))))))))
 zero = λf.λx.x
 succ = λn.λf.λx.f (n f x)
-pred = λn.λf.λx.n (λg.λh.h (g f)) (λu.x) (λu.u)
-1 = succ 0    
-2 = succ 1    
-3 = succ 2    
-4 = succ 3    
-5 = succ 4    
-6 = succ 5    
-7 = succ 6    
-8 = succ 7    
-9 = succ 8    
-10 = succ 9   
+pred = λn.λf.λx. n (λg.λh. h (g f)) (λu.x) (λu.u)
 plus = λm.λn.λf.λx.m f (n f x)
-mult = λm.λn.λf.m (n f)    
-iszero = λn.n (λx.false) true
+double = λn.plus n n              # Double (n*2)
+mult = λm.λn.λf.m (n f)
+square = λn.mult n n              # Square (n*n)
 exp = λm.λn.n m
+iszero = λn.n (λx.false) true
 minus = λm.λn.n pred m
+half = λn.n (λx.λy.y) 0           # Integer division by 2 (using Church numerals)
+max = λm.λn.if (leq m n) n m      # Maximum
+min = λm.λn.if (leq m n) m n      # Minimum
+even = λn.iszero (mod n 2)        # Even predicate
+odd = λn.not (even n)             # Odd predicate
 
-# Division and Modulo (using Y combinator for recursion)
-# Helper for division: rec m n = if (m < n) then 0 else 1 + rec(m-n, n)
-DIV_HELPER = λrec. λm. λn. if (lt m n) 0 (succ (rec (minus m n) n))
-div = Y DIV_HELPER
-
-# Helper for modulo: rec m n = if (m < n) then m else rec(m-n, n)
-MOD_HELPER = λrec. λm. λn. if (lt m n) m (rec (minus m n) n)
-mod = Y MOD_HELPER
-
+# Comparison
 leq = λm.λn.iszero (minus m n)
 eq = λm.λn.and (leq m n) (leq n m)
 gt = λm.λn.not (leq m n)
 geq = λm.λn.not (lt m n)
 lt = λm.λn.and (leq m n) (not (eq m n))
 
-# combinators
-K = λx.λy.x
-I = λx.x
-S = λx.λy.λz.x z (y z)
-B = λx.λy.λz.x (y z)
-C = λx.λy.λz.x z y
-Y = λf.(λx.f (x x)) (λx.f (x x))
+# Division and Modulo (using Y combinator for recursion)
+DIV_HELPER = λrec. λm. λn. if (lt m n) 0 (succ (rec (minus m n) n))
+div = Y DIV_HELPER
+MOD_HELPER = λrec. λm. λn. if (lt m n) m (rec (minus m n) n)
+mod = Y MOD_HELPER
 
-# pair
+# Combinators
+K = λx.λy.x            # K (Kestrel, constant)
+I = λx.x               # I (Identity)
+S = λx.λy.λz.x z (y z) # S (Substitution)
+B = λx.λy.λz.x (y z)   # B (Composition)
+C = λx.λy.λz.x z y     # C (Flip)
+W = λx.λy.x y y        # W (Duplication)
+M = λx.x x             # M (Mockingbird)
+Y = λf.(λx.f (x x)) (λx.f (x x)) # Y (Fixed-point)
+Z = λf.(λx.f (λv.x x v)) (λx.f (λv.x x v)) # Z (Z combinator, another fixed-point)
+Ω = (λx.x x) (λx.x x)  # Ω (Omega, infinite loop)
+
+# Pairs
 pair = λx.λy.λf.f x y
 first = λp.p (λx.λy.x)
 second = λp.p (λx.λy.y)
 swap = λp.p (λx.λy.y x) (λx.λy.x y)
 
-# Basic list operations
+# Lists
 nil = λx.λy.x                           # Empty list
 cons = λx.λy.λf.f x y                   # Create a list node with head x and tail y
 head = λl.l (λx.λy.x)                   # Extract the first element
@@ -76,20 +87,31 @@ foldl = λf.λz.λl.l (λx.λy.y (f z x)) z                # Fold from left with
 length = λl.foldl (λx.λy.succ x) 0 l                  # Count elements
 reverse = λl.foldl (λx.λy.cons y x) nil l             # Reverse list order
 
-# arithmetic functions
+# Arithmetic functions (recursive)
 fact = λn.if (iszero n) 1 (mult n (fact (pred n)))
 fib = λn.if (iszero n) 0 (if (eq n 1) 1 (plus (fib (pred n)) (fib (pred (pred n)))))
 
-# fixed-point combinators
+# Fixed-point combinators and helpers
 FIB = Y (λf.λn.if (iszero n) 0 (if (eq n 1) 1 (plus (f (pred n)) (f (pred (pred n))))))
-FACT = Y (λf.λn.if (iszero n) 1 (mult n (f (pred n))))
 
-# Helper that uses an accumulator for O(n) computation
-FACT_HELPER = Y (λf.λn.λacc.if (iszero n) acc (f (pred n) (mult n acc)))
-# Tail-recursive factorial with accumulator
-FACT_TR = λn.FACT_HELPER n 1
+# Utility and convenience functions
+id-num = λn.n (λx.succ x) 0                # Identity for Church numerals
+bool-to-num = λb.b 1 0                     # Boolean to Church numeral
+ispos = λn.not (iszero n)                  # Is positive (n > 0)
+isnil = λl.l (λx.λy.false) true             # Checks if a list is nil
+singleton = λx.cons x nil                  # Singleton list
+compose = λf.λg.λx.f (g x)                 # Function composition
+flip = λf.λx.λy.f y x                      # Flip arguments
+make-pair = pair                           # Alias for pair
+swap-pair = swap                           # Alias for swap
+sub = λm.λn.n pred m                       # Alias for minus
+isone = λn.eq n 1                          # Is one predicate
+map-pair = λf.λp.p (λx.λy.pair (f x) (f y)) # Map function over both elements of a pair
 
 # Iterate n times to build up Fibonacci value
 FIB_ITER_HELPER = λn.n (λp.pair (second p) (plus (first p) (second p))) (pair 0 1)
-# Extract the result from the pair
 FIB_ITER = λn.first (FIB_ITER_HELPER n)
+
+# Iterative factorial (like FIB_ITER)
+FACT_ITER_HELPER = λp. pair (pred (first p)) (mult (first p) (second p))
+FACT_ITER = λn. second (n FACT_ITER_HELPER (pair n 1))
