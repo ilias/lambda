@@ -672,11 +672,34 @@ public class Interpreter(Logger logger)
     {
         int lineCount = 0;
         _logger.Log($"Loading commands from '{path}'");
-        foreach (var line in await File.ReadAllLinesAsync(path))
+        var lines = await File.ReadAllLinesAsync(path);
+        var currentInput = new System.Text.StringBuilder();
+        foreach (var line in lines)
         {
             await _logger.LogAsync($"line {lineCount++} <<: {line}");
-            var (_, str) = await ProcessInputAsync(line);
-            await _logger.LogAsync(str);
+            var trimmed = line.TrimEnd();
+            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#'))
+                continue;
+            if (trimmed.EndsWith('\\'))
+            {
+                currentInput.Append(trimmed[..^1]);
+                continue;
+            }
+            currentInput.Append(trimmed);
+            var input = currentInput.ToString();
+            currentInput.Clear();
+            var timing = System.Diagnostics.Stopwatch.StartNew();
+            var output = await ProcessInputAsync(input);
+            timing.Stop();
+            await DisplayOutput(output, timing.Elapsed);
+        }
+        // If file ends with a continued line, process it
+        if (currentInput.Length > 0)
+        {
+            var timing = System.Diagnostics.Stopwatch.StartNew();
+            var output = await ProcessInputAsync(currentInput.ToString());
+            timing.Stop();
+            await DisplayOutput(output, timing.Elapsed);
         }
         return $"Loaded {path}";
     }

@@ -1,0 +1,95 @@
+# Lambda Calculus Interpreter Comprehensive Test Suite
+# Load this file with :load combinator-tests.lambda
+
+# --- Boolean logic ---
+true true false      # expect: true
+false true false     # expect: false
+not true             # expect: false
+not false            # expect: true
+and true false       # expect: false
+and true true        # expect: true
+or false false       # expect: false
+or true false        # expect: true
+xor true false       # expect: true
+xor true true        # expect: false
+nand true true       # expect: false
+nor false false      # expect: true
+implies true false   # expect: false
+implies false true   # expect: true
+if true 1 0          # expect: 1
+if false 1 0         # expect: 0
+
+# --- Church numerals and arithmetic ---
+plus 2 3             # expect: 5
+mult 2 3             # expect: 6
+exp 2 3              # expect: 8
+pred 3               # expect: 2
+minus 5 2            # expect: 3
+iszero 0             # expect: true
+iszero 1             # expect: false
+even 4               # expect: true
+odd 4                # expect: false
+max 2 5              # expect: 5
+min 2 5              # expect: 2
+half 6               # expect: 3
+square 4             # expect: 16
+
+# --- Comparison ---
+eq 2 2               # expect: true
+eq 2 3               # expect: false
+leq 2 3              # expect: true
+leq 3 2              # expect: false
+gt 3 2               # expect: true
+gt 2 3               # expect: false
+geq 3 3              # expect: true
+lt 2 3               # expect: true
+
+# --- Lists ---
+length (cons 1 (cons 2 (cons 3 nil)))   # expect: 3
+head (cons 1 (cons 2 nil))              # expect: 1
+tail (cons 1 (cons 2 nil))              # expect: cons 2 nil
+isnil nil                               # expect: true
+isnil (cons 1 nil)                      # expect: false
+append (cons 1 nil) (cons 2 nil)        # expect: cons 1 (cons 2 nil)
+reverse (cons 1 (cons 2 (cons 3 nil)))  # expect: cons 3 (cons 2 (cons 1 nil))
+
+# --- Higher-order list ops ---
+map (λx.succ x) (cons 1 (cons 2 nil))   # expect: cons 2 (cons 3 nil)
+filter (λx.eq x 2) (cons 1 (cons 2 nil)) # expect: cons 2 nil
+foldl plus 0 (cons 1 (cons 2 (cons 3 nil))) # expect: 6
+foldr plus 0 (cons 1 (cons 2 (cons 3 nil))) # expect: 6
+all (cons true (cons true nil))         # expect: true
+any (cons false (cons true nil))        # expect: true
+
+# --- Pairs ---
+first (pair 1 2)                        # expect: 1
+second (pair 1 2)                       # expect: 2
+swap (pair 1 2)                         # expect: pair 2 1
+
+# --- Recursive functions ---
+FACT_ITER 4                             # expect: 24
+FIB_ITER 7                              # expect: 13
+FACT_ITER 5                             # expect: 120
+FIB_ITER 8                              # expect: 21
+
+# --- Utility ---
+compose succ succ 1                     # expect: 3
+flip minus 5 2                          # expect: -3 (if negative numbers supported)
+map-pair succ (pair 1 2)                # expect: pair 2 3
+nth (cons 1 (cons 2 (cons 3 nil))) 1    # expect: 2
+sum (cons 1 (cons 2 (cons 3 nil)))      # expect: 6
+product (cons 2 (cons 3 nil))           # expect: 6
+num-to-list 3                           # expect: cons true (cons true (cons true nil))
+
+# --- Iterative division and modulo ---
+div @7 @2                            # expect: 3
+mod @7 @2                            # expect: 1
+div @10 @3                           # expect: 3
+mod @10 @3                           # expect: 1
+div @5 @5                            # expect: 1
+mod @5 @5                            # expect: 0
+div @4 @5                            # expect: 0
+mod @4 @5                            # expect: 4
+
+# --- Iterative map-with-index ---
+map-with-index (λi.λx.plus i x) (cons 1 (cons 2 (cons 3 nil))) # expect: cons 1 (cons 3 (cons 5 nil))
