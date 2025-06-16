@@ -1524,6 +1524,7 @@ public class Program
         // Load standard library if available
         if (File.Exists("stdlib.lambda"))
             await interpreter.ProcessInputAsync(":load stdlib.lambda");
+        await interpreter.ProcessInputAsync(":loadcomb");
 
         // Process any command line files before starting interactive mode
         foreach (var filePath in args.ToArray())
