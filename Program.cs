@@ -221,9 +221,9 @@ public record Statement(StatementType Type, Expr Expression, string? VarName = n
         : $"{VarName} = {Expression}";
 }
 
-public static class Parser
+public class Parser
 {
-    public static List<Token> Tokenize(string input)
+    public List<Token> Tokenize(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return [];
 
@@ -269,7 +269,7 @@ public static class Parser
         return result;
     }
 
-    private static Token ParseInteger(string input, ref int i, ref int pos)
+    private Token ParseInteger(string input, ref int i, ref int pos)
     {
         var start = i + 1;
         var startPos = pos;
@@ -281,7 +281,7 @@ public static class Parser
         return new Token(TokenType.Integer, startPos, input[start..(i + 1)].Replace(",", ""));
     }
 
-    public static Statement? Parse(string input)
+    public Statement? Parse(string input)
     {
         var tokens = Tokenize(input);
         if (tokens.Count == 0) return null;
@@ -296,7 +296,7 @@ public static class Parser
         return Statement.ExprStatement(BuildExpressionTree(tokens, 0, tokens.Count - 1));
     }
 
-    private static Expr BuildExpressionTree(List<Token> tokens, int start, int end)
+    private Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
         var expressions = new List<Expr>();
         for (var i = start; i <= end; i++)
@@ -318,7 +318,7 @@ public static class Parser
             : expressions.Aggregate(Expr.App);
     }
 
-    private static Expr ParseParenthesizedExpr(List<Token> tokens, ref int i, int end)
+    private Expr ParseParenthesizedExpr(List<Token> tokens, ref int i, int end)
     {
         int start = i, nesting = 0;
         for (var j = i + 1; j <= end; j++)
@@ -338,7 +338,7 @@ public static class Parser
         throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
     }
 
-    private static Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
+    private Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
     {
         if (i + 2 > end)
             throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i].Position);
@@ -350,11 +350,11 @@ public static class Parser
         return Expr.Abs(varName, body);
     }
 
-    private static Expr CreateChurchNumeral(int n) => n < 1
+    private Expr CreateChurchNumeral(int n) => n < 1
         ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x")))
         : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n)));
 
-    private static Expr GenerateApplicationChain(string funcVar, string baseVar, int count) =>
+    private Expr GenerateApplicationChain(string funcVar, string baseVar, int count) =>
         Enumerable.Range(0, count).Aggregate(Expr.Var(baseVar), (acc, _) => Expr.App(Expr.Var(funcVar), acc));
 }
 
@@ -483,6 +483,8 @@ public class Interpreter(Logger logger)
         public object? Extra = extra;
     }
 
+    private readonly Parser _parser = new();
+
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
     {
         try
@@ -498,10 +500,8 @@ public class Interpreter(Logger logger)
             if (input.Trim().StartsWith(':'))
                 return (null, await HandleCommandAsync(input));
 
-            var statement = Parser.Parse(input);
-            if (statement is null) return (null, "");
-
-            // handle assignment before evaluation
+            var statement = _parser.Parse(input);
+            if (statement == null) return (null, "");
             if (statement.Type == StatementType.Assignment)
             {
                 _context[statement.VarName!] = statement.Expression;
