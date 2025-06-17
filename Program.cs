@@ -548,17 +548,90 @@ public class Interpreter(Logger logger)
         await DisplayOutput(output, timing.Elapsed);
     }
 
-    public async Task RunInteractiveLoopAsync()
+    // --- SIMPLIFICATION #3: Use switch expressions and pattern matching in EvaluateCEK ---
+    private Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
     {
-        Console.WriteLine(ShowHelp());
-        var currentInput = new System.Text.StringBuilder();
+        _perfStopwatch.Restart();
+        var environment = new Dictionary<string, Expr>(initialEnv ?? _context, StringComparer.Ordinal);
+        var stateStack = new Stack<CEKState>();
+        stateStack.Push(new CEKState(expr, environment, Kontinuation.Empty));
+        int currentStep = 0;
+        Expr? finalResult = null;
+        while (stateStack.Count > 0)
+        {
+            _iterations++;
+            var (control, env, kont) = stateStack.Pop();
+            if (_showStep)
+                _logger.Log($"Step {currentStep++}: CEK \tC: {control}, K: {kont.Type}");
+            if (GetEvalCache(control, out var cachedResult))
+            {
+                ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
+                continue;
+            }
+            switch (control)
+            {
+                case { Type: ExprType.Var, VarName: var v }:
+                    var value = env.TryGetValue(v!, out var envValue) ? envValue : control;
+                    ApplyContinuation(value, env, kont, stateStack, ref finalResult);
+                    break;
+                case { Type: ExprType.Abs }:
+                    ApplyContinuation(control, env, kont, stateStack, ref finalResult);
+                    break;
+                case { Type: ExprType.App, AppLeft: var left, AppRight: var right }:
+                    var argKont = Kontinuation.Arg(right!, env, kont);
+                    stateStack.Push(new CEKState(left!, env, argKont));
+                    break;
+                case { Type: ExprType.Thunk }:
+                    var forcedValue = Force(control);
+                    ApplyContinuation(forcedValue, env, kont, stateStack, ref finalResult);
+                    break;
+            }
+            if (finalResult != null)
+                break;
+        }
+        _timeInEvaluation += _perfStopwatch.ElapsedTicks;
+        if (finalResult != null)
+        {
+            var result = NormalizeExpression(finalResult);
+            PutEvalCache(currentStep, expr, result);
+            return result;
+        }
+        throw new InvalidOperationException("CEK evaluation completed without returning a value");
+    }
 
+    // --- SIMPLIFICATION #4: Reduce cache boilerplate with null-coalescing assignment and TryGetValue ---
+    private Expr Intern(Expr expr)
+    {
+        if (expr.Type != ExprType.Var) return expr;
+        var key = $"var:{expr.VarName}";
+        if (!_expressionPool.TryGetValue(key, out var existing))
+            _expressionPool[key] = existing = expr;
+        return existing;
+    }
+
+    private bool GetEvalCache(Expr expr, out Expr result)
+    {
+        if (expr is not null && _evaluationCache.TryGetValue(expr, out var cachedResult) && cachedResult is not null)
+        {
+            _cacheHits++;
+            result = cachedResult;
+            return true;
+        }
+        _cacheMisses++;
+        result = null!;
+        return false;
+    }
+
+    // --- SIMPLIFICATION #6: Unify REPL and file input logic ---
+    // Already unified via ProcessAndDisplayInputAsync, but further unify by extracting input loop
+    private async Task InputLoopAsync(Func<string?, Task> handleInput, string promptPrimary = "lambda> ", string promptCont = "......> ")
+    {
+        var currentInput = new System.Text.StringBuilder();
         while (true)
         {
             if (currentInput.Length == 0)
                 Console.WriteLine();
-            Console.Write(Logger.Prompt(currentInput.Length == 0 ? "lambda> " : "......> "));
-
+            Console.Write(Logger.Prompt(currentInput.Length == 0 ? promptPrimary : promptCont));
             var line = Console.ReadLine();
             if (line is null)
             {
@@ -566,28 +639,22 @@ public class Interpreter(Logger logger)
                 break;
             }
             if (string.IsNullOrWhiteSpace(line)) continue;
-
             await _logger.LogAsync($"λ> {line}", false);
-
-            // Handle line continuation
             if (line.EndsWith('\\'))
             {
                 currentInput.Append(line[..^1]);
                 continue;
             }
-
-            // Combine lines
             currentInput.Append(line);
             var input = currentInput.ToString();
             currentInput.Clear();
-
-            await ProcessAndDisplayInputAsync(input);
-
+            await handleInput(input);
             if (input.Trim() == ":exit" || input.Trim() == ":quit")
                 break;
         }
     }
-
+    public async Task RunInteractiveLoopAsync()
+        => await InputLoopAsync(async input => await ProcessAndDisplayInputAsync(input!));
     public async Task<string> LoadFileAsync(string path)
     {
         int lineCount = 0;
@@ -610,11 +677,8 @@ public class Interpreter(Logger logger)
             currentInput.Clear();
             await ProcessAndDisplayInputAsync(input);
         }
-        // If file ends with a continued line, process it
         if (currentInput.Length > 0)
-        {
             await ProcessAndDisplayInputAsync(currentInput.ToString());
-        }
         return $"Loaded {path}";
     }
 
@@ -792,78 +856,6 @@ public class Interpreter(Logger logger)
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
 
-    private bool GetEvalCache(Expr expr, out Expr result)
-    {
-        if (expr is not null && _evaluationCache.TryGetValue(expr, out var cachedResult) && cachedResult is not null)
-        {
-            _cacheHits++;
-            result = cachedResult;
-            return true;
-        }
-        _cacheMisses++;
-        result = null!;
-        return false;
-    }
-
-    private Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
-    {
-        _perfStopwatch.Restart();
-
-        var environment = new Dictionary<string, Expr>(initialEnv ?? _context, StringComparer.Ordinal);
-        var state = new CEKState(expr, environment, Kontinuation.Empty);
-        var stateStack = new Stack<CEKState>();
-        stateStack.Push(state);
-
-        int currentStep = 0;
-        Expr? finalResult = null;
-
-        while (stateStack.Count > 0)
-        {
-            _iterations++;
-            var (control, env, kont) = stateStack.Pop();
-
-            if (_showStep)
-                _logger.Log($"Step {currentStep++}: CEK \tC: {control}, K: {kont.Type}");
-
-            if (GetEvalCache(control, out var cachedResult))
-            {
-                ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
-                continue;
-            }
-
-            switch (control.Type)
-            {
-                case ExprType.Var:
-                    var value = env.TryGetValue(control.VarName!, out var envValue) ? envValue : control;
-                    ApplyContinuation(value, env, kont, stateStack, ref finalResult);
-                    break;
-                case ExprType.Abs:
-                    ApplyContinuation(control, env, kont, stateStack, ref finalResult);
-                    break;
-                case ExprType.App:
-                    var argKont = Kontinuation.Arg(control.AppRight!, env, kont);
-                    stateStack.Push(new CEKState(control.AppLeft!, env, argKont));
-                    break;
-                case ExprType.Thunk:
-                    var forcedValue = Force(control);
-                    ApplyContinuation(forcedValue, env, kont, stateStack, ref finalResult);
-                    break;
-            }
-
-            if (finalResult != null)
-                break;
-        }
-        _timeInEvaluation += _perfStopwatch.ElapsedTicks;
-        if (finalResult != null)
-        {
-            var result = NormalizeExpression(finalResult);
-            PutEvalCache(currentStep, expr, result);
-            return result;
-        }
-
-        throw new InvalidOperationException("CEK evaluation completed without returning a value");
-    }
-
     private void ApplyContinuation(Expr value, Dictionary<string, Expr> env, Kontinuation kont, Stack<CEKState> stateStack, ref Expr? finalResult)
     {
         switch (kont)
@@ -918,19 +910,6 @@ public class Interpreter(Logger logger)
     }
 
     // Expression interning for memory efficiency
-    private Expr Intern(Expr expr)
-    {
-        if (expr.Type != ExprType.Var) return expr;
-        var key = $"var:{expr.VarName}";
-        if (_expressionPool.TryGetValue(key, out var existing))
-        {
-            _cacheHits++;
-            return existing;
-        }
-        _cacheMisses++;
-        return _expressionPool[key] = expr;
-    }
-
     private HashSet<string> FreeVars(Expr expr, string? skipVar = null)
     {
         if (expr is null) return [];
@@ -983,20 +962,6 @@ public class Interpreter(Logger logger)
             _freeVarCache[expr] = freeVars;
 
         return freeVars;
-    }
-
-    private bool HasContextVariables(Expr? expr)
-    {
-        if (expr == null) return false;
-
-        return expr.Type switch
-        {
-            ExprType.Var => _context.ContainsKey(expr.VarName!),
-            ExprType.Abs => HasContextVariables(expr.AbsBody),
-            ExprType.App => HasContextVariables(expr.AppLeft) || HasContextVariables(expr.AppRight),
-            ExprType.Thunk => HasContextVariables(expr.ThunkValue?.Expression),
-            _ => false,
-        };
     }
 
     private Expr? GetSubCache(Expr root, string var, Expr val)
