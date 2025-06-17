@@ -2,14 +2,15 @@
 
 public enum ExprType : byte { Var, Abs, App, Thunk }
 
-// Thunk represents a delayed computation (now mutable for in-place update)
+/// <summary>
+/// Thunk represents a delayed computation (mutable for in-place update).
+/// </summary>
 public class Thunk
 {
     public Expr Expression { get; }
     public Dictionary<string, Expr> Environment { get; }
     public bool IsForced { get; private set; }
     public Expr? ForcedValue { get; private set; }
-
     public Thunk(Expr expr, Dictionary<string, Expr> env)
     {
         Expression = expr;
@@ -17,7 +18,6 @@ public class Thunk
         IsForced = false;
         ForcedValue = null;
     }
-
     public void Force(Expr value)
     {
         IsForced = true;
@@ -36,14 +36,11 @@ public record Expr(
 {
     public static int HashCodeCount { get; private set; }
     private int? _hashCode;
-
     public static Expr Var(string name) => new(ExprType.Var, VarName: name);
     public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body);
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
     public static Expr Thunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
-
     public override string ToString() => ToStringLimited(1000);
-
     private string ToStringLimited(int maxDepth) =>
         maxDepth <= 0 ? "..." : Type switch
         {
@@ -55,93 +52,75 @@ public record Expr(
                 $"<thunk:{ThunkValue.Expression.ToStringLimited(maxDepth - 1)}>",
             _ => "?"
         };
-
     private string FormatApplication(int maxDepth)
     {
         var leftStr = AppLeft!.Type == ExprType.Abs
             ? $"({AppLeft.ToStringLimited(maxDepth - 1)})"
             : AppLeft.ToStringLimited(maxDepth - 1);
-
         var rightStr = AppRight!.Type is ExprType.App or ExprType.Abs
             ? $"({AppRight.ToStringLimited(maxDepth - 1)})"
             : AppRight.ToStringLimited(maxDepth - 1);
-
         return $"{leftStr} {rightStr}";
     }
-
     public virtual bool Equals(Expr? other) => StructuralEquals(other);
-
     public bool StructuralEquals(Expr? other)
     {
         if (ReferenceEquals(this, other)) return true;
         if (other is null || Type != other.Type) return false;
         var stack = new Stack<(Expr Left, Expr Right)>();
         stack.Push((this, other));
-
         while (stack.Count > 0)
         {
             var (left, right) = stack.Pop();
             if (left.Type != right.Type) return false;
             if (ReferenceEquals(left, right)) continue;
-
             switch (left.Type)
             {
                 case ExprType.Var when left.VarName != right.VarName: return false;
                 case ExprType.Var: break;
-
                 case ExprType.Abs when left.AbsVarName != right.AbsVarName: return false;
                 case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: continue;
                 case ExprType.Abs when left.AbsBody is null || right.AbsBody is null: return false;
                 case ExprType.Abs:
                     stack.Push((left.AbsBody!, right.AbsBody!));
                     break;
-
                 case ExprType.App when AreApplicationsEmpty(left, right): continue;
                 case ExprType.App when HasMissingApplicationParts(left, right): return false;
                 case ExprType.App:
                     stack.Push((left.AppRight!, right.AppRight!));
                     stack.Push((left.AppLeft!, right.AppLeft!));
                     break;
-
                 case ExprType.Thunk when left.ThunkValue is null && right.ThunkValue is null: continue;
                 case ExprType.Thunk when left.ThunkValue is null || right.ThunkValue is null: return false;
                 case ExprType.Thunk:
-                    // For thunks, compare the forced values if both are forced, otherwise compare expressions
                     if (left.ThunkValue!.IsForced && right.ThunkValue!.IsForced)
                         stack.Push((left.ThunkValue.ForcedValue!, right.ThunkValue.ForcedValue!));
                     else if (!left.ThunkValue.IsForced && !right.ThunkValue.IsForced)
                         stack.Push((left.ThunkValue.Expression, right.ThunkValue.Expression));
                     else
-                        return false; // One forced, one not - not equal
+                        return false;
                     break;
-
                 default: return false;
             }
         }
         return true;
     }
-
     private static bool AreApplicationsEmpty(Expr left, Expr right) =>
         left.AppLeft is null && left.AppRight is null &&
         right.AppLeft is null && right.AppRight is null;
-
     private static bool HasMissingApplicationParts(Expr left, Expr right) =>
         left.AppLeft is null || left.AppRight is null ||
         right.AppLeft is null || right.AppRight is null;
-
     public override int GetHashCode()
     {
         if (_hashCode.HasValue) return _hashCode.Value;
-
         var stack = new Stack<Expr>();
         stack.Push(this);
-
         while (stack.Count > 0)
         {
             HashCodeCount++;
             var current = stack.Pop();
             if (current._hashCode.HasValue) continue;
-
             switch (current.Type)
             {
                 case ExprType.Var:
@@ -165,7 +144,6 @@ public record Expr(
                     if (current.AppRight?._hashCode is null) stack.Push(current.AppRight!);
                     break;
                 case ExprType.Thunk when current.ThunkValue is not null:
-                    // For thunks, use the forced value if available, otherwise the expression
                     var thunkHash = current.ThunkValue.IsForced && current.ThunkValue.ForcedValue is not null
                         ? current.ThunkValue.ForcedValue.GetHashCode()
                         : current.ThunkValue.Expression.GetHashCode();
@@ -175,7 +153,6 @@ public record Expr(
         }
         return _hashCode ?? 0;
     }
-
     private static bool BothApplicationPartsHaveHashCodes(Expr expr) =>
         expr.AppLeft?._hashCode is not null && expr.AppRight?._hashCode is not null;
 }
@@ -241,6 +218,41 @@ public record Statement(StatementType Type, Expr Expression, string? VarName = n
         : $"{VarName} = {Expression}";
 }
 
+/// <summary>
+/// Tracks interpreter statistics and performance metrics.
+/// </summary>
+public class InterpreterStats
+{
+    public long TimeInCacheLookup { get; set; }
+    public long TimeInSubstitution { get; set; }
+    public long TimeInEvaluation { get; set; }
+    public long TimeInForcing { get; set; }
+    public int NormalizeCEKCount { get; set; }
+    public int CacheHits { get; set; }
+    public int CacheMisses { get; set; }
+    public int TotalIterations { get; set; }
+    public int Iterations { get; set; }
+    public int SubstitutionExprCount { get; set; }
+    public int ThunkForceCount { get; set; }
+    public int VarCounter { get; set; }
+    public int MaxRecursionDepth { get; set; } = 20;
+    public void Reset()
+    {
+        TimeInCacheLookup = 0;
+        TimeInSubstitution = 0;
+        TimeInEvaluation = 0;
+        TimeInForcing = 0;
+        NormalizeCEKCount = 0;
+        CacheHits = 0;
+        CacheMisses = 0;
+        TotalIterations = 0;
+        Iterations = 0;
+        SubstitutionExprCount = 0;
+        ThunkForceCount = 0;
+        VarCounter = 0;
+    }
+}
+
 public class Parser
 {
     public List<Token> Tokenize(string input)
@@ -288,7 +300,6 @@ public class Parser
 
         return result;
     }
-
     private Token ParseInteger(string input, ref int i, ref int pos)
     {
         var start = i + 1;
@@ -300,7 +311,6 @@ public class Parser
         }
         return new Token(TokenType.Integer, startPos, input[start..(i + 1)].Replace(",", ""));
     }
-
     public Statement? Parse(string input)
     {
         var tokens = Tokenize(input);
@@ -315,7 +325,6 @@ public class Parser
         // Expression statement
         return Statement.ExprStatement(BuildExpressionTree(tokens, 0, tokens.Count - 1));
     }
-
     private Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
         var expressions = new List<Expr>();
@@ -337,7 +346,6 @@ public class Parser
             ? throw new ParseException(TreeErrorType.EmptyExprList, tokens.Count > 0 ? tokens[0].Position : 0)
             : expressions.Aggregate(Expr.App);
     }
-
     private Expr ParseParenthesizedExpr(List<Token> tokens, ref int i, int end)
     {
         int start = i, nesting = 0;
@@ -357,7 +365,6 @@ public class Parser
         }
         throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
     }
-
     private Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
     {
         if (i + 2 > end)
@@ -369,11 +376,9 @@ public class Parser
         i = end;
         return Expr.Abs(varName, body);
     }
-
     private Expr CreateChurchNumeral(int n) => n < 1
         ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x")))
         : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n)));
-
     private Expr GenerateApplicationChain(string funcVar, string baseVar, int count) =>
         Enumerable.Range(0, count).Aggregate(Expr.Var(baseVar), (acc, _) => Expr.App(Expr.Var(funcVar), acc));
 }
@@ -467,49 +472,38 @@ public class Logger
         LogAsync(message, toConsole).GetAwaiter().GetResult();
 }
 
-public class Interpreter(Logger logger)
+// Used for stack-based substitution in Interpreter
+internal enum SubstOp { Evaluate, BuildAbs, BuildApp, SubstituteInBody }
+internal readonly record struct StackEntry(Expr Node, SubstOp Op, object? Extra);
+
+public class Interpreter
 {
-    private static int _varCounter = 0; private readonly Dictionary<string, Expr> _context = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Expr> _context = new(StringComparer.Ordinal);
     private readonly Dictionary<SubstitutionCacheKey, Expr> _substitutionCache = new(8192);
     private readonly Dictionary<Expr, Expr> _evaluationCache = new(8192, new ExprEqualityComparer());
     private readonly Dictionary<Expr, HashSet<string>> _freeVarCache = new(4096, new ExprEqualityComparer());
     private readonly Dictionary<string, Expr> _expressionPool = new(2048, StringComparer.Ordinal);
-    private readonly Dictionary<(Expr, string), bool> _containsVarCache = new(2048); private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
-    private readonly Logger _logger = logger;
-    private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
-    private long _timeInCacheLookup = 0;
-    private long _timeInSubstitution = 0;
-    private long _timeInEvaluation = 0;
-    private long _timeInForcing = 0; // Track time spent forcing thunks
-    private int _normalizeCEKCount = 0; // Count of CEK normalizations to track performance impact
-    private int _cacheHits = 0;
-    private int _cacheMisses = 0;
-    private int _totalIterations = 0;
-    private int _iterations = 0;
-    private int _substitutionExprCount = 0;
-    private int _recursionDepth = 0;
-    private int _maxRecursionDepth = 20; // Default, can be set by user    
+    private readonly Dictionary<(Expr, string), bool> _containsVarCache = new(2048);
+    private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
-    private bool _showStep = false;
-    private bool _lazyEvaluation = true; // Enable lazy evaluation by default
-    private int _thunkForceCount = 0; // Track how many thunks are forced
-
-    // Stack-based substitution infrastructure for better performance
-    private enum SubstOp { Evaluate, BuildAbs, BuildApp, SubstituteInBody }
-    private struct StackEntry(Expr node, SubstOp op, object? extra)
-    {
-        public Expr Node = node;
-        public SubstOp Op = op;
-        public object? Extra = extra;
-    }
-
+    private readonly Logger _logger;
+    private readonly InterpreterStats _stats;
     private readonly Parser _parser = new();
+    private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
+    private bool _showStep = false;
+    private bool _lazyEvaluation = true;
+
+    public Interpreter(Logger logger, InterpreterStats? stats = null)
+    {
+        _logger = logger;
+        _stats = stats ?? new InterpreterStats();
+    }
 
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
     {
         try
         {
-            _iterations = 0; // Reset iterations for each input
+            _stats.Iterations = 0; // Reset iterations for each input
             if (string.IsNullOrWhiteSpace(input)) return (null, "");
             input = input.TrimEnd('\\');
 
@@ -528,7 +522,7 @@ public class Interpreter(Logger logger)
                 return (null, $"-> {statement.VarName} = {statement.Expression}");
             }
             var result = EvaluateCEK(statement.Expression);
-            _totalIterations += _iterations; 
+            _stats.TotalIterations += _stats.Iterations; 
 
             return (result, $"-> {result}");
         }
@@ -553,7 +547,7 @@ public class Interpreter(Logger logger)
             var timeInfo = elapsed.TotalSeconds >= 1
                 ? $"{elapsed.TotalSeconds:F2} s"
                 : $"{elapsed.TotalMilliseconds:F1} ms";
-            await _logger.LogAsync($"Time: {timeInfo}, iterations: {_iterations:#,##0}");
+            await _logger.LogAsync($"Time: {timeInfo}, iterations: {_stats.Iterations:#,##0}");
         }
 
         await _logger.LogAsync(result.str);
@@ -579,7 +573,7 @@ public class Interpreter(Logger logger)
         Expr? finalResult = null;
         while (stateStack.Count > 0)
         {
-            _iterations++;
+            _stats.Iterations++;
             var (control, env, kont) = stateStack.Pop();
             if (_showStep)
                 _logger.Log($"Step {currentStep++}: CEK \tC: {control}, K: {kont.Type}");
@@ -609,7 +603,7 @@ public class Interpreter(Logger logger)
             if (finalResult != null)
                 break;
         }
-        _timeInEvaluation += _perfStopwatch.ElapsedTicks;
+        _stats.TimeInEvaluation += _perfStopwatch.ElapsedTicks;
         if (finalResult != null)
         {
             var result = NormalizeExpression(finalResult);
@@ -633,11 +627,11 @@ public class Interpreter(Logger logger)
     {
         if (expr is not null && _evaluationCache.TryGetValue(expr, out var cachedResult) && cachedResult is not null)
         {
-            _cacheHits++;
+            _stats.CacheHits++;
             result = cachedResult;
             return true;
         }
-        _cacheMisses++;
+        _stats.CacheMisses++;
         result = null!;
         return false;
     }
@@ -739,12 +733,12 @@ public class Interpreter(Logger logger)
     private string HandleRecursionDepth(string arg)
     {
         if (string.IsNullOrWhiteSpace(arg))
-            return $"Current recursion depth limit: {_maxRecursionDepth}";
+            return $"Current recursion depth limit: {_stats.MaxRecursionDepth}";
 
         if (int.TryParse(arg, out int value) && value >= 10 && value <= 10000)
         {
-            _maxRecursionDepth = value;
-            return $"Recursion depth limit set to {_maxRecursionDepth}";
+            _stats.MaxRecursionDepth = value;
+            return $"Recursion depth limit set to {_stats.MaxRecursionDepth}";
         }
 
         return "Error: Please provide a number between 10 and 10000.";
@@ -760,11 +754,11 @@ public class Interpreter(Logger logger)
             return expr.ThunkValue.ForcedValue!;
 
         _perfStopwatch.Restart();
-        _thunkForceCount++;
+        _stats.ThunkForceCount++;
 
         // Evaluate the thunk's expression in its captured environment
         var forced = EvaluateCEK(expr.ThunkValue.Expression, expr.ThunkValue.Environment);
-        _timeInForcing += _perfStopwatch.ElapsedTicks;
+        _stats.TimeInForcing += _perfStopwatch.ElapsedTicks;
 
         // In-place update of the thunk
         expr.ThunkValue.Force(forced);
@@ -777,7 +771,7 @@ public class Interpreter(Logger logger)
         _evaluationCache.Clear();
         _freeVarCache.Clear();
         _expressionPool.Clear();
-        _cacheHits = _cacheMisses = 0;
+        _stats.CacheHits = _stats.CacheMisses = 0;
         return "All caches cleared.";
     }
 
@@ -791,13 +785,13 @@ public class Interpreter(Logger logger)
     {
         _context.Clear();
         MemoClear(); // Reuse cache clearing logic
-        _totalIterations = 0;
-        _timeInCacheLookup = 0;
-        _timeInSubstitution = 0;
-        _timeInEvaluation = 0;
-        _timeInForcing = 0;
-        _substitutionExprCount = 0;
-        _thunkForceCount = 0;
+        _stats.TotalIterations = 0;
+        _stats.TimeInCacheLookup = 0;
+        _stats.TimeInSubstitution = 0;
+        _stats.TimeInEvaluation = 0;
+        _stats.TimeInForcing = 0;
+        _stats.SubstitutionExprCount = 0;
+        _stats.ThunkForceCount = 0;
         return "Environment cleared.";
     }
 
@@ -812,30 +806,29 @@ public class Interpreter(Logger logger)
     private string ShowStats()
     {
         static string PerOfTotal(long value, long total) => total == 0 ? "0.0%" : $"{value * 100.0 / total:F1}%";
-        var totalTime = _timeInCacheLookup + _timeInSubstitution + _timeInEvaluation + _timeInForcing;
+        var totalTime = _stats.TimeInCacheLookup + _stats.TimeInSubstitution + _stats.TimeInEvaluation + _stats.TimeInForcing;
         return $"""
         === Lambda Interpreter Statistics ===
         Environment:              {_context.Count:#,##0} definitions
-        CEK normalization:        ({_normalizeCEKCount:#,##0} normalizations) {(_lazyEvaluation ? "lazy" : "eager")} evaluation 
-        Recursion depth:          {_maxRecursionDepth:#,##0}               
-        Thunk forcing:            {_thunkForceCount:#,##0} thunks forced
+        CEK normalization:        ({_stats.NormalizeCEKCount:#,##0} normalizations) {(_lazyEvaluation ? "lazy" : "eager")} evaluation 
+        Recursion depth:          {_stats.MaxRecursionDepth:#,##0}               
+        Thunk forcing:            {_stats.ThunkForceCount:#,##0} thunks forced
         Memoization:              
           Substitution cache:     {_substitutionCache.Count:#,##0} entries
           Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
           Free variable cache:    {_freeVarCache.Count:#,##0} entries
-          variable cache:         {_variableCache.Count:#,##0} entries
-          Expression pool:        {_expressionPool.Count:#,##0} entries
-          Cache hits/misses:      {_cacheHits:#,##0} / {_cacheMisses:#,##0} ({PerOfTotal(_cacheHits, _cacheHits + _cacheMisses)})
+          variable cache:         {_expressionPool.Count:#,##0} entries
+          Cache hits/misses:      {_stats.CacheHits:#,##0} / {_stats.CacheMisses:#,##0} ({PerOfTotal(_stats.CacheHits, _stats.CacheHits + _stats.CacheMisses)})
         Performance:
-          Total iterations:       {_totalIterations:#,##0}
+          Total iterations:       {_stats.TotalIterations:#,##0}
           Total hash code calls:  {Expr.HashCodeCount:#,##0}
-          Cache lookup time:      {_timeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInCacheLookup, totalTime)})
-          Substitution time:      {_timeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInSubstitution, totalTime)}) (called {_substitutionExprCount:#,##0} times)
-          Evaluation time:        {_timeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInEvaluation, totalTime)})
-          Thunk forcing time:     {_timeInForcing / 10000.0:#,##0.00} ms ({PerOfTotal(_timeInForcing, totalTime)})
+          Cache lookup time:      {_stats.TimeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInCacheLookup, totalTime)})
+          Substitution time:      {_stats.TimeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInSubstitution, totalTime)}) (called {_stats.SubstitutionExprCount:#,##0} times)
+          Evaluation time:        {_stats.TimeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInEvaluation, totalTime)})
+          Thunk forcing time:     {_stats.TimeInForcing / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInForcing, totalTime)})
           Total measured time:    {totalTime / 10000.0:#,##0.00} ms
         System:
-          Unique var counter:     {_varCounter:#,##0}
+          Unique var counter:     {_stats.VarCounter:#,##0}
           Step-by-step mode:      {(_showStep ? "ENABLED" : "DISABLED")}
           Logging:                {_logger.LogStatus}
           Memory usage:           {GC.GetTotalMemory(false) / 1024:#,##0} KB
@@ -924,7 +917,7 @@ public class Interpreter(Logger logger)
     // Alpha conversion to avoid variable capture
     private (string, Expr) AlphaConvert(string varName, Expr body)
     {
-        var newVar = $"{varName}_{_varCounter++}";
+        var newVar = $"{varName}_{_stats.VarCounter++}";
         var newBody = Substitute(body, varName, Expr.Var(newVar));
         return (newVar, newBody);
     }
@@ -989,7 +982,7 @@ public class Interpreter(Logger logger)
         var cacheKey = new SubstitutionCacheKey(root, var, val);
         var hasResult = _substitutionCache.TryGetValue(cacheKey, out Expr? result);
 
-        _ = hasResult ? _cacheHits++ : _cacheMisses++;
+        _ = hasResult ? _stats.CacheHits++ : _stats.CacheMisses++;
         return result;
     }
 
@@ -1010,18 +1003,18 @@ public class Interpreter(Logger logger)
         Expr? cachedResult = GetSubCache(root, var, val);
         if (cachedResult is not null) return cachedResult;
 
-        _substitutionExprCount++;
+        _stats.SubstitutionExprCount++;
 
         // Ultra-fast path for variables with aggressive caching
         if (root.Type == ExprType.Var)
         {
             if (root.VarName == var) return val;
 
-            if (_variableCache.TryGetValue(root.VarName!, out var cached)) return cached;
+            if (_expressionPool.TryGetValue(root.VarName!, out var cached)) return cached;
 
             // Cache all variable lookups for better performance
             var toCache = Intern(root);
-            _variableCache[root.VarName!] = toCache;
+            _expressionPool[root.VarName!] = toCache;
             return toCache;
         }
 
@@ -1044,7 +1037,7 @@ public class Interpreter(Logger logger)
         _perfStopwatch.Restart();
 
         Expr result;
-        if (++_recursionDepth > _maxRecursionDepth)
+        if (++_stats.VarCounter > _stats.MaxRecursionDepth)
             result = SubstituteStackBased(root, var, val);
         else
         {
@@ -1066,8 +1059,8 @@ public class Interpreter(Logger logger)
             };
         }
 
-        _recursionDepth--;
-        _timeInSubstitution += _perfStopwatch.ElapsedTicks;
+        _stats.VarCounter--;
+        _stats.TimeInSubstitution += _perfStopwatch.ElapsedTicks;
 
         PutSubCache(root, var, val, result);
 
@@ -1207,7 +1200,7 @@ public class Interpreter(Logger logger)
                             if (currentVal.Type != ExprType.Var && absVarName != currentVar && FreeVars(currentVal).Contains(absVarName))
                             {
                                 // Alpha conversion needed - use block scope to avoid conflicts
-                                string newVar = absVarName + _varCounter++;
+                                string newVar = absVarName + _stats.VarCounter++;
 
                                 // Setup operations in reverse order
                                 opStack.Push(new StackEntry(node, SubstOp.BuildAbs, newVar));
@@ -1267,7 +1260,7 @@ public class Interpreter(Logger logger)
 
     private Expr NormalizeWithVisited(Expr expr, HashSet<Expr> visited, int depth, int maxDepth)
     {
-        _normalizeCEKCount++;
+        _stats.NormalizeCEKCount++;
         if (_normalizationCache.TryGetValue(expr, out var cached))
             return cached;
         if (depth > maxDepth || visited.Contains(expr))
