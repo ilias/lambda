@@ -998,7 +998,20 @@ public class Interpreter(Logger logger)
 
     private Expr Substitute(Expr root, string var, Expr val)
     {
+        // Fast-path: If substituting a variable with itself, return the original expression
+        if (val.Type == ExprType.Var && val.VarName == var)
+            return root;
+
+        // Fast-path: If the variable does not occur free in the expression, return the original
+        if (!ContainsVariable(root, var))
+            return root;
+
+        // Always use substitution cache for all substitutions (move to top)
+        Expr? cachedResult = GetSubCache(root, var, val);
+        if (cachedResult is not null) return cachedResult;
+
         _substitutionExprCount++;
+
         // Ultra-fast path for variables with aggressive caching
         if (root.Type == ExprType.Var)
         {
@@ -1018,7 +1031,6 @@ public class Interpreter(Logger logger)
         // Handle thunks
         if (root.Type == ExprType.Thunk && root.ThunkValue is not null)
         {
-            // Instead of using 'with', create a new Thunk with the substituted expression
             var substitutedExpr = Substitute(root.ThunkValue.Expression, var, val);
             var newThunk = new Thunk(substitutedExpr, root.ThunkValue.Environment);
             if (root.ThunkValue.IsForced)
@@ -1029,10 +1041,6 @@ public class Interpreter(Logger logger)
         // Ultra-fast application patterns for common Church numeral operations
         if (root.Type == ExprType.App && IsCommonPattern(root, var, val, out var fastResult)) return fastResult;
 
-        // Always use substitution cache for all substitutions
-        Expr? cachedResult = GetSubCache(root, var, val);
-        if (cachedResult is not null) return cachedResult;
-
         _perfStopwatch.Restart();
 
         Expr result;
@@ -1042,7 +1050,6 @@ public class Interpreter(Logger logger)
         {
             result = root.Type switch
             {
-                // Abstraction with alpha conversion check
                 ExprType.Abs when val.Type != ExprType.Var &&
                                   root.AbsVarName != var &&
                                   QuickFreeVarCheck(val, root.AbsVarName!) =>
@@ -1052,7 +1059,6 @@ public class Interpreter(Logger logger)
 
                 ExprType.Abs => Expr.Abs(root.AbsVarName!, Substitute(root.AbsBody!, var, val)),
 
-                // Application with parallel processing for large expressions
                 ExprType.App when root.AppLeft != null && root.AppRight != null =>
                     CreateOptimizedApplication(root.AppLeft, root.AppRight, var, val),
 
