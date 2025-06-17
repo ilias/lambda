@@ -2,8 +2,28 @@
 
 public enum ExprType : byte { Var, Abs, App, Thunk }
 
-// Thunk represents a delayed computation
-public record Thunk(Expr Expression, Dictionary<string, Expr> Environment, bool IsForced = false, Expr? ForcedValue = null);
+// Thunk represents a delayed computation (now mutable for in-place update)
+public class Thunk
+{
+    public Expr Expression { get; }
+    public Dictionary<string, Expr> Environment { get; }
+    public bool IsForced { get; private set; }
+    public Expr? ForcedValue { get; private set; }
+
+    public Thunk(Expr expr, Dictionary<string, Expr> env)
+    {
+        Expression = expr;
+        Environment = env;
+        IsForced = false;
+        ForcedValue = null;
+    }
+
+    public void Force(Expr value)
+    {
+        IsForced = true;
+        ForcedValue = value;
+    }
+}
 
 public record Expr(
     ExprType Type,
@@ -746,9 +766,9 @@ public class Interpreter(Logger logger)
         var forced = EvaluateCEK(expr.ThunkValue.Expression, expr.ThunkValue.Environment);
         _timeInForcing += _perfStopwatch.ElapsedTicks;
 
-        // Update the thunk to cache the forced value
-        var updatedThunk = expr.ThunkValue with { IsForced = true, ForcedValue = forced };
-        return expr with { ThunkValue = updatedThunk };
+        // In-place update of the thunk
+        expr.ThunkValue.Force(forced);
+        return forced;
     }
 
     private string MemoClear()
@@ -998,8 +1018,11 @@ public class Interpreter(Logger logger)
         // Handle thunks
         if (root.Type == ExprType.Thunk && root.ThunkValue is not null)
         {
+            // Instead of using 'with', create a new Thunk with the substituted expression
             var substitutedExpr = Substitute(root.ThunkValue.Expression, var, val);
-            var newThunk = root.ThunkValue with { Expression = substitutedExpr };
+            var newThunk = new Thunk(substitutedExpr, root.ThunkValue.Environment);
+            if (root.ThunkValue.IsForced)
+                newThunk.Force(root.ThunkValue.ForcedValue!);
             return root with { ThunkValue = newThunk };
         }
 
@@ -1159,7 +1182,9 @@ public class Interpreter(Logger logger)
                     if (node.ThunkValue is not null)
                     {
                         var substitutedExpr = Substitute(node.ThunkValue.Expression, currentVar, currentVal);
-                        var newThunk = node.ThunkValue with { Expression = substitutedExpr };
+                        var newThunk = new Thunk(substitutedExpr, node.ThunkValue.Environment);
+                        if (node.ThunkValue.IsForced)
+                            newThunk.Force(node.ThunkValue.ForcedValue!);
                         resultStack.Push(node with { ThunkValue = newThunk });
                     }
                     else
