@@ -129,4 +129,3 @@ sum = λl.foldl plus 0 l      # Sums all elements in the list
 product = λl.foldl mult 1 l  # Multiplies all elements in the list
 
 num-to-list = λn. n (λxs. cons true xs) nil   # Converts a Church numeral to a list of n trues
-

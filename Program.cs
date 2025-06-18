@@ -2,22 +2,14 @@
 
 public enum ExprType : byte { Var, Abs, App, Thunk }
 
-/// <summary>
-/// Thunk represents a delayed computation (mutable for in-place update).
-/// </summary>
-public class Thunk
+// Thunk represents a delayed computation (mutable for in-place update).
+public class Thunk(Expr expr, Dictionary<string, Expr> env)
 {
-    public Expr Expression { get; }
-    public Dictionary<string, Expr> Environment { get; }
-    public bool IsForced { get; private set; }
-    public Expr? ForcedValue { get; private set; }
-    public Thunk(Expr expr, Dictionary<string, Expr> env)
-    {
-        Expression = expr;
-        Environment = env;
-        IsForced = false;
-        ForcedValue = null;
-    }
+    public Expr Expression { get; } = expr;
+    public Dictionary<string, Expr> Environment { get; } = env;
+    public bool IsForced { get; private set; } = false;
+    public Expr? ForcedValue { get; private set; } = null;
+
     public void Force(Expr value)
     {
         IsForced = true;
@@ -218,9 +210,7 @@ public record Statement(StatementType Type, Expr Expression, string? VarName = n
         : $"{VarName} = {Expression}";
 }
 
-/// <summary>
-/// Tracks interpreter statistics and performance metrics.
-/// </summary>
+// Tracks interpreter statistics and performance metrics.
 public class InterpreterStats
 {
     public long TimeInCacheLookup { get; set; }
@@ -613,7 +603,6 @@ public class Interpreter
         throw new InvalidOperationException("CEK evaluation completed without returning a value");
     }
 
-    // --- SIMPLIFICATION #4: Reduce cache boilerplate with null-coalescing assignment and TryGetValue ---
     private Expr Intern(Expr expr)
     {
         if (expr.Type != ExprType.Var) return expr;
@@ -636,7 +625,6 @@ public class Interpreter
         return false;
     }
 
-    // --- SIMPLIFICATION #6: Unify REPL and file input logic ---
     // Already unified via ProcessAndDisplayInputAsync, but further unify by extracting input loop
     private async Task InputLoopAsync(Func<string?, Task> handleInput, string promptPrimary = "lambda> ", string promptCont = "......> ")
     {
@@ -785,13 +773,7 @@ public class Interpreter
     {
         _context.Clear();
         MemoClear(); // Reuse cache clearing logic
-        _stats.TotalIterations = 0;
-        _stats.TimeInCacheLookup = 0;
-        _stats.TimeInSubstitution = 0;
-        _stats.TimeInEvaluation = 0;
-        _stats.TimeInForcing = 0;
-        _stats.SubstitutionExprCount = 0;
-        _stats.ThunkForceCount = 0;
+        _stats.Reset();
         return "Environment cleared.";
     }
 
