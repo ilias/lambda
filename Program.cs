@@ -552,7 +552,6 @@ public class Interpreter
         await DisplayOutput(output, timing.Elapsed);
     }
 
-    // --- SIMPLIFICATION #3: Use switch expressions and pattern matching in EvaluateCEK ---
     private Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
     {
         _perfStopwatch.Restart();
