@@ -624,7 +624,6 @@ public class Interpreter
         return false;
     }
 
-    // Already unified via ProcessAndDisplayInputAsync, but further unify by extracting input loop
     private async Task InputLoopAsync(Func<string?, Task> handleInput, string promptPrimary = "lambda> ", string promptCont = "......> ")
     {
         var currentInput = new System.Text.StringBuilder();
