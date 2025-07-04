@@ -23,6 +23,7 @@ if false 1 0         # expect: 0
 plus 2 3             # expect: 5
 mult 2 3             # expect: 6
 exp 2 3              # expect: 8
+EXP 2 3              # expect: 8
 pred 3               # expect: 2
 minus 5 2            # expect: 3
 iszero 0             # expect: true

@@ -43,6 +43,8 @@ max = λm.λn.if (leq m n) n m      # Maximum
 min = λm.λn.if (leq m n) m n      # Minimum
 even = λn.iszero (mod n 2)        # Even predicate
 odd = λn.not (even n)             # Odd predicate
+MUL = \m.\n.m (plus n) 0          # Multiplication (m*n)
+EXP = \m.\n.m (MUL n) 1           # Exponentiation (m^n)
 
 # Comparison
 leq = λm.λn.iszero (minus m n)
