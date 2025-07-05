@@ -35,7 +35,7 @@ plus = λm.λn.λf.λx.m f (n f x)
 double = λn.plus n n              # Double (n*2)
 mult = λm.λn.λf.m (n f)
 square = λn.mult n n              # Square (n*n)
-exp = λm.λn.n m
+exp = λm.λn.n (mult m) 1
 iszero = λn.n (λx.false) true
 minus = λm.λn.n pred m
 half = λn.div n 2                 # Integer division by 2 (using Church numerals)
@@ -44,7 +44,6 @@ min = λm.λn.if (leq m n) m n      # Minimum
 even = λn.iszero (mod n 2)        # Even predicate
 odd = λn.not (even n)             # Odd predicate
 MUL = \m.\n.m (plus n) 0          # Multiplication (m*n)
-EXP = \m.\n.m (MUL n) 1           # Exponentiation (m^n)
 
 # Comparison
 leq = λm.λn.iszero (minus m n)
