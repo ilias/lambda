@@ -560,7 +560,9 @@ public class Interpreter
         stateStack.Push(new CEKState(expr, environment, Kontinuation.Empty));
         int currentStep = 0;
         Expr? finalResult = null;
-        while (stateStack.Count > 0)
+        const int maxIterations = 100000; // Prevent infinite loops
+        
+        while (stateStack.Count > 0 && _stats.Iterations < maxIterations)
         {
             _stats.Iterations++;
             var (control, env, kont) = stateStack.Pop();
@@ -592,6 +594,13 @@ public class Interpreter
             if (finalResult != null)
                 break;
         }
+        
+        // Check if we hit the iteration limit
+        if (_stats.Iterations >= maxIterations)
+        {
+            throw new InvalidOperationException($"Evaluation exceeded maximum iterations ({maxIterations}). This may indicate an infinite loop, possibly due to undefined variables or non-terminating recursion.");
+        }
+        
         _stats.TimeInEvaluation += _perfStopwatch.ElapsedTicks;
         if (finalResult != null)
         {
@@ -886,9 +895,10 @@ public class Interpreter
                 }
                 else
                 {
-                    // Not a function - create application and continue
+                    // Not a function - create application and continue with next continuation
+                    // This prevents infinite loops with undefined variables
                     var app = Expr.App(function, argument);
-                    stateStack.Push(new CEKState(app, env, next!));
+                    ApplyContinuation(app, env, next!, stateStack, ref finalResult);
                 }
                 break;
         }
