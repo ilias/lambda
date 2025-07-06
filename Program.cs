@@ -265,7 +265,7 @@ public class Parser
                 '(' => new Token(TokenType.LParen, pos),
                 ')' => new Token(TokenType.RParen, pos),
                 '=' => new Token(TokenType.Equals, pos),
-                '@' => ParseInteger(input, ref i, ref pos),
+                char c when char.IsDigit(c) => ParseInteger(input, ref i, ref pos),
                 _ => null
             };
 
@@ -292,14 +292,14 @@ public class Parser
     }
     private Token ParseInteger(string input, ref int i, ref int pos)
     {
-        var start = i + 1;
+        var start = i;
         var startPos = pos;
-        while (i + 1 < input.Length && (char.IsDigit(input[i + 1]) || input[i + 1] == ','))
+        while (i + 1 < input.Length && char.IsDigit(input[i + 1]))
         {
             pos++;
             i++;
         }
-        return new Token(TokenType.Integer, startPos, input[start..(i + 1)].Replace(",", ""));
+        return new Token(TokenType.Integer, startPos, input[start..(i + 1)]);
     }
     public Statement? Parse(string input)
     {
@@ -531,7 +531,7 @@ public class Interpreter
 
             if (number is not null || !string.IsNullOrEmpty(resultName))
                 await _logger.LogAsync("Result is" +
-                    (number is not null ? $" (Church numeral @{number:#,##0})" : "") +
+                    (number is not null ? $" (Church numeral {number:#,##0})" : "") +
                     (!string.IsNullOrEmpty(resultName) ? $" (named '{resultName}')" : ""));
 
             var timeInfo = elapsed.TotalSeconds >= 1
@@ -835,7 +835,7 @@ public class Interpreter
           (expr)             - Grouping (e.g., (\x.x) y)
           expr1 expr2        - Application (e.g., succ 0)
           name = expr        - Assignment (e.g., id = \x.x)
-          @123 or @1,234     - Integer literal, replaced by the Church numeral λf.λx.f^n(x)
+          123                - Integer literal, replaced by the Church numeral λf.λx.f^n(x)
 
         Commands: (Prefix with ':')
           :load <filename>       - Load definitions from a file (e.g., :load stdlib.lambda)

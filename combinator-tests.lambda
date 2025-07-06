@@ -82,14 +82,14 @@ product (cons 2 (cons 3 nil))           # expect: 6
 num-to-list 3                           # expect: cons true (cons true (cons true nil))
 
 # --- Iterative division and modulo ---
-div @7 @2                            # expect: 3
-mod @7 @2                            # expect: 1
-div @10 @3                           # expect: 3
-mod @10 @3                           # expect: 1
-div @5 @5                            # expect: 1
-mod @5 @5                            # expect: 0
-div @4 @5                            # expect: 0
-mod @4 @5                            # expect: 4
+div 7 2                            # expect: 3
+mod 7 2                            # expect: 1
+div 10 3                           # expect: 3
+mod 10 3                           # expect: 1
+div 5 5                            # expect: 1
+mod 5 5                            # expect: 0
+div 4 5                            # expect: 0
+mod 4 5                            # expect: 4
 
 # --- Iterative map-with-index ---
 map-with-index (λi.λx.plus i x) (cons 1 (cons 2 (cons 3 nil))) # expect: cons 1 (cons 3 (cons 5 nil))
