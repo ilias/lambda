@@ -186,7 +186,7 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
 public class ParseException(TreeErrorType errorType, int position)
@@ -264,6 +264,9 @@ public class Parser
                 '\\' or 'λ' => new Token(TokenType.Lambda, pos),
                 '(' => new Token(TokenType.LParen, pos),
                 ')' => new Token(TokenType.RParen, pos),
+                '[' => new Token(TokenType.LBracket, pos),
+                ']' => new Token(TokenType.RBracket, pos),
+                ',' => new Token(TokenType.Comma, pos),
                 '=' => new Token(TokenType.Equals, pos),
                 char c when char.IsDigit(c) => ParseInteger(input, ref i, ref pos),
                 _ => null
@@ -325,6 +328,8 @@ public class Parser
             {
                 TokenType.LParen => ParseParenthesizedExpr(tokens, ref i, end),
                 TokenType.RParen => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
+                TokenType.LBracket => ParseListExpr(tokens, ref i, end),
+                TokenType.RBracket => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
                 TokenType.Lambda => ParseLambdaExpr(tokens, ref i, end),
                 TokenType.Term => Expr.Var(token.Value!),
                 TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
@@ -371,6 +376,63 @@ public class Parser
         : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n)));
     private Expr GenerateApplicationChain(string funcVar, string baseVar, int count) =>
         Enumerable.Range(0, count).Aggregate(Expr.Var(baseVar), (acc, _) => Expr.App(Expr.Var(funcVar), acc));
+    private Expr ParseListExpr(List<Token> tokens, ref int i, int end)
+    {
+        var start = i;
+        var elements = new List<Expr>();
+        
+        i++; // Skip the opening bracket
+        
+        while (i <= end && tokens[i].Type != TokenType.RBracket)
+        {
+            var elementStart = i;
+            
+            // Find the end of this element (up to comma or closing bracket)
+            var elementEnd = i;
+            var nesting = 0;
+            
+            while (elementEnd <= end)
+            {
+                var token = tokens[elementEnd];
+                if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket)
+                    nesting++;
+                else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket)
+                {
+                    if (nesting == 0)
+                        break;
+                    nesting--;
+                }
+                else if (nesting == 0 && token.Type == TokenType.Comma)
+                    break;
+                    
+                elementEnd++;
+            }
+            
+            if (elementStart < elementEnd)
+            {
+                var element = BuildExpressionTree(tokens, elementStart, elementEnd - 1);
+                elements.Add(element);
+            }
+            
+            i = elementEnd;
+            
+            if (i <= end && tokens[i].Type == TokenType.Comma)
+                i++; // Skip comma
+        }
+        
+        if (i > end || tokens[i].Type != TokenType.RBracket)
+            throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+        
+        // Build the list as nested cons expressions
+        // [a, b, c] becomes cons a (cons b (cons c nil))
+        var result = Expr.Var("nil");
+        for (var j = elements.Count - 1; j >= 0; j--)
+        {
+            result = Expr.App(Expr.App(Expr.Var("cons"), elements[j]), result);
+        }
+        
+        return result;
+    }
 }
 
 public class Logger
@@ -836,6 +898,7 @@ public class Interpreter
           expr1 expr2        - Application (e.g., succ 0)
           name = expr        - Assignment (e.g., id = \x.x)
           123                - Integer literal, replaced by the Church numeral λf.λx.f^n(x)
+          [a,b,c]            - List literal, replaced by cons a (cons b (cons c nil))
 
         Commands: (Prefix with ':')
           :load <filename>       - Load definitions from a file (e.g., :load stdlib.lambda)
