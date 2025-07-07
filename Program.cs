@@ -1,6 +1,6 @@
 ﻿namespace LambdaCalculus;
 
-public enum ExprType : byte { Var, Abs, App, Thunk }
+public enum ExprType : byte { Var, Abs, App, Thunk, Let }
 
 // Thunk represents a delayed computation (mutable for in-place update).
 public class Thunk(Expr expr, Dictionary<string, Expr> env)
@@ -24,7 +24,10 @@ public record Expr(
     Expr? AbsBody = null,
     Expr? AppLeft = null,
     Expr? AppRight = null,
-    Thunk? ThunkValue = null)
+    Thunk? ThunkValue = null,
+    string? LetVarName = null,
+    Expr? LetValue = null,
+    Expr? LetBody = null)
 {
     public static int HashCodeCount { get; private set; }
     private int? _hashCode;
@@ -32,6 +35,7 @@ public record Expr(
     public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body);
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
     public static Expr Thunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
+    public static Expr Let(string varName, Expr value, Expr body) => new(ExprType.Let, LetVarName: varName, LetValue: value, LetBody: body);
     public override string ToString() => ToStringLimited(1000);
     private string ToStringLimited(int maxDepth) =>
         maxDepth <= 0 ? "..." : Type switch
@@ -42,6 +46,7 @@ public record Expr(
             ExprType.Thunk => ThunkValue!.IsForced ?
                 $"<forced:{ThunkValue.ForcedValue?.ToStringLimited(maxDepth - 1) ?? "null"}>" :
                 $"<thunk:{ThunkValue.Expression.ToStringLimited(maxDepth - 1)}>",
+            ExprType.Let => $"let {LetVarName} = {LetValue?.ToStringLimited(maxDepth - 1) ?? "null"} in {LetBody?.ToStringLimited(maxDepth - 1) ?? "null"}",
             _ => "?"
         };
     private string FormatApplication(int maxDepth)
@@ -92,6 +97,13 @@ public record Expr(
                     else
                         return false;
                     break;
+                case ExprType.Let when left.LetVarName != right.LetVarName: return false;
+                case ExprType.Let when left.LetValue is null && right.LetValue is null && left.LetBody is null && right.LetBody is null: continue;
+                case ExprType.Let when left.LetValue is null || right.LetValue is null || left.LetBody is null || right.LetBody is null: return false;
+                case ExprType.Let:
+                    stack.Push((left.LetBody!, right.LetBody!));
+                    stack.Push((left.LetValue!, right.LetValue!));
+                    break;
                 default: return false;
             }
         }
@@ -141,6 +153,16 @@ public record Expr(
                         : current.ThunkValue.Expression.GetHashCode();
                     current._hashCode = HashCode.Combine(current.Type, thunkHash);
                     break;
+                case ExprType.Let when (current.LetValue is null || current.LetValue._hashCode.HasValue) &&
+                                       (current.LetBody is null || current.LetBody._hashCode.HasValue):
+                    current._hashCode = HashCode.Combine(current.Type, current.LetVarName,
+                        current.LetValue?._hashCode ?? 0, current.LetBody?._hashCode ?? 0);
+                    break;
+                case ExprType.Let:
+                    stack.Push(current);
+                    if (current.LetValue is not null) stack.Push(current.LetValue);
+                    if (current.LetBody is not null) stack.Push(current.LetBody);
+                    break;
             }
         }
         return _hashCode ?? 0;
@@ -172,9 +194,10 @@ public readonly record struct SubstitutionCacheKey(Expr Root, string VarName, Ex
     public override int GetHashCode() => _hashCode;
 }
 
-public enum KontinuationType : byte { Empty, Arg, Fun }
+public enum KontinuationType : byte { Empty, Arg, Fun, Let }
 public record Kontinuation(KontinuationType Type, Expr? Expression = null,
-    Dictionary<string, Expr>? Environment = null, Expr? Value = null, Kontinuation? Next = null)
+    Dictionary<string, Expr>? Environment = null, Expr? Value = null, Kontinuation? Next = null,
+    string? VarName = null)
 {
     public static readonly Kontinuation Empty = new(KontinuationType.Empty);
 
@@ -183,10 +206,13 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 
     public static Kontinuation Fun(Expr value, Kontinuation next) =>
         new(KontinuationType.Fun, Value: value, Next: next);
+
+    public static Kontinuation Let(string varName, Expr body, Dictionary<string, Expr> env, Kontinuation next) =>
+        new(KontinuationType.Let, body, env, Next: next, VarName: varName);
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Let, In }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
 public class ParseException(TreeErrorType errorType, int position)
@@ -280,7 +306,14 @@ public class Parser
             {
                 if (currentTerm.Length > 0)
                 {
-                    result.Add(new Token(TokenType.Term, pos - currentTerm.Length, currentTerm.ToString()));
+                    var termValue = currentTerm.ToString();
+                    var tokenType = termValue switch
+                    {
+                        "let" => TokenType.Let,
+                        "in" => TokenType.In,
+                        _ => TokenType.Term
+                    };
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
                     currentTerm.Clear();
                 }
                 if (nextToken is not null)
@@ -289,7 +322,16 @@ public class Parser
         }
 
         if (currentTerm.Length > 0)
-            result.Add(new Token(TokenType.Term, pos - currentTerm.Length + 1, currentTerm.ToString()));
+        {
+            var termValue = currentTerm.ToString();
+            var tokenType = termValue switch
+            {
+                "let" => TokenType.Let,
+                "in" => TokenType.In,
+                _ => TokenType.Term
+            };
+            result.Add(new Token(tokenType, pos - currentTerm.Length + 1, termValue));
+        }
 
         return result;
     }
@@ -331,6 +373,7 @@ public class Parser
                 TokenType.LBracket => ParseListExpr(tokens, ref i, end),
                 TokenType.RBracket => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
                 TokenType.Lambda => ParseLambdaExpr(tokens, ref i, end),
+                TokenType.Let => ParseLetExpr(tokens, ref i, end),
                 TokenType.Term => Expr.Var(token.Value!),
                 TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
                 TokenType.Equals => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position),
@@ -433,6 +476,46 @@ public class Parser
         
         return result;
     }
+    private Expr ParseLetExpr(List<Token> tokens, ref int i, int end)
+    {
+        // let var = value in body
+        if (i + 4 > end)
+            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i].Position);
+        
+        if (tokens[i + 1].Type != TokenType.Term)
+            throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[i].Position);
+        
+        var varName = tokens[i + 1].Value!;
+        
+        if (tokens[i + 2].Type != TokenType.Equals)
+            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i + 2].Position);
+        
+        // Find the "in" keyword
+        var inPos = -1;
+        var nesting = 0;
+        for (var j = i + 3; j <= end; j++)
+        {
+            var token = tokens[j];
+            if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket)
+                nesting++;
+            else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket)
+                nesting--;
+            else if (nesting == 0 && token.Type == TokenType.In)
+            {
+                inPos = j;
+                break;
+            }
+        }
+        
+        if (inPos == -1)
+            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i].Position);
+        
+        var value = BuildExpressionTree(tokens, i + 3, inPos - 1);
+        var body = BuildExpressionTree(tokens, inPos + 1, end);
+        
+        i = end;
+        return Expr.Let(varName, value, body);
+    }
 }
 
 public class Logger
@@ -525,7 +608,7 @@ public class Logger
 }
 
 // Used for stack-based substitution in Interpreter
-internal enum SubstOp { Evaluate, BuildAbs, BuildApp, SubstituteInBody }
+internal enum SubstOp { Evaluate, BuildAbs, BuildApp, BuildLet, SubstituteInBody }
 internal readonly record struct StackEntry(Expr Node, SubstOp Op, object? Extra);
 
 public class Interpreter
@@ -648,6 +731,11 @@ public class Interpreter
                     var argKont = Kontinuation.Arg(right!, env, kont);
                     stateStack.Push(new CEKState(left!, env, argKont));
                     break;
+                case { Type: ExprType.Let, LetVarName: var letVar, LetValue: var letValue, LetBody: var letBody }:
+                    // Create a continuation for the let binding
+                    var letKont = Kontinuation.Let(letVar!, letBody!, env, kont);
+                    stateStack.Push(new CEKState(letValue!, env, letKont));
+                    break;
                 case { Type: ExprType.Thunk }:
                     var forcedValue = Force(control);
                     ApplyContinuation(forcedValue, env, kont, stateStack, ref finalResult);
@@ -769,6 +857,7 @@ public class Interpreter
             ":stats" => ShowStats(),
             ":help" => ShowHelp(),
             ":env" => ShowEnv(),
+            ":memo" => MemoClear(),
             ":exit" or ":quit" => "bye",
             ":depth" => HandleRecursionDepth(arg),
             _ => $"Unknown command: {command}"
@@ -899,6 +988,7 @@ public class Interpreter
           name = expr        - Assignment (e.g., id = \x.x)
           123                - Integer literal, replaced by the Church numeral λf.λx.f^n(x)
           [a,b,c]            - List literal, replaced by cons a (cons b (cons c nil))
+          let x = expr1 in expr2 - Let binding (e.g., let x = 5 in add x 3)
 
         Commands: (Prefix with ':')
           :load <filename>       - Load definitions from a file (e.g., :load stdlib.lambda)
@@ -911,6 +1001,7 @@ public class Interpreter
           :depth [number]        - Set or show the maximum recursion depth (default: 100, range: 10-10000)
           :env                   - Show current definitions in the environment
           :help                  - Show this help message
+          :memo                  - clear memoization
           :exit                  - Exit the interpreter
 
         Other Features:
@@ -964,6 +1055,12 @@ public class Interpreter
                     ApplyContinuation(app, env, next!, stateStack, ref finalResult);
                 }
                 break;
+
+            case { Type: KontinuationType.Let, VarName: var varName, Expression: var body, Environment: var letEnv, Next: var next }:
+                // We have evaluated the let value, now add it to environment and evaluate the body
+                var newEnv = new Dictionary<string, Expr>(letEnv!, StringComparer.Ordinal) { [varName!] = value };
+                stateStack.Push(new CEKState(body!, newEnv, next!));
+                break;
         }
     }
 
@@ -1011,6 +1108,16 @@ public class Interpreter
                     boundVars.Add(absVar);
                     stack.Push((current, false, absVar)); // Cleanup entry
                     stack.Push((current.AbsBody, true, null));
+                    break;
+
+                case ExprType.Let when current.LetVarName is not null && current.LetValue is not null && current.LetBody is not null:
+                    var letVar = current.LetVarName;
+                    // First process the value (where letVar is not bound)
+                    stack.Push((current.LetValue, true, null));
+                    // Then process the body (where letVar is bound)
+                    boundVars.Add(letVar);
+                    stack.Push((current, false, letVar)); // Cleanup entry
+                    stack.Push((current.LetBody, true, null));
                     break;
 
                 case ExprType.App when current.AppLeft is not null && current.AppRight is not null:
@@ -1073,6 +1180,10 @@ public class Interpreter
 
         // Fast path for abstractions that shadow the variable
         if (root.Type == ExprType.Abs && root.AbsVarName == var) return root;
+        
+        // Fast path for let expressions that shadow the variable
+        if (root.Type == ExprType.Let && root.LetVarName == var) 
+            return Expr.Let(root.LetVarName!, Substitute(root.LetValue!, var, val), root.LetBody!);
 
         // Handle thunks
         if (root.Type == ExprType.Thunk && root.ThunkValue is not null)
@@ -1107,6 +1218,17 @@ public class Interpreter
 
                 ExprType.App when root.AppLeft != null && root.AppRight != null =>
                     CreateOptimizedApplication(root.AppLeft, root.AppRight, var, val),
+
+                ExprType.Let when val.Type != ExprType.Var &&
+                                  root.LetVarName != var &&
+                                  QuickFreeVarCheck(val, root.LetVarName!) =>
+                    AlphaConvert(root.LetVarName!, root.LetBody!) is var (newVar, newBody)
+                        ? Expr.Let(newVar, Substitute(root.LetValue!, var, val), Substitute(newBody, var, val))
+                        : throw new InvalidOperationException("Alpha conversion failed"),
+
+                ExprType.Let => Expr.Let(root.LetVarName!, 
+                    Substitute(root.LetValue!, var, val),
+                    root.LetVarName == var ? root.LetBody! : Substitute(root.LetBody!, var, val)),
 
                 _ => throw new InvalidOperationException($"Unknown expression type: {root.Type}")
             };
@@ -1148,6 +1270,8 @@ public class Interpreter
         {
             ExprType.Var => expr.VarName == varName,
             ExprType.Abs => expr.AbsVarName != varName && QuickFreeVarCheck(expr.AbsBody!, varName),
+            ExprType.Let => QuickFreeVarCheck(expr.LetValue!, varName) || 
+                           (expr.LetVarName != varName && QuickFreeVarCheck(expr.LetBody!, varName)),
             ExprType.Thunk => expr.ThunkValue is not null && QuickFreeVarCheck(expr.ThunkValue.Expression, varName),
             _ => FreeVars(expr).Contains(varName),// Fall back to full computation for complex cases
         };
@@ -1188,6 +1312,11 @@ public class Interpreter
 
                 case ExprType.Abs when current.AbsBody != null:
                     stack.Push(current.AbsBody);
+                    break;
+
+                case ExprType.Let:
+                    if (current.LetBody != null) stack.Push(current.LetBody);
+                    if (current.LetValue != null) stack.Push(current.LetValue);
                     break;
 
                 case ExprType.App:
@@ -1277,6 +1406,39 @@ public class Interpreter
                             opStack.Push(new StackEntry(node.AppRight!, SubstOp.Evaluate, null));
                             opStack.Push(new StackEntry(node.AppLeft!, SubstOp.Evaluate, null));
                             break;
+
+                        case ExprType.Let:
+                            var (letVar, letVal, letBod) = (node.LetVarName!, node.LetValue!, node.LetBody!);
+                            if (currentVal.Type != ExprType.Var && letVar != currentVar && FreeVars(currentVal).Contains(letVar))
+                            {
+                                // Alpha conversion needed for let variable
+                                string newVar = letVar + _stats.VarCounter++;
+
+                                // Setup operations in reverse order
+                                opStack.Push(new StackEntry(node, SubstOp.BuildLet, newVar));
+                                opStack.Push(new StackEntry(null!, SubstOp.SubstituteInBody, (currentVar, currentVal)));
+                                opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null));
+                                opStack.Push(new StackEntry(letVal, SubstOp.Evaluate, null));
+
+                                // Perform variable renaming
+                                (currentVar, currentVal) = (letVar, Expr.Var(newVar));
+                            }
+                            else
+                            {
+                                // No alpha conversion needed
+                                opStack.Push(new StackEntry(node, SubstOp.BuildLet, letVar));
+                                // If let variable shadows current var, don't substitute in body
+                                if (letVar == currentVar)
+                                {
+                                    opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null)); // Don't substitute in body
+                                }
+                                else
+                                {
+                                    opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null));
+                                }
+                                opStack.Push(new StackEntry(letVal, SubstOp.Evaluate, null));
+                            }
+                            break;
                     }
                     break;
 
@@ -1291,6 +1453,14 @@ public class Interpreter
                     var left = resultStack.Pop();
                     resultStack.Push(Expr.App(left, right));
                     break;
+                    
+                case SubstOp.BuildLet:
+                    var letBodyResult = resultStack.Pop();
+                    var letValueResult = resultStack.Pop();
+                    var letVarName = (string)extra!;
+                    resultStack.Push(Expr.Let(letVarName, letValueResult, letBodyResult));
+                    break;
+                    
                 case SubstOp.SubstituteInBody:
                     // Restore previous substitution context
                     (currentVar, currentVal) = ((string, Expr))extra!;
@@ -1327,6 +1497,9 @@ public class Interpreter
                 ExprType.Var => expr,
                 ExprType.Abs => Expr.Abs(expr.AbsVarName!, NormalizeWithVisited(expr.AbsBody!, visited, depth + 1, maxDepth)),
                 ExprType.App => NormalizeApplicationWithVisited(expr, visited, depth, maxDepth),
+                ExprType.Let => Expr.Let(expr.LetVarName!, 
+                    NormalizeWithVisited(expr.LetValue!, visited, depth + 1, maxDepth),
+                    NormalizeWithVisited(expr.LetBody!, visited, depth + 1, maxDepth)),
                 ExprType.Thunk => Force(expr), // Force thunks during normalization
                 _ => expr
             };
