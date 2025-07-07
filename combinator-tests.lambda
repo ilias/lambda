@@ -93,3 +93,21 @@ mod 4 5                            # expect: 4
 
 # --- Iterative map-with-index ---
 map-with-index (λi.λx.plus i x) (cons 1 (cons 2 (cons 3 nil))) # expect: cons 1 (cons 3 (cons 5 nil))
+
+# --- Let definition ---
+let x = 3 in \
+  let y = 4 in \
+    plus x y
+
+# --- Continuation tests ---
+# This should define a function across multiple lines
+id = \x.\
+x
+
+# This should be a simple assignment
+y = 5
+
+# This should define a more complex function
+succ = \n.\f.\x.\
+f \
+(n f x)
