@@ -212,7 +212,7 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Let, In }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Let, In, Dot }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
 public class ParseException(TreeErrorType errorType, int position)
@@ -294,6 +294,7 @@ public class Parser
                 ']' => new Token(TokenType.RBracket, pos),
                 ',' => new Token(TokenType.Comma, pos),
                 '=' => new Token(TokenType.Equals, pos),
+                '.' => new Token(TokenType.Dot, pos),
                 char c when char.IsDigit(c) => ParseInteger(input, ref i, ref pos),
                 _ => null
             };
@@ -405,14 +406,44 @@ public class Parser
     }
     private Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
     {
-        if (i + 2 > end)
-            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i].Position);
-        if (tokens[i + 1].Type != TokenType.Term)
-            throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[i].Position);
-        var varName = tokens[i + 1].Value!;
-        var body = BuildExpressionTree(tokens, i + 2, end);
+        var variables = new List<string>();
+        i++; // Skip λ or \
+        
+        // Collect all variables before the dot
+        while (i <= end && tokens[i].Type == TokenType.Term)
+        {
+            variables.Add(tokens[i].Value!);
+            i++;
+        }
+        
+        if (variables.Count == 0)
+            throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[i - 1].Position);
+        
+        // Check for dot separator
+        if (i > end || tokens[i].Type != TokenType.Dot)
+        {
+            // No dot found - fall back to old behavior for single variable
+            if (variables.Count == 1)
+            {
+                i--; // Go back to process the body starting from current position
+                var body = BuildExpressionTree(tokens, i, end);
+                i = end;
+                return Expr.Abs(variables[0], body);
+            }
+            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
+        }
+        
+        i++; // Skip dot
+        
+        if (i > end)
+            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
+        
+        var lambdaBody = BuildExpressionTree(tokens, i, end);
         i = end;
-        return Expr.Abs(varName, body);
+        
+        // Build nested lambdas from right to left (innermost to outermost)
+        return variables.AsEnumerable().Reverse()
+            .Aggregate(lambdaBody, (body, var) => Expr.Abs(var, body));
     }
     private Expr CreateChurchNumeral(int n) => n < 1
         ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x")))
@@ -983,6 +1014,7 @@ public class Interpreter
         Expression Syntax:
           x                  - Variable (e.g., myVar)
           \x.expr or λx.expr - Lambda abstraction (e.g., \x.x or λf.λx.f x)
+          \x y z.expr        - Multi-argument lambda (syntactic sugar for \x.\y.\z.expr)
           (expr)             - Grouping (e.g., (\x.x) y)
           expr1 expr2        - Application (e.g., succ 0)
           name = expr        - Assignment (e.g., id = \x.x)
