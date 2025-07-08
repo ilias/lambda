@@ -295,11 +295,11 @@ public class Parser
                 ',' => new Token(TokenType.Comma, pos),
                 '=' => new Token(TokenType.Equals, pos),
                 '.' => new Token(TokenType.Dot, pos),
-                char c when char.IsDigit(c) => ParseInteger(input, ref i, ref pos),
+                char c when char.IsDigit(c) && currentTerm.Length == 0 => ParseInteger(input, ref i, ref pos),
                 _ => null
             };
 
-            if (nextToken is null && !char.IsWhiteSpace(ch) && ch != '.')
+            if (nextToken is null && !char.IsWhiteSpace(ch))
             {
                 currentTerm.Append(ch);
             }
