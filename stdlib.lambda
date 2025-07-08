@@ -56,25 +56,12 @@ head = λl.l (λx xs.x) nil                 # Extract the first element
 tail = λl.l (λx xs.xs) nil                # Extract the rest of the list
 
 # Higher-order list operations (iterative implementations)
-# Append: directly use Church list structure - l1 applies cons to each element with l2 as base
 append = λl1 l2.l1 cons l2
-
-# Map: directly use Church list structure - apply f to each element and cons the results
 map = λf l.l (λx rest.cons (f x) rest) nil
-
-# Filter: directly use Church list structure - conditionally include elements
 filter = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
-
-# Foldr: directly use Church list structure - this is the natural fold for Church lists
 foldr = λf z l.l f z
-
-# Foldl: convert foldr to foldl using function composition
 foldl = λf z l.foldr (λx g acc.g (f acc x)) (λy.y) l z
-
-# Length: count elements using foldr
 length = λl.foldr (λx acc.succ acc) zero l
-
-# Reverse: build reversed list using foldl  
 reverse = λl.foldl (λacc x.cons x acc) nil l
 
 # Helper that uses an accumulator for O(n) computation
