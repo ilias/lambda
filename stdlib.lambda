@@ -21,14 +21,13 @@ iszero = λn.n (λx.false) true
 exp = λm n.n m
 minus = λm n.n pred m
 
-# Division and Modulo (using Y combinator for recursion)
-# Helper for division: rec m n = if (m < n) then 0 else 1 + rec(m-n, n)
-DIV_HELPER = λrec m n.if (lt m n) 0 (succ (rec (minus m n) n))
-div = Y DIV_HELPER
-
-# Helper for modulo: rec m n = if (m < n) then m else rec(m-n, n)
-MOD_HELPER = λrec m n.if (lt m n) m (rec (minus m n) n)
-mod = Y MOD_HELPER
+# Division and Modulo (iterative implementation)
+# Iterative division: repeatedly subtract divisor from dividend
+# State: (quotient, remainder)
+DIV_STEP = λn p.if (lt (second p) n) p (pair (succ (first p)) (minus (second p) n))
+DIV_ITER_HELPER = λm n.m (DIV_STEP n) (pair 0 m)
+div = λm n.first (DIV_ITER_HELPER m n)
+mod = λm n.second (DIV_ITER_HELPER m n)
 
 leq = λm n.iszero (minus m n)
 eq = λm n.and (leq m n) (leq n m)
@@ -56,29 +55,32 @@ cons = λx y f.f x y                   # Create a list node with head x and tail
 head = λl.l (λx y.x)                   # Extract the first element
 tail = λl.l (λx y.y)                   # Extract the rest of the list
 
-# Higher-order list operations
-append = λl1 l2.l1 (λx y.cons x (append y l2)) l2   # Append l2 to l1
-map = λf l.l (λx y.cons (f x) (map f y)) nil        # Apply f to each element
-filter = λf l.l (λx y.if (f x) (cons x (filter f y)) (filter f y)) nil  # Keep elements satisfying f
-foldr = λf z l.l (λx y.f x (foldr f z y)) z        # Fold from right with initial value z
-foldl = λf z l.l (λx y.y (f z x)) z                # Fold from left with initial value z
-length = λl.foldl (λx y.succ x) 0 l                  # Count elements
-reverse = λl.foldl (λx y.cons y x) nil l             # Reverse list order
+# Higher-order list operations (iterative implementations)
+# Append: directly use Church list structure - l1 applies cons to each element with l2 as base
+append = λl1 l2.l1 cons l2
 
-# arithmetic functions
-fact = λn.if (iszero n) 1 (mult n (fact (pred n)))
-fib = λn.if (iszero n) 0 (if (eq n 1) 1 (plus (fib (pred n)) (fib (pred (pred n)))))
+# Map: directly use Church list structure - apply f to each element and cons the results
+map = λf l.l (λx rest.cons (f x) rest) nil
 
-# fixed-point combinators
-FIB = Y (λf n.if (iszero n) 0 (if (eq n 1) 1 (plus (f (pred n)) (f (pred (pred n))))))
-FACT = Y (λf n.if (iszero n) 1 (mult n (f (pred n))))
+# Filter: directly use Church list structure - conditionally include elements
+filter = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
+
+# Foldr: directly use Church list structure - this is the natural fold for Church lists
+foldr = λf z l.l f z
+
+# Foldl: convert foldr to foldl using function composition
+foldl = λf z l.foldr (λx g acc.g (f acc x)) (λx.x) l z
+
+# Length: count elements using foldr
+length = λl.foldr (λx acc.succ acc) 0 l
+
+# Reverse: build reversed list using foldl  
+reverse = λl.foldl (λacc x.cons x acc) nil l
 
 # Helper that uses an accumulator for O(n) computation
 FACT_HELPER = Y (λf n acc.if (iszero n) acc (f (pred n) (mult n acc)))
-# Tail-recursive factorial with accumulator
-FACT_TR = λn.FACT_HELPER n 1
+fact = λn.FACT_HELPER n 1
 
 # Iterate n times to build up Fibonacci value
 FIB_ITER_HELPER = λn.n (λp.pair (second p) (plus (first p) (second p))) (pair 0 1)
-# Extract the result from the pair
-FIB_ITER = λn.first (FIB_ITER_HELPER n)
+fib = λn.first (FIB_ITER_HELPER n)
