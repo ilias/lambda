@@ -50,10 +50,10 @@ second = λp.p (λx y.y)
 swap = λp.p (λx y.y x) (λx y.x y)
 
 # Basic list operations
-nil = λx y.x                           # Empty list
-cons = λx y f.f x y                   # Create a list node with head x and tail y
-head = λl.l (λx y.x)                   # Extract the first element
-tail = λl.l (λx y.y)                   # Extract the rest of the list
+nil = λf z.z                              # Empty list
+cons = λx xs f z.f x (xs f z)             # Create a list node with head x and tail xs
+head = λl.l (λx xs.x) nil                 # Extract the first element
+tail = λl.l (λx xs.xs) nil                # Extract the rest of the list
 
 # Higher-order list operations (iterative implementations)
 # Append: directly use Church list structure - l1 applies cons to each element with l2 as base
@@ -69,10 +69,10 @@ filter = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
 foldr = λf z l.l f z
 
 # Foldl: convert foldr to foldl using function composition
-foldl = λf z l.foldr (λx g acc.g (f acc x)) (λx.x) l z
+foldl = λf z l.foldr (λx g acc.g (f acc x)) (λy.y) l z
 
 # Length: count elements using foldr
-length = λl.foldr (λx acc.succ acc) 0 l
+length = λl.foldr (λx acc.succ acc) zero l
 
 # Reverse: build reversed list using foldl  
 reverse = λl.foldl (λacc x.cons x acc) nil l
