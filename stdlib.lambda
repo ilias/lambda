@@ -111,8 +111,8 @@ minimum = λl.tail l (foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)) (he
 concat = λll.foldr append nil ll         # Concatenate list of lists
 
 # Iterative computational helpers
-FACT_HELPER = Y (λf n acc.if (iszero n) acc (f (pred n) (mult n acc)))
-fact = λn.FACT_HELPER n 1
+FACT_ITER_HELPER = λn.n (λp.pair (succ (first p)) (mult (succ (first p)) (second p))) (pair 0 1)
+fact = λn.second (FACT_ITER_HELPER n)
 
 FIB_ITER_HELPER = λn.n (λp.pair (second p) (plus (first p) (second p))) (pair 0 1)
 fib = λn.first (FIB_ITER_HELPER n)
