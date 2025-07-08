@@ -12,7 +12,6 @@ if = λp a b.p a b
 eq-bool = λx y.x y (not y)
 
 # Church numerals
-0 = λf x.x
 zero = λf x.x
 succ = λn f x.f (n f x)
 pred = λn f x.n (λg h.h (g f)) (λu.x) (λu.u) 
