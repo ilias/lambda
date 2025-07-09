@@ -118,9 +118,16 @@ FIB_ITER_HELPER = λn.n (λp.pair (second p) (plus (first p) (second p))) (pair 
 fib = λn.first (FIB_ITER_HELPER n)
 
 # Additional computational functions
-# Safe GCD implementation (simplified to avoid infinite loops)
-# For safety, we use a simple approach that works for small numbers
-gcd = λm n.if (iszero n) m (if (iszero m) n (min m n))  # Simplified safe GCD
+# Iterative GCD using Euclidean algorithm
+GCD_STEP = λp.if (eq (first p) (second p)) \
+                p \
+                (if (gt (first p) (second p)) \
+                    (pair (minus (first p) (second p)) (second p)) \
+                    (pair (first p) (minus (second p) (first p))))
+GCD_ITER_HELPER = λm n.(plus m n) GCD_STEP (pair m n)
+gcd = λm n.if (iszero n) m \
+                (if (iszero m) n \
+                    (first (GCD_ITER_HELPER m n)))  # Iterative GCD using subtraction
 lcm = λm n.div (mult m n) (gcd m n)              # Least common multiple
 factorial = fact                                  # Alias for fact
 fibonacci = fib                                   # Alias for fib
