@@ -978,68 +978,90 @@ public class Interpreter
     {
         static string PerOfTotal(long value, long total) => total == 0 ? "0.0%" : $"{value * 100.0 / total:F1}%";
         var totalTime = _stats.TimeInCacheLookup + _stats.TimeInSubstitution + _stats.TimeInEvaluation + _stats.TimeInForcing;
+        var process = System.Diagnostics.Process.GetCurrentProcess();
+        var memUsage = GC.GetTotalMemory(false) / 1024.0;
+        var peakMem = process.PeakWorkingSet64 / 1024.0;
+        var threads = process.Threads.Count;
+        var startTime = process.StartTime;
+        var upTime = DateTime.Now - startTime;
+        var gen0 = GC.CollectionCount(0);
+        var gen1 = GC.CollectionCount(1);
+        var gen2 = GC.CollectionCount(2);
+        var evalMode = _lazyEvaluation ? "Lazy" : "Eager";
+        var cacheHitRate = PerOfTotal(_stats.CacheHits, _stats.CacheHits + _stats.CacheMisses);
+        var cacheStats = $"Subst: {_substitutionCache.Count}, Eval: {_evaluationCache.Count}, FreeVar: {_freeVarCache.Count}, Var: {_expressionPool.Count}, ContainsVar: {_containsVarCache.Count}, Norm: {_normalizationCache.Count}";
         return $"""
         === Lambda Interpreter Statistics ===
-        Environment:              {_context.Count:#,##0} definitions
-        CEK normalization:        ({_stats.NormalizeCEKCount:#,##0} normalizations) {(_lazyEvaluation ? "lazy" : "eager")} evaluation 
-        Recursion depth:          {_stats.MaxRecursionDepth:#,##0}               
-        Thunk forcing:            {_stats.ThunkForceCount:#,##0} thunks forced
-        Memoization:              
-          Substitution cache:     {_substitutionCache.Count:#,##0} entries
-          Evaluation cache:       {_evaluationCache.Count:#,##0} entries 
-          Free variable cache:    {_freeVarCache.Count:#,##0} entries
-          variable cache:         {_expressionPool.Count:#,##0} entries
-          Cache hits/misses:      {_stats.CacheHits:#,##0} / {_stats.CacheMisses:#,##0} ({PerOfTotal(_stats.CacheHits, _stats.CacheHits + _stats.CacheMisses)})
-        Performance:
-          Total iterations:       {_stats.TotalIterations:#,##0}
-          Total hash code calls:  {Expr.HashCodeCount:#,##0}
-          Cache lookup time:      {_stats.TimeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInCacheLookup, totalTime)})
-          Substitution time:      {_stats.TimeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInSubstitution, totalTime)}) (called {_stats.SubstitutionExprCount:#,##0} times)
-          Evaluation time:        {_stats.TimeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInEvaluation, totalTime)})
-          Thunk forcing time:     {_stats.TimeInForcing / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInForcing, totalTime)})
-          Total measured time:    {totalTime / 10000.0:#,##0.00} ms
-        System:
-          Unique var counter:     {_stats.VarCounter:#,##0}
-          Step-by-step mode:      {(_showStep ? "ENABLED" : "DISABLED")}
-          Logging:                {_logger.LogStatus}
-          Memory usage:           {GC.GetTotalMemory(false) / 1024:#,##0} KB
-          GC collections:         Gen0={GC.CollectionCount(0)} Gen1={GC.CollectionCount(1)} Gen2={GC.CollectionCount(2)}
+        
+        -- Environment --
+        Definitions:              {_context.Count:#,##0}
+        Recursion depth limit:    {_stats.MaxRecursionDepth:#,##0}
+        Unique var counter:       {_stats.VarCounter:#,##0}
+        
+        -- Evaluation --
+        Mode:                     {evalMode}
+        Step-by-step:             {(_showStep ? "ENABLED" : "DISABLED")}
+        Normalizations:           {_stats.NormalizeCEKCount:#,##0}
+        Thunks forced:            {_stats.ThunkForceCount:#,##0}
+        Total iterations:         {_stats.TotalIterations:#,##0}
+        Hash code calls:          {Expr.HashCodeCount:#,##0}
+        
+        -- Memoization/Caching --
+        Cache sizes:              {cacheStats}
+        Cache hits/misses:        {_stats.CacheHits:#,##0} / {_stats.CacheMisses:#,##0} ({cacheHitRate})
+        
+        -- Performance (timings) --
+        Cache lookup time:        {_stats.TimeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInCacheLookup, totalTime)})
+        Substitution time:        {_stats.TimeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInSubstitution, totalTime)}) (calls: {_stats.SubstitutionExprCount:#,##0})
+        Evaluation time:          {_stats.TimeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInEvaluation, totalTime)})
+        Thunk forcing time:       {_stats.TimeInForcing / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInForcing, totalTime)})
+        Total measured time:      {totalTime / 10000.0:#,##0.00} ms
+        
+        -- System --
+        Logging:                  {_logger.LogStatus}
+        Memory usage:             {memUsage:#,##0.0} KB (peak: {peakMem:#,##0.0} KB)
+        Threads:                  {threads}
+        Uptime:                   {upTime:dd\.hh\:mm\:ss}
+        GC collections:           Gen0={gen0} Gen1={gen1} Gen2={gen2}
+        Process start:            {startTime}
         """;
     }
 
     private static string ShowHelp() =>
         """
-        Lambda Calculus Interpreter Help:
+        ================= Lambda Calculus Interpreter Help =================
 
-        Expression Syntax:
-          x                  - Variable (e.g., myVar)
-          \x.expr or λx.expr - Lambda abstraction (e.g., \x.x or λf.λx.f x)
-          \x y z.expr        - Multi-argument lambda (syntactic sugar for \x.\y.\z.expr)
-          (expr)             - Grouping (e.g., (\x.x) y)
-          expr1 expr2        - Application (e.g., succ 0)
-          name = expr        - Assignment (e.g., id = \x.x)
-          123                - Integer literal, replaced by the Church numeral λf.λx.f^n(x)
-          [a,b,c]            - List literal, replaced by cons a (cons b (cons c nil))
-          let x = expr1 in expr2 - Let binding (e.g., let x = 5 in add x 3)
+        -- Expression Syntax --
+          x                      Variable (e.g., myVar)
+          \x.expr or λx.expr     Lambda abstraction (e.g., \x.x or λf.λx.f x)
+          \x y z.expr            Multi-argument lambda (sugar for \x.\y.\z.expr)
+          (expr)                 Grouping (e.g., (\x.x) y)
+          expr1 expr2            Application (e.g., succ 0)
+          name = expr            Assignment (e.g., id = \x.x)
+          123                    Integer literal (Church numeral λf.λx.f^n(x))
+          [a, b, c]              List literal (cons a (cons b (cons c nil)))
+          let x = e1 in e2       Let binding (e.g., let x = 5 in add x 3)
 
-        Commands: (Prefix with ':')
-          :load <filename>       - Load definitions from a file (e.g., :load stdlib.lambda)
-          :save <filename>       - Save current environment to a file (e.g., :save myenv.lambda)
-          :log (<filename>|off)  - Log output to a file or disable logging (e.g., :log session.log, :log off)
-          :log clear             - Clear the current log file (if logging is enabled)
-          :step (on|off)         - Toggle step-by-step evaluation logging (e.g., :step on)
-          :lazy (on|off)         - Toggle lazy evaluation (default: on)
-          :stats                 - Show performance and environment statistics
-          :depth [number]        - Set or show the maximum recursion depth (default: 100, range: 10-10000)
-          :env                   - Show current definitions in the environment
-          :help                  - Show this help message
-          :memo                  - clear memoization
-          :exit                  - Exit the interpreter
+        -- Commands (prefix with ':') --
+          :load <file>           Load definitions from file (e.g., :load stdlib.lambda)
+          :save <file>           Save current environment to file (e.g., :save myenv.lambda)
+          :log <file|off>        Log output to file or disable logging (e.g., :log session.log, :log off)
+          :log clear             Clear the current log file (if enabled)
+          :step on|off           Toggle step-by-step evaluation logging
+          :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
+          :stats                 Show detailed performance and environment statistics
+          :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
+          :env                   Show current environment definitions
+          :help                  Show this help message
+          :memo                  Clear all memoization/caches
+          :exit, :quit           Exit the interpreter
 
-        Other Features:
-          Line continuation: Use '\' at the end of a line to continue input on the next line.
-          Comments: Lines starting with '#' are ignored.
-          Any command line arguments are treated as files with commands to load
+        -- Interactive Features --
+          - Line continuation: Use '\' at end of line to continue input
+          - Comments: Lines starting with '#' are ignored
+          - Command line arguments: Treated as files to load at startup
+          - Tab/arrow keys: Use your terminal's editing features for input
+          
         """;
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
