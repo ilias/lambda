@@ -1058,10 +1058,8 @@ public class Interpreter
 
         -- Interactive Features --
           - Line continuation: Use '\' at end of line to continue input
-          - Comments: Lines starting with '#' are ignored
+          - Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
           - Command line arguments: Treated as files to load at startup
-          - Tab/arrow keys: Use your terminal's editing features for input
-          
         """;
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
@@ -1628,6 +1626,9 @@ public class Program
             else
                 Console.WriteLine($"File not found: {filePath}");
 
+        Logger.LogToConsole("");
+        Logger.LogToConsole("Lambda Calculus Interpreter - Interactive Mode");
+        Logger.LogToConsole("Type ':help' for a list of commands or ':exit' to quit");
         await interpreter.RunInteractiveLoopAsync();
     }
 }
