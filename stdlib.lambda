@@ -79,7 +79,7 @@ I        = λx.x
 S        = λx y z.x z (y z)
 B        = λx y z.x (y z)
 C        = λx y z.x z y
-Y        = λf.(λx.f (x x)) (λx.f (x x))
+#Y        = λf.(λx.f (x x)) (λx.f (x x))
 
 # =============================================================================
 # ADDITIONAL COMBINATORS AND UTILITIES
@@ -92,7 +92,7 @@ apply    = λf x.f x                         # Function application
 curry    = λf x y.f (pair x y)              # Curry a function
 uncurry  = λf p.f (first p) (second p)      # Uncurry a function
 on       = λop f x y.op (f x) (f y)         # Apply function to both args before operation
-fix      = Y                                # Fixed point combinator (alias for Y)
+#fix      = Y                                # Fixed point combinator (alias for Y)
 
 # =============================================================================
 # CONDITIONAL UTILITIES
