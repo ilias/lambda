@@ -1,6 +1,6 @@
 ﻿namespace LambdaCalculus;
 
-public enum ExprType : byte { Var, Abs, App, Thunk, Let, YCombinator }
+public enum ExprType : byte { Var, Abs, App, Thunk, YCombinator }
 
 // Thunk represents a delayed computation (mutable for in-place update).
 public class Thunk(Expr expr, Dictionary<string, Expr> env)
@@ -22,8 +22,7 @@ public record Expr(
     string? VarName = null,
     string? AbsVarName = null, Expr? AbsBody = null,
     Expr? AppLeft = null, Expr? AppRight = null,
-    Thunk? ThunkValue = null,
-    string? LetVarName = null, Expr? LetValue = null, Expr? LetBody = null)
+    Thunk? ThunkValue = null)
 {
     public static int HashCodeCount { get; private set; }
     private int? _hashCode;
@@ -31,7 +30,6 @@ public record Expr(
     public static Expr Abs(string name, Expr body) => new(ExprType.Abs, AbsVarName: name, AbsBody: body);
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
     public static Expr Thunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
-    public static Expr Let(string varName, Expr value, Expr body) => new(ExprType.Let, LetVarName: varName, LetValue: value, LetBody: body);
     public static Expr YCombinator() => new(ExprType.YCombinator);
     public override string ToString() => ToStringLimited(1000);
     private string ToStringLimited(int maxDepth) =>
@@ -43,7 +41,6 @@ public record Expr(
             ExprType.Thunk => ThunkValue!.IsForced ?
                 $"<forced:{ThunkValue.ForcedValue?.ToStringLimited(maxDepth - 1) ?? "null"}>" :
                 $"<thunk:{ThunkValue.Expression.ToStringLimited(maxDepth - 1)}>",
-            ExprType.Let => $"let {LetVarName} = {LetValue?.ToStringLimited(maxDepth - 1) ?? "null"} in {LetBody?.ToStringLimited(maxDepth - 1) ?? "null"}",
             ExprType.YCombinator => "Y",
             _ => "?"
         };
@@ -94,13 +91,6 @@ public record Expr(
                         stack.Push((left.ThunkValue.Expression, right.ThunkValue.Expression));
                     else
                         return false;
-                    break;
-                case ExprType.Let when left.LetVarName != right.LetVarName: return false;
-                case ExprType.Let when left.LetValue is null && right.LetValue is null && left.LetBody is null && right.LetBody is null: continue;
-                case ExprType.Let when left.LetValue is null || right.LetValue is null || left.LetBody is null || right.LetBody is null: return false;
-                case ExprType.Let:
-                    stack.Push((left.LetBody!, right.LetBody!));
-                    stack.Push((left.LetValue!, right.LetValue!));
                     break;
                 case ExprType.YCombinator:
                     break; // Y combinators are always equal to other Y combinators
@@ -153,16 +143,6 @@ public record Expr(
                         : current.ThunkValue.Expression.GetHashCode();
                     current._hashCode = HashCode.Combine(current.Type, thunkHash);
                     break;
-                case ExprType.Let when (current.LetValue is null || current.LetValue._hashCode.HasValue) &&
-                                       (current.LetBody is null || current.LetBody._hashCode.HasValue):
-                    current._hashCode = HashCode.Combine(current.Type, current.LetVarName,
-                        current.LetValue?._hashCode ?? 0, current.LetBody?._hashCode ?? 0);
-                    break;
-                case ExprType.Let:
-                    stack.Push(current);
-                    if (current.LetValue is not null) stack.Push(current.LetValue);
-                    if (current.LetBody is not null) stack.Push(current.LetBody);
-                    break;
                 case ExprType.YCombinator:
                     current._hashCode = HashCode.Combine(current.Type);
                     break;
@@ -197,7 +177,7 @@ public readonly record struct SubstitutionCacheKey(Expr Root, string VarName, Ex
     public override int GetHashCode() => _hashCode;
 }
 
-public enum KontinuationType : byte { Empty, Arg, Fun, Let, Conditional }
+public enum KontinuationType : byte { Empty, Arg, Fun, Conditional }
 public record Kontinuation(KontinuationType Type, Expr? Expression = null,
     Dictionary<string, Expr>? Environment = null, Expr? Value = null, Kontinuation? Next = null,
     string? VarName = null, Expr? ThenBranch = null, Expr? ElseBranch = null)
@@ -210,15 +190,12 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
     public static Kontinuation Fun(Expr value, Kontinuation next) =>
         new(KontinuationType.Fun, Value: value, Next: next);
 
-    public static Kontinuation Let(string varName, Expr body, Dictionary<string, Expr> env, Kontinuation next) =>
-        new(KontinuationType.Let, body, env, Next: next, VarName: varName);
-
     public static Kontinuation Conditional(Expr thenBranch, Expr elseBranch, Dictionary<string, Expr> env, Kontinuation next) =>
         new(KontinuationType.Conditional, Environment: env, Next: next, ThenBranch: thenBranch, ElseBranch: elseBranch);
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Let, In, Dot, Y }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
 public class ParseException(TreeErrorType errorType, int position)
@@ -279,8 +256,6 @@ public class Parser
 {
     TokenType MyTokenType(string? term) => term switch
     {
-        "let" => TokenType.Let,
-        "in" => TokenType.In,
         "Y" => TokenType.Y,
         _ => TokenType.Term
     }; 
@@ -378,7 +353,6 @@ public class Parser
                 TokenType.LBracket => ParseListExpr(tokens, ref i, end),
                 TokenType.RBracket => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
                 TokenType.Lambda => ParseLambdaExpr(tokens, ref i, end),
-                TokenType.Let => ParseLetExpr(tokens, ref i, end),
                 TokenType.Y => Expr.YCombinator(),
                 TokenType.Term => Expr.Var(token.Value!),
                 TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
@@ -512,46 +486,6 @@ public class Parser
         
         return result;
     }
-    private Expr ParseLetExpr(List<Token> tokens, ref int i, int end)
-    {
-        // let var = value in body
-        if (i + 4 > end)
-            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i].Position);
-        
-        if (tokens[i + 1].Type != TokenType.Term)
-            throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[i].Position);
-        
-        var varName = tokens[i + 1].Value!;
-        
-        if (tokens[i + 2].Type != TokenType.Equals)
-            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i + 2].Position);
-        
-        // Find the "in" keyword
-        var inPos = -1;
-        var nesting = 0;
-        for (var j = i + 3; j <= end; j++)
-        {
-            var token = tokens[j];
-            if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket)
-                nesting++;
-            else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket)
-                nesting--;
-            else if (nesting == 0 && token.Type == TokenType.In)
-            {
-                inPos = j;
-                break;
-            }
-        }
-        
-        if (inPos == -1)
-            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i].Position);
-        
-        var value = BuildExpressionTree(tokens, i + 3, inPos - 1);
-        var body = BuildExpressionTree(tokens, inPos + 1, end);
-        
-        i = end;
-        return Expr.Let(varName, value, body);
-    }
 }
 
 public class Logger
@@ -644,7 +578,7 @@ public class Logger
 }
 
 // Used for stack-based substitution in Interpreter
-internal enum SubstOp { Evaluate, BuildAbs, BuildApp, BuildLet, SubstituteInBody }
+internal enum SubstOp { Evaluate, BuildAbs, BuildApp, SubstituteInBody }
 internal readonly record struct StackEntry(Expr Node, SubstOp Op, object? Extra);
 
 public class Interpreter
@@ -773,11 +707,6 @@ public class Interpreter
                         var argKont = Kontinuation.Arg(right!, env, kont);
                         stateStack.Push(new CEKState(left!, env, argKont));
                     }
-                    break;
-                case { Type: ExprType.Let, LetVarName: var letVar, LetValue: var letValue, LetBody: var letBody }:
-                    // Create a continuation for the let binding
-                    var letKont = Kontinuation.Let(letVar!, letBody!, env, kont);
-                    stateStack.Push(new CEKState(letValue!, env, letKont));
                     break;
                 case { Type: ExprType.Thunk }:
                     var forcedValue = Force(control);
@@ -1064,7 +993,6 @@ public class Interpreter
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
-          let x = e1 in e2       Let binding (e.g., let x = 5 in add x 3)
           Y f1                   Y combinator (e.g., Y \f.\x.f (f x))
 
         -- Commands (prefix with ':') --
@@ -1172,12 +1100,6 @@ public class Interpreter
                 }
                 break;
 
-            case { Type: KontinuationType.Let, VarName: var varName, Expression: var body, Environment: var letEnv, Next: var next }:
-                // We have evaluated the let value, now add it to environment and evaluate the body
-                var newEnv = new Dictionary<string, Expr>(letEnv!, StringComparer.Ordinal) { [varName!] = value };
-                stateStack.Push(new CEKState(body!, newEnv, next!));
-                break;
-
             case { Type: KontinuationType.Conditional, ThenBranch: var thenBranch, ElseBranch: var elseBranch, Environment: var condEnv, Next: var next }:
                 // We have evaluated the condition, now choose the appropriate branch
                 // The condition should be a Church boolean: true = λx.λy.x, false = λx.λy.y
@@ -1231,16 +1153,6 @@ public class Interpreter
                     boundVars.Add(absVar);
                     stack.Push((current, false, absVar)); // Cleanup entry
                     stack.Push((current.AbsBody, true, null));
-                    break;
-
-                case ExprType.Let when current.LetVarName is not null && current.LetValue is not null && current.LetBody is not null:
-                    var letVar = current.LetVarName;
-                    // First process the value (where letVar is not bound)
-                    stack.Push((current.LetValue, true, null));
-                    // Then process the body (where letVar is bound)
-                    boundVars.Add(letVar);
-                    stack.Push((current, false, letVar)); // Cleanup entry
-                    stack.Push((current.LetBody, true, null));
                     break;
 
                 case ExprType.App when current.AppLeft is not null && current.AppRight is not null:
@@ -1308,10 +1220,6 @@ public class Interpreter
         // Fast path for abstractions that shadow the variable
         if (root.Type == ExprType.Abs && root.AbsVarName == var) return root;
         
-        // Fast path for let expressions that shadow the variable
-        if (root.Type == ExprType.Let && root.LetVarName == var) 
-            return Expr.Let(root.LetVarName!, Substitute(root.LetValue!, var, val), root.LetBody!);
-
         // Handle thunks
         if (root.Type == ExprType.Thunk && root.ThunkValue is not null)
         {
@@ -1345,17 +1253,6 @@ public class Interpreter
 
                 ExprType.App when root.AppLeft != null && root.AppRight != null =>
                     CreateOptimizedApplication(root.AppLeft, root.AppRight, var, val),
-
-                ExprType.Let when val.Type != ExprType.Var &&
-                                  root.LetVarName != var &&
-                                  QuickFreeVarCheck(val, root.LetVarName!) =>
-                    AlphaConvert(root.LetVarName!, root.LetBody!) is var (newVar, newBody)
-                        ? Expr.Let(newVar, Substitute(root.LetValue!, var, val), Substitute(newBody, var, val))
-                        : throw new InvalidOperationException("Alpha conversion failed"),
-
-                ExprType.Let => Expr.Let(root.LetVarName!, 
-                    Substitute(root.LetValue!, var, val),
-                    root.LetVarName == var ? root.LetBody! : Substitute(root.LetBody!, var, val)),
 
                 ExprType.YCombinator => root, // Y combinator doesn't contain variables
 
@@ -1399,8 +1296,6 @@ public class Interpreter
         {
             ExprType.Var => expr.VarName == varName,
             ExprType.Abs => expr.AbsVarName != varName && QuickFreeVarCheck(expr.AbsBody!, varName),
-            ExprType.Let => QuickFreeVarCheck(expr.LetValue!, varName) || 
-                           (expr.LetVarName != varName && QuickFreeVarCheck(expr.LetBody!, varName)),
             ExprType.Thunk => expr.ThunkValue is not null && QuickFreeVarCheck(expr.ThunkValue.Expression, varName),
             _ => FreeVars(expr).Contains(varName),// Fall back to full computation for complex cases
         };
@@ -1441,11 +1336,6 @@ public class Interpreter
 
                 case ExprType.Abs when current.AbsBody != null:
                     stack.Push(current.AbsBody);
-                    break;
-
-                case ExprType.Let:
-                    if (current.LetBody != null) stack.Push(current.LetBody);
-                    if (current.LetValue != null) stack.Push(current.LetValue);
                     break;
 
                 case ExprType.App:
@@ -1538,35 +1428,6 @@ public class Interpreter
                             opStack.Push(new StackEntry(node.AppLeft!, SubstOp.Evaluate, null));
                             break;
 
-                        case ExprType.Let:
-                            var (letVar, letVal, letBod) = (node.LetVarName!, node.LetValue!, node.LetBody!);
-                            if (currentVal.Type != ExprType.Var && letVar != currentVar && FreeVars(currentVal).Contains(letVar))
-                            {
-                                // Alpha conversion needed for let variable
-                                string newVar = letVar + _stats.VarCounter++;
-
-                                // Setup operations in reverse order
-                                opStack.Push(new StackEntry(node, SubstOp.BuildLet, newVar));
-                                opStack.Push(new StackEntry(null!, SubstOp.SubstituteInBody, (currentVar, currentVal)));
-                                opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null));
-                                opStack.Push(new StackEntry(letVal, SubstOp.Evaluate, null));
-
-                                // Perform variable renaming
-                                (currentVar, currentVal) = (letVar, Expr.Var(newVar));
-                            }
-                            else
-                            {
-                                // No alpha conversion needed
-                                opStack.Push(new StackEntry(node, SubstOp.BuildLet, letVar));
-                                // If let variable shadows current var, don't substitute in body
-                                if (letVar == currentVar)
-                                    opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null)); // Don't substitute in body
-                                else
-                                    opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null));
-                                opStack.Push(new StackEntry(letVal, SubstOp.Evaluate, null));
-                            }
-                            break;
-
                         case ExprType.YCombinator:
                             // Y combinator has no variables, so substitution returns itself
                             resultStack.Push(node);
@@ -1584,13 +1445,6 @@ public class Interpreter
                     var right = resultStack.Pop();
                     var left = resultStack.Pop();
                     resultStack.Push(Expr.App(left, right));
-                    break;
-                    
-                case SubstOp.BuildLet:
-                    var letBodyResult = resultStack.Pop();
-                    var letValueResult = resultStack.Pop();
-                    var letVarName = (string)extra!;
-                    resultStack.Push(Expr.Let(letVarName, letValueResult, letBodyResult));
                     break;
                     
                 case SubstOp.SubstituteInBody:
@@ -1629,9 +1483,6 @@ public class Interpreter
                 ExprType.Var => expr,
                 ExprType.Abs => Expr.Abs(expr.AbsVarName!, NormalizeWithVisited(expr.AbsBody!, visited, depth + 1, maxDepth)),
                 ExprType.App => NormalizeApplicationWithVisited(expr, visited, depth, maxDepth),
-                ExprType.Let => Expr.Let(expr.LetVarName!, 
-                    NormalizeWithVisited(expr.LetValue!, visited, depth + 1, maxDepth),
-                    NormalizeWithVisited(expr.LetBody!, visited, depth + 1, maxDepth)),
                 ExprType.Thunk => Force(expr), // Force thunks during normalization
                 ExprType.YCombinator => expr, // Y combinator itself is normalized, but applications should be handled in NormalizeApplicationWithVisited
                 _ => expr
