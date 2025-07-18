@@ -590,7 +590,6 @@ public class Interpreter
     private readonly Dictionary<string, Expr> _expressionPool = new(2048, StringComparer.Ordinal);
     private readonly Dictionary<(Expr, string), bool> _containsVarCache = new(2048);
     private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
-    private readonly Dictionary<string, Expr> _variableCache = new(1024);
     private readonly Logger _logger;
     private readonly InterpreterStats _stats;
     private readonly Parser _parser = new();
