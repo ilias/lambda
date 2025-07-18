@@ -118,7 +118,7 @@ swap     = λp.p (λx y.y x) (λx y.x y)
 nil      = λf z.z                              # Empty list
 cons     = λx xs f z.f x (xs f z)              # Create a list node with head x and tail xs
 head     = λl.l (λx xs.x) nil                  # Extract the first element
-tail     = λl.l (λx xs.xs) nil                 # Extract the rest of the list
+tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil nil)) # Extract the rest of the list
 
 # =============================================================================
 # HIGHER-ORDER LIST OPERATIONS (iterative implementations)
@@ -204,24 +204,6 @@ iota             = range                                      # Alias for range
 enumFromTo       = λstart end.map (plus start) \
                                    (range (succ (minus end start)))  # [start..end]
 enumFrom         = λstart n.map (plus start) (range n)        # n numbers starting from start
-
-# =============================================================================
-# STRING AND CHARACTER OPERATIONS (using Church numerals as characters)
-# =============================================================================
-
-# Character operations treating numbers as ASCII codes
-char-to-num      = I                                   # Characters are just numbers
-num-to-char      = I                                   # Numbers are just characters
-is-alpha         = λc.or (and (geq c 65) (leq c 90)) \
-                          (and (geq c 97) (leq c 122)) # Check if letter
-is-digit         = λc.and (geq c 48) (leq c 57)        # Check if digit (0-9)
-is-upper         = λc.and (geq c 65) (leq c 90)        # Check if uppercase letter
-is-lower         = λc.and (geq c 97) (leq c 122)       # Check if lowercase letter
-to-upper         = λc.if (is-lower c) (minus c 32) c   # Convert to uppercase
-to-lower         = λc.if (is-upper c) (plus c 32) c    # Convert to lowercase
-is-space         = λc.or (eq c 32) \
-                         (or (eq c 9) \
-                             (or (eq c 10) (eq c 13))) # Space, tab, newline, return
 
 # =============================================================================
 # ADVANCED LIST UTILITIES (safe, non-recursive implementations)
@@ -430,19 +412,39 @@ partial          = λf x.λy.f x y                            # Partial applicat
 partial2         = λf x y.λz.f x y z                        # Partial application of first 2 args
 
 # =============================================================================
-# TYPE CHECKING PREDICATES (best effort in untyped lambda calculus)
+# ADDITIONAL LIST UTILITIES (safe, non-recursive implementations)
 # =============================================================================
 
-isFunction       = λx.true                                  # Everything is a function in lambda calculus
-isNumber         = λx.true                                  # Church numerals look like functions too
-isList           = λx.true                                  # Lists are also functions
-isPair           = λx.true                                  # Pairs are also functions
-isBool           = λx.true                                  # Booleans are also functions
+scanl    = λf z l.reverse (foldl (λacc x.cons (f (head acc) x) acc) (cons z nil) l)
+scanr    = λf z l.foldr (λx acc.cons (f x (head acc)) acc) (cons z nil) l
+
+findIndex = λp l.foldl (λacc x.if (and (isempty acc) (p x)) (cons (length acc) nil) acc) nil l
+elemIndex = λx l.findIndex (eq x) l
+
+unzip    = λl.pair (map first l) (map second l)
+
+fromMaybe = λdef m.if (isNothing m) def (fromJust m)
+maybeMap  = λf m.if (isNothing m) nothing (just (f (fromJust m)))
+
+clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
 
 # =============================================================================
-# ERROR HANDLING
+# IMPROVED EXISTING FUNCTIONS
 # =============================================================================
 
-try              = λf handler.f                             # Simple try (no real exception handling in pure lambda)
-catch            = λf handler x.f x                         # Simple catch
-finally          = λf cleanup x.cleanup (f x)               # Finally block simulation
+# minimum and maximum: handle empty lists gracefully
+safeMinimum = λl.if (isempty l) nothing (just (foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)))
+safeMaximum = λl.if (isempty l) nothing (just (foldr (λx acc.if (gt x acc) x acc) (head l) (tail l)))
+
+# init: handle single-element and empty lists
+safeInit = λl.if (isempty l) nil (reverse (tail (reverse l)))
+
+# reverse: add comment for clarity
+# reverse = λl.foldl (λacc x.cons x acc) nil l  # Already present, iterative and safe
+
+# =============================================================================
+# ADDITIONAL FUNCTION UTILITIES
+# =============================================================================
+
+id2      = λx.x  # Alias for id, for clarity
+const2   = λx y.x  # Alias for const/K
