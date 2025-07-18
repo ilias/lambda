@@ -20,14 +20,10 @@ public class Thunk(Expr expr, Dictionary<string, Expr> env)
 public record Expr(
     ExprType Type,
     string? VarName = null,
-    string? AbsVarName = null,
-    Expr? AbsBody = null,
-    Expr? AppLeft = null,
-    Expr? AppRight = null,
+    string? AbsVarName = null, Expr? AbsBody = null,
+    Expr? AppLeft = null, Expr? AppRight = null,
     Thunk? ThunkValue = null,
-    string? LetVarName = null,
-    Expr? LetValue = null,
-    Expr? LetBody = null)
+    string? LetVarName = null, Expr? LetValue = null, Expr? LetBody = null)
 {
     public static int HashCodeCount { get; private set; }
     private int? _hashCode;
@@ -771,9 +767,7 @@ public class Interpreter
                 case { Type: ExprType.App, AppLeft: var left, AppRight: var right }:
                     // Special handling for Church conditionals to ensure lazy evaluation of branches
                     if (IsChurchConditional(control, env))
-                    {
                         HandleChurchConditional(control, env, kont, stateStack);
-                    }
                     else
                     {
                         var argKont = Kontinuation.Arg(right!, env, kont);
@@ -1114,9 +1108,7 @@ public class Interpreter
                     stateStack.Push(new CEKState(thunk, env, funKont));
                 }
                 else
-                {
                     stateStack.Push(new CEKState(expr!, kenv!, funKont));
-                }
                 break;
 
             case { Type: KontinuationType.Fun, Value: var function, Next: var next }:
@@ -1509,9 +1501,7 @@ public class Interpreter
                         resultStack.Push(node with { ThunkValue = newThunk });
                     }
                     else
-                    {
                         resultStack.Push(node);
-                    }
                     continue;
 
                 case SubstOp.Evaluate:
@@ -1569,13 +1559,9 @@ public class Interpreter
                                 opStack.Push(new StackEntry(node, SubstOp.BuildLet, letVar));
                                 // If let variable shadows current var, don't substitute in body
                                 if (letVar == currentVar)
-                                {
                                     opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null)); // Don't substitute in body
-                                }
                                 else
-                                {
                                     opStack.Push(new StackEntry(letBod, SubstOp.Evaluate, null));
-                                }
                                 opStack.Push(new StackEntry(letVal, SubstOp.Evaluate, null));
                             }
                             break;
@@ -1677,11 +1663,6 @@ public class Interpreter
         }
 
         return Expr.App(left, right);
-    }
-
-    private bool IsChurchNumeral(Expr expr)
-    {
-        return ExtractChurchNumeralValue(expr) != null;
     }
 
     // Returns the integer value of a Church numeral (λf.λx.f^n(x)), or null if not valid.
