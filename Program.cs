@@ -686,12 +686,12 @@ public class Interpreter
             {
                 var evaluatedExpression = EvaluateCEK(statement.Expression);
                 _context[statement.VarName!] = evaluatedExpression;
-                return (null, $"-> {statement.VarName} = {evaluatedExpression}");
+                return (null, $"-> {statement.VarName} = {FormatWithNumerals(evaluatedExpression)}");
             }
             var result = EvaluateCEK(statement.Expression);
             _stats.TotalIterations += _stats.Iterations; 
 
-            return (result, $"-> {result}");
+            return (result, $"-> {FormatWithNumerals(result)}");
         }
         catch (Exception ex)
         {
@@ -927,6 +927,25 @@ public class Interpreter
         return "Error: Please provide a number between 10 and 10000.";
     }
 
+    private string FormatWithNumerals(Expr expr)
+    {
+        var number = ExtractChurchNumeralValue(expr);
+        if (number.HasValue)
+            return number.Value.ToString();
+
+        return expr.Type switch
+        {
+            ExprType.Var => expr.VarName!,
+            ExprType.Abs => $"λ{expr.AbsVarName}.{FormatWithNumerals(expr.AbsBody!)}",
+            ExprType.App => $"({FormatWithNumerals(expr.AppLeft!)}) ({FormatWithNumerals(expr.AppRight!)})",
+            ExprType.Thunk => expr.ThunkValue!.IsForced
+                ? $"<forced:{FormatWithNumerals(expr.ThunkValue.ForcedValue!)}>"
+                : $"<thunk:{FormatWithNumerals(expr.ThunkValue.Expression)}>",
+            ExprType.YCombinator => "Y",
+            _ => "?"
+        };
+    }
+
     // Force evaluation of a thunk (lazy value)
     private Expr Force(Expr expr)
     {
@@ -984,7 +1003,7 @@ public class Interpreter
     {
         _logger.Log("# Current environment:");
         foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
-            _logger.Log($"  {key} = {value}");
+            _logger.Log($"  {key} = {FormatWithNumerals(value)}");
         return $"# Displayed {_context.Count} definitions.";
     }
 
