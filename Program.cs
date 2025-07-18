@@ -1338,7 +1338,8 @@ public class Interpreter
         }
 
         // Ultra-fast application patterns for common Church numeral operations
-        if (root.Type == ExprType.App && IsCommonPattern(root, var, val, out var fastResult)) return fastResult;
+        if (root.Type == ExprType.App && IsCommonPattern(root, var, val, out var fastResult))
+            return fastResult;
 
         _perfStopwatch.Restart();
 
@@ -1658,51 +1659,47 @@ public class Interpreter
     }
 
     // Check if an expression is the Church 'if' function: λp.λa.λb.p a b
-    private static bool IsIfFunction(Expr expr)
-    {
-        return expr is 
-        { 
-            Type: ExprType.Abs, 
-            AbsVarName: var p, 
-            AbsBody: 
-            { 
-                Type: ExprType.Abs, 
-                AbsVarName: var a, 
-                AbsBody: 
-                { 
-                    Type: ExprType.Abs, 
-                    AbsVarName: var b, 
-                    AbsBody: 
-                    { 
-                        Type: ExprType.App, 
-                        AppLeft: 
-                        { 
-                            Type: ExprType.App, 
-                            AppLeft: { Type: ExprType.Var, VarName: var p2 }, 
-                            AppRight: { Type: ExprType.Var, VarName: var a2 } 
-                        }, 
-                        AppRight: { Type: ExprType.Var, VarName: var b2 } 
-                    } 
-                } 
-            } 
+    private static bool IsIfFunction(Expr expr) =>
+        expr is
+        {
+            Type: ExprType.Abs,
+            AbsVarName: var p,
+            AbsBody:
+            {
+                Type: ExprType.Abs,
+                AbsVarName: var a,
+                AbsBody:
+                {
+                    Type: ExprType.Abs,
+                    AbsVarName: var b,
+                    AbsBody:
+                    {
+                        Type: ExprType.App,
+                        AppLeft:
+                        {
+                            Type: ExprType.App,
+                            AppLeft: { Type: ExprType.Var, VarName: var p2 },
+                            AppRight: { Type: ExprType.Var, VarName: var a2 }
+                        },
+                        AppRight: { Type: ExprType.Var, VarName: var b2 }
+                    }
+                }
+            }
         } && p == p2 && a == a2 && b == b2;
-    }
 
     // Check if an expression is Church true: λx.λy.x
-    private static bool IsChurchTrue(Expr expr)
-    {
-        return expr is 
-        { 
-            Type: ExprType.Abs, 
-            AbsVarName: var x, 
-            AbsBody: 
-            { 
-                Type: ExprType.Abs, 
-                AbsVarName: var y, 
-                AbsBody: { Type: ExprType.Var, VarName: var x2 } 
-            } 
+    private static bool IsChurchTrue(Expr expr) =>
+        expr is
+        {
+            Type: ExprType.Abs,
+            AbsVarName: var x,
+            AbsBody:
+            {
+                Type: ExprType.Abs,
+                AbsVarName: var y,
+                AbsBody: { Type: ExprType.Var, VarName: var x2 }
+            }
         } && x == x2;
-    }
 
     // Handle Church conditional with lazy evaluation of branches
     private void HandleChurchConditional(Expr control, Dictionary<string, Expr> env, Kontinuation kont, Stack<CEKState> stateStack)
