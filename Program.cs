@@ -195,9 +195,9 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In }
 public record Token(TokenType Type, int Position, string? Value = null);
-public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment }
+public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody }
 public class ParseException(TreeErrorType errorType, int position)
     : Exception($"{errorType} at position {position}")
 {
@@ -257,6 +257,8 @@ public class Parser
     TokenType MyTokenType(string? term) => term switch
     {
         "Y" => TokenType.Y,
+        "let" => TokenType.Let,
+        "in" => TokenType.In,
         _ => TokenType.Term
     }; 
 
@@ -353,6 +355,7 @@ public class Parser
                 TokenType.LBracket => ParseListExpr(tokens, ref i, end),
                 TokenType.RBracket => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
                 TokenType.Lambda => ParseLambdaExpr(tokens, ref i, end),
+                TokenType.Let => ParseLetExpr(tokens, ref i, end),
                 TokenType.Y => Expr.YCombinator(),
                 TokenType.Term => Expr.Var(token.Value!),
                 TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
@@ -382,6 +385,51 @@ public class Parser
             }
         }
         throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+    }
+    private Expr ParseLetExpr(List<Token> tokens, ref int i, int end)
+    {
+        var letTokenPos = tokens[i].Position;
+        i++; // Move past 'let'
+
+        if (i > end || tokens[i].Type != TokenType.Term)
+            throw new ParseException(TreeErrorType.MissingLetVariable, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
+        var varName = tokens[i].Value!;
+        i++;
+
+        if (i > end || tokens[i].Type != TokenType.Equals)
+            throw new ParseException(TreeErrorType.MissingLetEquals, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
+        i++;
+
+        // Find 'in' token to determine the end of the value expression
+        var inTokenIndex = -1;
+        var nesting = 0;
+        for (var j = i; j <= end; j++)
+        {
+            if (tokens[j].Type is TokenType.LParen or TokenType.LBracket) nesting++;
+            else if (tokens[j].Type is TokenType.RParen or TokenType.RBracket) nesting--;
+            else if (nesting == 0 && tokens[j].Type == TokenType.In)
+            {
+                inTokenIndex = j;
+                break;
+            }
+        }
+
+        if (inTokenIndex == -1)
+            throw new ParseException(TreeErrorType.MissingLetIn, letTokenPos);
+        if (i >= inTokenIndex)
+            throw new ParseException(TreeErrorType.MissingLetValue, tokens[i].Position);
+
+        var valueExpr = BuildExpressionTree(tokens, i, inTokenIndex - 1);
+        i = inTokenIndex + 1; // Move past 'in'
+
+        if (i > end)
+            throw new ParseException(TreeErrorType.MissingLetBody, tokens[inTokenIndex].Position);
+
+        var bodyExpr = BuildExpressionTree(tokens, i, end);
+        i = end; // Consume the rest of the tokens for the parent loop
+
+        // Desugar `let var = value in body` into `(\var.body) value`
+        return Expr.App(Expr.Abs(varName, bodyExpr), valueExpr);
     }
     private Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
     {
@@ -990,6 +1038,7 @@ public class Interpreter
           \x y z.expr            Multi-argument lambda (sugar for \x.\y.\z.expr)
           (expr)                 Grouping (e.g., (\x.x) y)
           expr1 expr2            Application (e.g., succ 0)
+          let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0)
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
