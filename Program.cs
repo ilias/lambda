@@ -658,6 +658,7 @@ public class Interpreter
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
     private bool _lazyEvaluation = true;
+    private bool _formatNumerals = true;
 
     public Interpreter(Logger logger, InterpreterStats? stats = null)
     {
@@ -890,6 +891,7 @@ public class Interpreter
             ":save" => await SaveFileAsync(arg),
             ":step" => HandleStep(arg),
             ":lazy" => HandleLazy(arg),
+            ":numerals" => HandleNumerals(arg),
             ":clear" => ClearEnvironment(),
             ":stats" => ShowStats(),
             ":help" => ShowHelp(),
@@ -899,6 +901,12 @@ public class Interpreter
             ":depth" => HandleRecursionDepth(arg),
             _ => $"Unknown command: {command}"
         };
+    }
+
+    private string HandleNumerals(string arg)
+    {
+        _formatNumerals = arg != "off";
+        return $"Numeral formatting {(_formatNumerals ? "enabled" : "disabled")}";
     }
 
     private string HandleStep(string arg)
@@ -927,8 +935,24 @@ public class Interpreter
         return "Error: Please provide a number between 10 and 10000.";
     }
 
+    private string FormatApplicationWithNumerals(Expr app)
+    {
+        var leftStr = app.AppLeft!.Type == ExprType.Abs
+            ? $"({FormatWithNumerals(app.AppLeft!)})"
+            : FormatWithNumerals(app.AppLeft!);
+
+        var rightStr = app.AppRight!.Type is ExprType.App or ExprType.Abs
+            ? $"({FormatWithNumerals(app.AppRight!)})"
+            : FormatWithNumerals(app.AppRight!);
+
+        return $"{leftStr} {rightStr}";
+    }
+
     private string FormatWithNumerals(Expr expr)
     {
+        if (!_formatNumerals)
+            return expr.ToString();
+
         var number = ExtractChurchNumeralValue(expr);
         if (number.HasValue)
             return number.Value.ToString();
@@ -937,7 +961,7 @@ public class Interpreter
         {
             ExprType.Var => expr.VarName!,
             ExprType.Abs => $"λ{expr.AbsVarName}.{FormatWithNumerals(expr.AbsBody!)}",
-            ExprType.App => $"({FormatWithNumerals(expr.AppLeft!)}) ({FormatWithNumerals(expr.AppRight!)})",
+            ExprType.App => FormatApplicationWithNumerals(expr),
             ExprType.Thunk => expr.ThunkValue!.IsForced
                 ? $"<forced:{FormatWithNumerals(expr.ThunkValue.ForcedValue!)}>"
                 : $"<thunk:{FormatWithNumerals(expr.ThunkValue.Expression)}>",
@@ -1084,6 +1108,7 @@ public class Interpreter
           :log clear             Clear the current log file (if enabled)
           :step on|off           Toggle step-by-step evaluation logging
           :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
+          :numerals on|off       Toggle formatting of Church numerals as integers (default: on)
           :stats                 Show detailed performance and environment statistics
           :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
           :env                   Show current environment definitions
