@@ -972,6 +972,7 @@ public class Interpreter
         _freeVarCache.Clear();
         _expressionPool.Clear();
         _stats.CacheHits = _stats.CacheMisses = 0;
+        GC.Collect(); // Suggest garbage collection to free memory
         return "All caches cleared.";
     }
 
