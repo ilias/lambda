@@ -409,7 +409,7 @@ timeIt           = benchmark                                # Alias for benchmar
 # =============================================================================
 
 omega            = λx.x x                                   # Self-application
-omega2           = omega omega                              # Infinite loop
+#omega2           = omega omega                              # Infinite loop
 mockingbird      = λf.f f                                   # M combinator (same as omega)
 thrush           = λx f.f x                                 # T combinator (reverse application)
 cardinal         = flip                                     # Cardinal (same as flip/C)

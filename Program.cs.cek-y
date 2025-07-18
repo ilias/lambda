@@ -1,4 +1,4 @@
-﻿namespace LambdaCalculus;
+namespace LambdaCalculus;
 
 public enum ExprType : byte { Var, Abs, App, Thunk, Let, YCombinator }
 
