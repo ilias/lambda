@@ -281,6 +281,14 @@ public class InterpreterStats
 
 public class Parser
 {
+    TokenType MyTokenType(string? term) => term switch
+    {
+        "let" => TokenType.Let,
+        "in" => TokenType.In,
+        "Y" => TokenType.Y,
+        _ => TokenType.Term
+    }; 
+
     public List<Token> Tokenize(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return [];
@@ -318,13 +326,7 @@ public class Parser
                 if (currentTerm.Length > 0)
                 {
                     var termValue = currentTerm.ToString();
-                    var tokenType = termValue switch
-                    {
-                        "let" => TokenType.Let,
-                        "in" => TokenType.In,
-                        "Y" => TokenType.Y,
-                        _ => TokenType.Term
-                    };
+                    var tokenType = MyTokenType(termValue);
                     result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
                     currentTerm.Clear();
                 }
@@ -336,13 +338,7 @@ public class Parser
         if (currentTerm.Length > 0)
         {
             var termValue = currentTerm.ToString();
-            var tokenType = termValue switch
-            {
-                "let" => TokenType.Let,
-                "in" => TokenType.In,
-                "Y" => TokenType.Y,
-                _ => TokenType.Term
-            };
+            var tokenType = MyTokenType(termValue);
             result.Add(new Token(tokenType, pos - currentTerm.Length + 1, termValue));
         }
 
@@ -1074,6 +1070,7 @@ public class Interpreter
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
           let x = e1 in e2       Let binding (e.g., let x = 5 in add x 3)
+          Y f1                   Y combinator (e.g., Y \f.\x.f (f x))
 
         -- Commands (prefix with ':') --
           :load <file>           Load definitions from file (e.g., :load stdlib.lambda)
