@@ -195,7 +195,7 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody }
 public class ParseException(TreeErrorType errorType, int position)
@@ -259,6 +259,7 @@ public class Parser
         "Y" => TokenType.Y,
         "let" => TokenType.Let,
         "in" => TokenType.In,
+        "rec" => TokenType.Rec,
         _ => TokenType.Term
     }; 
 
@@ -391,6 +392,13 @@ public class Parser
         var letTokenPos = tokens[i].Position;
         i++; // Move past 'let'
 
+        var isRecursive = false;
+        if (i <= end && tokens[i].Type == TokenType.Rec)
+        {
+            isRecursive = true;
+            i++; // Move past 'rec'
+        }
+
         if (i > end || tokens[i].Type != TokenType.Term)
             throw new ParseException(TreeErrorType.MissingLetVariable, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
         var varName = tokens[i].Value!;
@@ -429,7 +437,12 @@ public class Parser
         i = end; // Consume the rest of the tokens for the parent loop
 
         // Desugar `let var = value in body` into `(\var.body) value`
-        return Expr.App(Expr.Abs(varName, bodyExpr), valueExpr);
+        // For `let rec`, desugar `let rec f = E in B` into `(\f.B) (Y (\f.E))`
+        var finalValueExpr = isRecursive
+            ? Expr.App(Expr.YCombinator(), Expr.Abs(varName, valueExpr))
+            : valueExpr;
+
+        return Expr.App(Expr.Abs(varName, bodyExpr), finalValueExpr);
     }
     private Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
     {
@@ -1039,6 +1052,7 @@ public class Interpreter
           (expr)                 Grouping (e.g., (\x.x) y)
           expr1 expr2            Application (e.g., succ 0)
           let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0)
+          let rec f = E in B     Recursive local binding
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
