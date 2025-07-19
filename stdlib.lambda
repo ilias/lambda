@@ -458,6 +458,7 @@ const2   = λx y.x  # Alias for const/K
 * = mult
 / = div
 ^ = exp
+% = mod
 
 # Define infix operator precedence and associativity
 
@@ -465,4 +466,5 @@ const2   = λx y.x  # Alias for const/K
 :infix - 6 left 
 :infix * 7 left
 :infix / 7 left
+:infix % 7 left
 :infix ^ 8 right
