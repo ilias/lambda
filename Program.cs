@@ -901,7 +901,7 @@ public class Interpreter
             _stats.Iterations++;
             var (control, env, kont) = stateStack.Pop();
             if (_showStep)
-                _logger.Log($"Step {currentStep++}: CEK \tC: {control}, K: {kont.Type}");
+                _logger.Log($"Step {currentStep++}: CEK \tC: {FormatWithNumerals(control)}, K: {kont.Type}");
             if (GetEvalCache(control, out var cachedResult))
             {
                 ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
