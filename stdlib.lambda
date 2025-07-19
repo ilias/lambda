@@ -448,3 +448,21 @@ safeInit = λl.if (isempty l) nil (reverse (tail (reverse l)))
 
 id2      = λx.x  # Alias for id, for clarity
 const2   = λx y.x  # Alias for const/K
+
+# =============================================================================
+# INFIX OPERATORS
+# =============================================================================
+
++ = plus
+- = minus
+* = mult
+/ = div
+^ = exp
+
+# Define infix operator precedence and associativity
+
+:infix + 6 left
+:infix - 6 left 
+:infix * 7 left
+:infix / 7 left
+:infix ^ 8 right

@@ -195,7 +195,7 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody }
 public class ParseException(TreeErrorType errorType, int position)
@@ -252,14 +252,52 @@ public class InterpreterStats
     }
 }
 
+// Represents an infix operator with precedence and associativity
+public enum Associativity : byte { Left, Right }
+public record InfixOperator(string Symbol, int Precedence, Associativity Associativity, string? FunctionName = null)
+{
+    public string GetFunctionName() => FunctionName ?? Symbol;
+}
+
 public class Parser
 {
+    public readonly Dictionary<string, InfixOperator> _infixOperators = new(StringComparer.Ordinal);
+
+    public Parser()
+    {
+        // // Add default operators - these can be overridden
+        // _infixOperators["+"] = new InfixOperator("+", 6, Associativity.Left);
+        // _infixOperators["-"] = new InfixOperator("-", 6, Associativity.Left);
+        // _infixOperators["*"] = new InfixOperator("*", 7, Associativity.Left);
+        // _infixOperators["/"] = new InfixOperator("/", 7, Associativity.Left);
+        // _infixOperators["^"] = new InfixOperator("^", 8, Associativity.Right);
+    }
+
+    public string DefineInfixOperator(string symbol, int precedence, string associativity)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+            return "Error: Operator symbol cannot be empty";
+        
+        if (precedence < 1 || precedence > 10)
+            return "Error: Precedence must be between 1 and 10";
+        
+        if (!Enum.TryParse<Associativity>(associativity, true, out var assoc))
+            return "Error: Associativity must be 'left' or 'right'";
+        
+        _infixOperators[symbol] = new InfixOperator(symbol, precedence, assoc);
+        return $"Infix operator '{symbol}' defined with precedence {precedence} and {associativity} associativity";
+    }
+
+    public bool IsInfixOperator(string symbol) => _infixOperators.ContainsKey(symbol);
+    public InfixOperator? GetInfixOperator(string symbol) => _infixOperators.GetValueOrDefault(symbol);
+
     TokenType MyTokenType(string? term) => term switch
     {
         "Y" => TokenType.Y,
         "let" => TokenType.Let,
         "in" => TokenType.In,
         "rec" => TokenType.Rec,
+        _ when term != null && IsInfixOperator(term) => TokenType.InfixOp,
         _ => TokenType.Term
     }; 
 
@@ -345,6 +383,10 @@ public class Parser
     }
     private Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
+        // Handle infix expressions using the Shunting Yard algorithm
+        if (HasInfixOperators(tokens, start, end))
+            return ParseInfixExpression(tokens, start, end);
+
         var expressions = new List<Expr>();
         for (var i = start; i <= end; i++)
         {
@@ -360,6 +402,7 @@ public class Parser
                 TokenType.Y => Expr.YCombinator(),
                 TokenType.Term => Expr.Var(token.Value!),
                 TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
+                TokenType.InfixOp => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position), // Should be handled by infix parser
                 TokenType.Equals => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position),
                 _ => throw new ParseException(TreeErrorType.EmptyExprList, token.Position)
             });
@@ -367,6 +410,119 @@ public class Parser
         return expressions.Count == 0
             ? throw new ParseException(TreeErrorType.EmptyExprList, tokens.Count > 0 ? tokens[0].Position : 0)
             : expressions.Aggregate(Expr.App);
+    }
+
+    private bool HasInfixOperators(List<Token> tokens, int start, int end)
+    {
+        var nesting = 0;
+        for (var i = start; i <= end; i++)
+        {
+            var token = tokens[i];
+            if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket) nesting++;
+            else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket) nesting--;
+            else if (nesting == 0 && token.Type == TokenType.InfixOp) return true;
+        }
+        return false;
+    }
+
+    private Expr ParseInfixExpression(List<Token> tokens, int start, int end)
+    {
+        var outputQueue = new Queue<object>(); // Contains Expr or InfixOperator
+        var operatorStack = new Stack<InfixOperator>();
+        
+        for (var i = start; i <= end; i++)
+        {
+            var token = tokens[i];
+            
+            switch (token.Type)
+            {
+                case TokenType.LParen:
+                    var parenExpr = ParseParenthesizedExpr(tokens, ref i, end);
+                    outputQueue.Enqueue(parenExpr);
+                    break;
+                    
+                case TokenType.LBracket:
+                    var listExpr = ParseListExpr(tokens, ref i, end);
+                    outputQueue.Enqueue(listExpr);
+                    break;
+                    
+                case TokenType.Lambda:
+                    var lambdaExpr = ParseLambdaExpr(tokens, ref i, end);
+                    outputQueue.Enqueue(lambdaExpr);
+                    break;
+                    
+                case TokenType.Let:
+                    var letExpr = ParseLetExpr(tokens, ref i, end);
+                    outputQueue.Enqueue(letExpr);
+                    break;
+                    
+                case TokenType.Y:
+                    outputQueue.Enqueue(Expr.YCombinator());
+                    break;
+                    
+                case TokenType.Term:
+                    outputQueue.Enqueue(Expr.Var(token.Value!));
+                    break;
+                    
+                case TokenType.Integer when int.TryParse(token.Value, out int value):
+                    outputQueue.Enqueue(CreateChurchNumeral(value));
+                    break;
+                    
+                case TokenType.InfixOp:
+                    var currentOp = GetInfixOperator(token.Value!)!;
+                    
+                    while (operatorStack.Count > 0)
+                    {
+                        var topOp = operatorStack.Peek();
+                        
+                        // Pop operators with higher precedence or same precedence with left associativity
+                        if (topOp.Precedence > currentOp.Precedence ||
+                            (topOp.Precedence == currentOp.Precedence && currentOp.Associativity == Associativity.Left))
+                        {
+                            outputQueue.Enqueue(operatorStack.Pop());
+                        }
+                        else break;
+                    }
+                    
+                    operatorStack.Push(currentOp);
+                    break;
+            }
+        }
+        
+        // Pop remaining operators
+        while (operatorStack.Count > 0)
+            outputQueue.Enqueue(operatorStack.Pop());
+        
+        // Build expression tree from postfix notation
+        var stack = new Stack<Expr>();
+        
+        while (outputQueue.Count > 0)
+        {
+            var item = outputQueue.Dequeue();
+            
+            if (item is Expr expr)
+            {
+                stack.Push(expr);
+            }
+            else if (item is InfixOperator op)
+            {
+                if (stack.Count < 2)
+                    throw new ParseException(TreeErrorType.EmptyExprList, 0);
+                
+                var right = stack.Pop();
+                var left = stack.Pop();
+                
+                // Convert infix operation to function application: op a b -> ((op a) b)
+                var functionVar = Expr.Var(op.GetFunctionName());
+                var result = Expr.App(Expr.App(functionVar, left), right);
+                stack.Push(result);
+            }
+        }
+        
+        if (stack.Count != 1)
+            throw new ParseException(TreeErrorType.EmptyExprList, 0);
+        
+        return stack.Pop();
     }
     private Expr ParseParenthesizedExpr(List<Token> tokens, ref int i, int end)
     {
@@ -899,6 +1055,7 @@ public class Interpreter
             ":memo" => MemoClear(),
             ":exit" or ":quit" => "bye",
             ":depth" => HandleRecursionDepth(arg),
+            ":infix" => HandleInfixCommand(arg),
             _ => $"Unknown command: {command}"
         };
     }
@@ -933,6 +1090,26 @@ public class Interpreter
         }
 
         return "Error: Please provide a number between 10 and 10000.";
+    }
+
+    private string HandleInfixCommand(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg))
+            return ShowInfixOperators();
+
+        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        
+        if (parts.Length != 3)
+            return "Usage: :infix <operator> <precedence> <associativity>\nExample: :infix + 6 left";
+        
+        var symbol = parts[0];
+        
+        if (!int.TryParse(parts[1], out int precedence))
+            return "Error: Precedence must be a number between 1 and 10";
+        
+        var associativity = parts[2].ToLowerInvariant();
+        
+        return _parser.DefineInfixOperator(symbol, precedence, associativity);
     }
 
     private string FormatApplicationWithNumerals(Expr app)
@@ -1028,7 +1205,24 @@ public class Interpreter
         _logger.Log("# Current environment:");
         foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
             _logger.Log($"  {key} = {FormatWithNumerals(value)}");
+
+        ShowInfixOperators();
         return $"# Displayed {_context.Count} definitions.";
+    }
+
+    public string ShowInfixOperators()
+    {
+        if (_parser._infixOperators.Count == 0)
+            return "No infix operators defined";
+        
+        var operators = _parser._infixOperators.Values
+            .OrderByDescending(op => op.Precedence)
+            .ThenBy(op => op.Symbol);
+        
+        _logger.Log("Defined infix operators:\n");
+        foreach (var op in operators)
+            _logger.Log($"  infix {op.Symbol} (precedence: {op.Precedence}, associativity: {op.Associativity.ToString().ToLower()})");
+        return $"# Displayed {_parser._infixOperators.Count} infix operators.";
     }
 
     private string ShowStats()
@@ -1100,6 +1294,7 @@ public class Interpreter
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
           Y f1                   Y combinator (e.g., Y \f.\x.f (f x))
+          a + b                  Infix operations (when operators are defined)
 
         -- Commands (prefix with ':') --
           :load <file>           Load definitions from file (e.g., :load stdlib.lambda)
@@ -1111,6 +1306,7 @@ public class Interpreter
           :numerals on|off       Toggle formatting of Church numerals as integers (default: on)
           :stats                 Show detailed performance and environment statistics
           :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
+          :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
           :env                   Show current environment definitions
           :help                  Show this help message
           :memo                  Clear all memoization/caches
@@ -1120,6 +1316,7 @@ public class Interpreter
           - Line continuation: Use '\' at end of line to continue input
           - Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
           - Command line arguments: Treated as files to load at startup
+          - Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
         """;
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
