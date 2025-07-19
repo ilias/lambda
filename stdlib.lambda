@@ -459,12 +459,31 @@ const2   = λx y.x  # Alias for const/K
 / = div
 ^ = exp
 % = mod
-
-# Define infix operator precedence and associativity
-
 :infix + 6 left
 :infix - 6 left 
 :infix * 7 left
 :infix / 7 left
 :infix % 7 left
 :infix ^ 8 right
+
+&& = and
+|| = or
+^^ = xor
+== = eq
+!= = neq
+< = lt
+<= = leq
+> = gt
+>= = geq
+:infix && 3 left
+:infix || 2 left
+:infix ^^ 3 left
+:infix == 4 left
+:infix != 4 left
+:infix < 5 left
+:infix <= 5 left
+:infix > 5 left
+:infix >= 5 left
+
+
+
