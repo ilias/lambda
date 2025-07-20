@@ -471,18 +471,18 @@ const2   = λx y.x  # Alias for const/K
 ^^ = xor
 == = eq
 != = neq
-< = lt
+<  = lt
 <= = leq
-> = gt
+>  = gt
 >= = geq
 :infix && 3 left
 :infix || 2 left
 :infix ^^ 3 left
 :infix == 4 left
 :infix != 4 left
-:infix < 5 left
+:infix <  5 left
 :infix <= 5 left
-:infix > 5 left
+:infix >  5 left
 :infix >= 5 left
 
 
