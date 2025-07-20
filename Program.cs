@@ -31,7 +31,11 @@ public record Expr(
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
     public static Expr Thunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
     public static Expr YCombinator() => new(ExprType.YCombinator);
-    public override string ToString() => ToStringLimited(1000);
+    public override string ToString() 
+    {
+        var result = ToStringLimited(1000);
+        return result.Length <= 5000 ? result : result[..5000] + "... (output truncated)";
+    }
     private string ToStringLimited(int maxDepth) =>
         maxDepth <= 0 ? "..." : Type switch
         {
