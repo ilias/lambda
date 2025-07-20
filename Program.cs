@@ -1125,8 +1125,10 @@ public class Interpreter
         return $"{leftStr} {rightStr}";
     }
 
-    private string FormatWithNumerals(Expr expr)
+    private string FormatWithNumerals(Expr expr) => FormatWithNumerals2(expr, 1000);
+    private string FormatWithNumerals2(Expr expr, int maxDepth = 1000)
     {
+        if (maxDepth <= 0) return "...";
         if (!_formatNumerals)
             return expr.ToString();
 
@@ -1137,11 +1139,11 @@ public class Interpreter
         return expr.Type switch
         {
             ExprType.Var => expr.VarName!,
-            ExprType.Abs => $"λ{expr.AbsVarName}.{FormatWithNumerals(expr.AbsBody!)}",
+            ExprType.Abs => $"λ{expr.AbsVarName}.{FormatWithNumerals2(expr.AbsBody!, maxDepth - 1)}",
             ExprType.App => FormatApplicationWithNumerals(expr),
             ExprType.Thunk => expr.ThunkValue!.IsForced
-                ? $"<forced:{FormatWithNumerals(expr.ThunkValue.ForcedValue!)}>"
-                : $"<thunk:{FormatWithNumerals(expr.ThunkValue.Expression)}>",
+                ? $"<forced:{FormatWithNumerals2(expr.ThunkValue.ForcedValue!, maxDepth - 1)}>"
+                : $"<thunk:{FormatWithNumerals2(expr.ThunkValue.Expression, maxDepth - 1)}>",
             ExprType.YCombinator => "Y",
             _ => "?"
         };
