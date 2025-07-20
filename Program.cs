@@ -267,16 +267,7 @@ public class Parser
 {
     public readonly Dictionary<string, InfixOperator> _infixOperators = new(StringComparer.Ordinal);
 
-    public Parser()
-    {
-        // // Add default operators - these can be overridden
-        // _infixOperators["+"] = new InfixOperator("+", 6, Associativity.Left);
-        // _infixOperators["-"] = new InfixOperator("-", 6, Associativity.Left);
-        // _infixOperators["*"] = new InfixOperator("*", 7, Associativity.Left);
-        // _infixOperators["/"] = new InfixOperator("/", 7, Associativity.Left);
-        // _infixOperators["^"] = new InfixOperator("^", 8, Associativity.Right);
-    }
-
+    public Parser() { }
     public string DefineInfixOperator(string symbol, int precedence, string associativity)
     {
         if (string.IsNullOrWhiteSpace(symbol))
