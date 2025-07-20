@@ -310,6 +310,7 @@ public class Parser
             pos++;
             if (ch == '#') break; // Comments
 
+            // Only treat '=' as TokenType.Equals when it is the only character in the token
             Token? nextToken = ch switch
             {
                 '\\' or 'λ' => new Token(TokenType.Lambda, pos),
@@ -318,11 +319,18 @@ public class Parser
                 '[' => new Token(TokenType.LBracket, pos),
                 ']' => new Token(TokenType.RBracket, pos),
                 ',' => new Token(TokenType.Comma, pos),
-                '=' => new Token(TokenType.Equals, pos),
+                '=' when currentTerm.Length == 0 && (i + 1 == input.Length || !input[i + 1].Equals('=')) => new Token(TokenType.Equals, pos),
                 '.' => new Token(TokenType.Dot, pos),
                 char c when char.IsDigit(c) && currentTerm.Length == 0 => ParseInteger(input, ref i, ref pos),
                 _ => null
             };
+
+            // If '=' is not the only character, treat it as part of a term (e.g., '==')
+            if (ch == '=' && nextToken is null && !char.IsWhiteSpace(ch))
+            {
+                currentTerm.Append(ch);
+                continue;
+            }
 
             if (nextToken is null && !char.IsWhiteSpace(ch))
             {
