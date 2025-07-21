@@ -118,6 +118,6 @@ f \
 #
 # Test Y combinator with factorial
 #
-let Y = λf.(λx.f (λy.x x y)) (λx.f (λy.x x y)) in \
+# let Y = λf.(λx.f (λy.x x y)) (λx.f (λy.x x y)) in \
 let FACT = λf n. if (iszero n) 1 (mult n (f (pred n))) in \
 (Y FACT) 3
