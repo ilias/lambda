@@ -280,7 +280,7 @@ public class Parser
         if (string.IsNullOrWhiteSpace(symbol))
             return "Error: Operator symbol cannot be empty";
         
-        if (precedence < 1 || precedence > 10)
+        if (precedence is < 1 or > 10)
             return "Error: Precedence must be between 1 and 10";
         
         if (!Enum.TryParse<Associativity>(associativity, true, out var assoc))
@@ -681,9 +681,9 @@ public class Parser
             while (elementEnd <= end)
             {
                 var token = tokens[elementEnd];
-                if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket)
+                if (token.Type is TokenType.LParen or TokenType.LBracket)
                     nesting++;
-                else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket)
+                else if (token.Type is TokenType.RParen or TokenType.RBracket)
                 {
                     if (nesting == 0)
                         break;
