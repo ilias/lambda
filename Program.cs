@@ -8,12 +8,19 @@ public class Thunk(Expr expr, Dictionary<string, Expr> env)
     public Expr Expression { get; } = expr;
     public Dictionary<string, Expr> Environment { get; } = env;
     public bool IsForced { get; private set; } = false;
+    public bool IsBeingForced { get; private set; } = false;
     public Expr? ForcedValue { get; private set; } = null;
 
     public void Force(Expr value)
     {
         IsForced = true;
         ForcedValue = value;
+        IsBeingForced = false;
+    }
+
+    public void BeginForce()
+    {
+        IsBeingForced = true;
     }
 }
 
@@ -558,9 +565,16 @@ public class Parser
             i++; // Move past 'rec'
         }
 
-        if (i > end || tokens[i].Type != TokenType.Term)
-            throw new ParseException(TreeErrorType.MissingLetVariable, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
-        var varName = tokens[i].Value!;
+        if (i > end)
+            throw new ParseException(TreeErrorType.MissingLetVariable, letTokenPos);
+
+        // The token after 'let' or 'let rec' is the variable name.
+        // We accept any token that has a string value, allowing keywords to be redefined.
+        var varToken = tokens[i];
+        if (varToken.Value is null)
+            throw new ParseException(TreeErrorType.MissingLetVariable, varToken.Position);
+        
+        var varName = varToken.Value;
         i++;
 
         if (i > end || tokens[i].Type != TokenType.Equals)
@@ -849,9 +863,10 @@ public class Interpreter
                 return (null, $"-> {statement.VarName} = {FormatWithNumerals(evaluatedExpression)}");
             }
             var result = EvaluateCEK(statement.Expression);
+            var normalizedResult = NormalizeExpression(result);
             _stats.TotalIterations += _stats.Iterations; 
 
-            return (result, $"-> {FormatWithNumerals(result)}");
+            return (normalizedResult, $"-> {FormatWithNumerals(normalizedResult)}");
         }
         catch (Exception ex)
         {
@@ -951,9 +966,10 @@ public class Interpreter
         _stats.TimeInEvaluation += _perfStopwatch.ElapsedTicks;
         if (finalResult != null)
         {
-            var result = NormalizeExpression(finalResult);
-            PutEvalCache(currentStep, expr, result);
-            return result;
+            // Normalization is now handled at the top-level processing loop
+            // to avoid recursive loops with Force/Normalize.
+            PutEvalCache(currentStep, expr, finalResult);
+            return finalResult;
         }
         throw new InvalidOperationException("CEK evaluation completed without returning a value");
     }
@@ -1115,41 +1131,50 @@ public class Interpreter
         return _parser.DefineInfixOperator(symbol, precedence, associativity);
     }
 
-    private string FormatApplicationWithNumerals(Expr app)
+    private string FormatApplicationWithNumerals(Expr app, HashSet<Expr> visited)
     {
         var leftStr = app.AppLeft!.Type == ExprType.Abs
-            ? $"({FormatWithNumerals(app.AppLeft!)})"
-            : FormatWithNumerals(app.AppLeft!);
+            ? $"({FormatWithNumerals2(app.AppLeft!, visited)})"
+            : FormatWithNumerals2(app.AppLeft!, visited);
 
         var rightStr = app.AppRight!.Type is ExprType.App or ExprType.Abs
-            ? $"({FormatWithNumerals(app.AppRight!)})"
-            : FormatWithNumerals(app.AppRight!);
+            ? $"({FormatWithNumerals2(app.AppRight!, visited)})"
+            : FormatWithNumerals2(app.AppRight!, visited);
 
         return $"{leftStr} {rightStr}";
     }
 
-    private string FormatWithNumerals(Expr expr) => FormatWithNumerals2(expr, 1000);
-    private string FormatWithNumerals2(Expr expr, int maxDepth = 1000)
+    private string FormatWithNumerals(Expr expr) => FormatWithNumerals2(expr, new HashSet<Expr>());
+    private string FormatWithNumerals2(Expr expr, HashSet<Expr> visited, int maxDepth = 1000)
     {
         if (maxDepth <= 0) return "...";
+        if (visited.Contains(expr)) return "<cycle>";
         if (!_formatNumerals)
             return expr.ToString();
 
-        var number = ExtractChurchNumeralValue(expr);
-        if (number.HasValue)
-            return number.Value.ToString();
-
-        return expr.Type switch
+        visited.Add(expr);
+        try
         {
-            ExprType.Var => expr.VarName!,
-            ExprType.Abs => $"λ{expr.AbsVarName}.{FormatWithNumerals2(expr.AbsBody!, maxDepth - 1)}",
-            ExprType.App => FormatApplicationWithNumerals(expr),
-            ExprType.Thunk => expr.ThunkValue!.IsForced
-                ? $"<forced:{FormatWithNumerals2(expr.ThunkValue.ForcedValue!, maxDepth - 1)}>"
-                : $"<thunk:{FormatWithNumerals2(expr.ThunkValue.Expression, maxDepth - 1)}>",
-            ExprType.YCombinator => "Y",
-            _ => "?"
-        };
+            var number = ExtractChurchNumeralValue(expr);
+            if (number.HasValue)
+                return number.Value.ToString();
+
+            return expr.Type switch
+            {
+                ExprType.Var => expr.VarName!,
+                ExprType.Abs => $"λ{expr.AbsVarName}.{FormatWithNumerals2(expr.AbsBody!, visited, maxDepth - 1)}",
+                ExprType.App => FormatApplicationWithNumerals(expr, visited),
+                ExprType.Thunk => expr.ThunkValue!.IsForced
+                    ? $"<forced:{FormatWithNumerals2(expr.ThunkValue.ForcedValue!, visited, maxDepth - 1)}>"
+                    : $"<thunk:{FormatWithNumerals2(expr.ThunkValue.Expression, visited, maxDepth - 1)}>",
+                ExprType.YCombinator => "Y",
+                _ => "?"
+            };
+        }
+        finally
+        {
+            visited.Remove(expr);
+        }
     }
 
     // Force evaluation of a thunk (lazy value)
@@ -1161,17 +1186,16 @@ public class Interpreter
         if (expr.ThunkValue.IsForced)
             return expr.ThunkValue.ForcedValue!;
 
+        if (expr.ThunkValue.IsBeingForced)
+            return expr; // Return the thunk itself to handle recursion.
+
         _perfStopwatch.Restart();
         _stats.ThunkForceCount++;
 
+        expr.ThunkValue.BeginForce();
+
         // Evaluate the thunk's expression in its captured environment
         var forced = EvaluateCEK(expr.ThunkValue.Expression, expr.ThunkValue.Environment);
-        
-        // Recursively force the result until we get a non-thunk
-        while (forced.Type == ExprType.Thunk && forced.ThunkValue != null && !forced.ThunkValue.IsForced)
-        {
-            forced = EvaluateCEK(forced.ThunkValue.Expression, forced.ThunkValue.Environment);
-        }
         
         _stats.TimeInForcing += _perfStopwatch.ElapsedTicks;
 
@@ -1353,58 +1377,31 @@ public class Interpreter
                 // We have evaluated the argument, now apply the function (stored in kont.Value)
                 var argument = value;
 
-                if (function!.Type == ExprType.Abs)
+                var funcToApply = function;
+                if (funcToApply!.Type == ExprType.Thunk)
+                {
+                    funcToApply = Force(funcToApply);
+                }
+
+                if (funcToApply.Type == ExprType.Abs)
                 {
                     // Beta reduction - substitute argument for parameter in function body
-                    var substituted = Substitute(function.AbsBody!, function.AbsVarName!, argument);
+                    var substituted = Substitute(funcToApply.AbsBody!, funcToApply.AbsVarName!, argument);
                     stateStack.Push(new CEKState(substituted, env, next!));
                 }
-                else if (function.Type == ExprType.YCombinator)
+                else if (funcToApply.Type == ExprType.YCombinator)
                 {
-                    // Y combinator using call-by-value Z combinator approach
-                    // The issue with the direct Y f = f (Y f) is infinite expansion.
-                    // 
-                    // The Z combinator solves this by delaying the self-application:
-                    // Z = λf. (λx. f (λv. x x v)) (λx. f (λv. x x v))
-                    //
-                    // This creates the recursive structure without immediate expansion.
-                    
-                    var x1 = $"__x1_{Guid.NewGuid():N}"[..12];
-                    var x2 = $"__x2_{Guid.NewGuid():N}"[..12];
-                    var v1 = $"__v1_{Guid.NewGuid():N}"[..12];
-                    var v2 = $"__v2_{Guid.NewGuid():N}"[..12];
-                    
-                    // Create: λv. x x v
-                    var selfApp1 = Expr.App(Expr.Var(x1), Expr.Var(x1));
-                    var delayed1 = Expr.Abs(v1, Expr.App(selfApp1, Expr.Var(v1)));
-                    
-                    // Create: f (λv. x x v)
-                    var fApplied1 = Expr.App(argument, delayed1);
-                    
-                    // Create: λx. f (λv. x x v)
-                    var leftSide = Expr.Abs(x1, fApplied1);
-                    
-                    // Create second copy: λv. x x v
-                    var selfApp2 = Expr.App(Expr.Var(x2), Expr.Var(x2));
-                    var delayed2 = Expr.Abs(v2, Expr.App(selfApp2, Expr.Var(v2)));
-                    
-                    // Create: f (λv. x x v)
-                    var fApplied2 = Expr.App(argument, delayed2);
-                    
-                    // Create: λx. f (λv. x x v)
-                    var rightSide = Expr.Abs(x2, fApplied2);
-                    
-                    // Apply: (λx. f (λv. x x v)) (λx. f (λv. x x v))
-                    var result = Expr.App(leftSide, rightSide);
-                    
-                    // Push the result for further evaluation
-                    stateStack.Push(new CEKState(result, env, next!));
+                    // Y f becomes a thunk for f (Y f) to delay recursion.
+                    var yf = Expr.App(Expr.YCombinator(), argument);
+                    var recursiveExpr = Expr.App(argument, yf);
+                    var thunkExpr = Expr.Thunk(recursiveExpr, env);
+                    ApplyContinuation(thunkExpr, env, next!, stateStack, ref finalResult);
                 }
                 else
                 {
                     // Not a function - create application and continue with next continuation
                     // This prevents infinite loops with undefined variables
-                    var app = Expr.App(function, argument);
+                    var app = Expr.App(funcToApply, argument);
                     ApplyContinuation(app, env, next!, stateStack, ref finalResult);
                 }
                 break;

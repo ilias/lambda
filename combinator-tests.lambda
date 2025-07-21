@@ -1,7 +1,10 @@
 # Lambda Calculus Interpreter Comprehensive Test Suite
 # Load this file with :load combinator-tests.lambda
 
-# --- Boolean logic ---
+# --# Test Y combinator with factorial
+let Y = λf.(λx.f (λy.x x y)) (λx.f (λy.x x y)) in
+let FACT = Y (λf n. if (iszero n) 1 (mult n (f (pred n)))) in
+FACT 3lean logic ---
 true true false      # expect: true
 false true false     # expect: false
 not true             # expect: false
@@ -111,3 +114,10 @@ y = 5
 succ = \n.\f.\x.\
 f \
 (n f x)
+
+#
+# Test Y combinator with factorial
+#
+let Y = λf.(λx.f (λy.x x y)) (λx.f (λy.x x y)) in \
+let FACT = λf n. if (iszero n) 1 (mult n (f (pred n))) in \
+(Y FACT) 3
