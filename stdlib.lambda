@@ -166,6 +166,10 @@ FIB_ITER_HELPER  = λn.n (λp.pair (second p) \
                          (pair 0 1)
 fib              = λn.first (FIB_ITER_HELPER n)
 
+fact-rec = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
+
+fib-rec = Y (\f.\n. if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
+
 # =============================================================================
 # ADDITIONAL COMPUTATIONAL FUNCTIONS
 # =============================================================================
