@@ -804,12 +804,12 @@ public class Logger
         string s when s.StartsWith("#") => YELLOW,        // Comments
         string s when s.StartsWith("->") => GREEN,        // Results/Assignments
         string s when s.StartsWith("Step") => YELLOW,     // Evaluation steps
-        string s when s.StartsWith("Time:") => MAGENTA,   // Timing info
+        string s when s.StartsWith("Time:") => BLUE,      // Timing info
         string s when s.StartsWith("Result ") => MAGENTA, // Final result details
         string s when s.Contains("Loading") => CYAN,      // Loading files
         string s when s.Contains("<<") => GRAY,           // Reading file lines
         string s when s.Contains(">>") => GREEN,          // Result of reading file lines
-        _ => RESET                                         // Default
+        _ => RESET                                        // Default
     };
 
     public static void LogToConsole(string message) =>
