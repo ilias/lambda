@@ -38,31 +38,59 @@ public record Expr(
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
     public static Expr Thunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
     public static Expr YCombinator() => new(ExprType.YCombinator);
-    public override string ToString() 
+    
+    public override string ToString() => ToString(false, null);
+    
+    public string ToString(bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor = null)
     {
-        var result = ToStringLimited(1000);
+        var result = ToStringWithOptions(1000, new HashSet<Expr>(), formatNumerals, churchNumeralExtractor);
         return result.Length <= 5000 ? result : result[..5000] + "... (output truncated)";
     }
-    private string ToStringLimited(int maxDepth) =>
-        maxDepth <= 0 ? "..." : Type switch
+    
+    private string ToStringWithOptions(int maxDepth, HashSet<Expr> visited, bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor)
+    {
+        if (maxDepth <= 0) return "...";
+        if (visited.Contains(this)) return "<cycle>";
+        
+        // Check for Church numeral formatting if enabled
+        if (formatNumerals && churchNumeralExtractor != null)
         {
-            ExprType.Var => VarName!,
-            ExprType.Abs => $"λ{AbsVarName}.{AbsBody?.ToStringLimited(maxDepth - 1) ?? "null"}",
-            ExprType.App => FormatApplication(maxDepth),
-            ExprType.Thunk => ThunkValue!.IsForced ?
-                $"<forced:{ThunkValue.ForcedValue?.ToStringLimited(maxDepth - 1) ?? "null"}>" :
-                $"<thunk:{ThunkValue.Expression.ToStringLimited(maxDepth - 1)}>",
-            ExprType.YCombinator => "Y",
-            _ => "?"
-        };
-    private string FormatApplication(int maxDepth)
+            var number = churchNumeralExtractor(this);
+            if (number.HasValue)
+                return number.Value.ToString();
+        }
+        
+        visited.Add(this);
+        try
+        {
+            return Type switch
+            {
+                ExprType.Var => VarName!,
+                ExprType.Abs => $"λ{AbsVarName}.{AbsBody?.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor) ?? "null"}",
+                ExprType.App => FormatApplicationWithOptions(maxDepth, visited, formatNumerals, churchNumeralExtractor),
+                ExprType.Thunk => ThunkValue!.IsForced ?
+                    $"<forced:{ThunkValue.ForcedValue?.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor) ?? "null"}>" :
+                    $"<thunk:{ThunkValue.Expression.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)}>",
+                ExprType.YCombinator => "Y",
+                _ => "?"
+            };
+        }
+        finally
+        {
+            visited.Remove(this);
+        }
+    }
+    
+    private string FormatApplicationWithOptions(int maxDepth, HashSet<Expr> visited, bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor)
     {
         var leftStr = AppLeft!.Type == ExprType.Abs
-            ? $"({AppLeft.ToStringLimited(maxDepth - 1)})"
-            : AppLeft.ToStringLimited(maxDepth - 1);
+            ? $"({AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)})"
+            : AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
+
         var rightStr = AppRight!.Type is ExprType.App or ExprType.Abs
-            ? $"({AppRight.ToStringLimited(maxDepth - 1)})"
-            : AppRight.ToStringLimited(maxDepth - 1);
+            ? $"({AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)})"
+            : AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
+
         return $"{leftStr} {rightStr}";
     }
     public virtual bool Equals(Expr? other) => StructuralEquals(other);
@@ -728,20 +756,18 @@ public class Logger
     private StreamWriter? _logWriter;
     private readonly SemaphoreSlim _logFileLock = new(1);
 
-    private static readonly Dictionary<string, string> _colors = new(StringComparer.Ordinal)
-    {
-        ["red"] = "\u001b[31m",
-        ["green"] = "\u001b[32m",
-        ["yellow"] = "\u001b[33m",
-        ["blue"] = "\u001b[34m",
-        ["magenta"] = "\u001b[35m",
-        ["cyan"] = "\u001b[36m",
-        ["white"] = "\u001b[37m",
-        ["gray"] = "\u001b[90m",
-        ["reset"] = "\u001b[0m"
-    };
+    // ANSI color constants
+    private const string RED = "\u001b[31m";
+    private const string GREEN = "\u001b[32m";
+    private const string YELLOW = "\u001b[33m";
+    private const string BLUE = "\u001b[34m";
+    private const string MAGENTA = "\u001b[35m";
+    private const string CYAN = "\u001b[36m";
+    private const string WHITE = "\u001b[37m";
+    private const string GRAY = "\u001b[90m";
+    private const string RESET = "\u001b[0m";
 
-    public static string Prompt(string txt) => $"{_colors["cyan"]}{txt}{_colors["reset"]} ";
+    public static string Prompt(string txt) => $"{CYAN}{txt}{RESET} ";
     public string LogStatus => _logFile == string.Empty ? "DISABLED" : _logFile;
 
     public async Task<string> HandleLogCommandAsync(string arg) => arg switch
@@ -772,22 +798,22 @@ public class Logger
         _logWriter = null;
     }
 
-    public static string GetColor(string message) => message switch
+    private static string GetMessageColor(string message) => message switch
     {
-        string s when s.StartsWith("Error:") => _colors["red"],
-        string s when s.StartsWith("#") => _colors["yellow"], // Comments
-        string s when s.StartsWith("->") => _colors["green"], // Results/Assignments
-        string s when s.StartsWith("Step") => _colors["yellow"], // Evaluation steps
-        string s when s.StartsWith("Time:") => _colors["magenta"], // Timing info
-        string s when s.StartsWith("Result ") => _colors["magenta"], // Final result details
-        string s when s.Contains("Loading") => _colors["cyan"], // loading files
-        string s when s.Contains("<<") => _colors["gray"], // reading file lines
-        string s when s.Contains(">>") => _colors["green"], // result of reading file lines
-        _ => _colors["reset"] // Default
+        string s when s.StartsWith("Error:") => RED,
+        string s when s.StartsWith("#") => YELLOW,        // Comments
+        string s when s.StartsWith("->") => GREEN,        // Results/Assignments
+        string s when s.StartsWith("Step") => YELLOW,     // Evaluation steps
+        string s when s.StartsWith("Time:") => MAGENTA,   // Timing info
+        string s when s.StartsWith("Result ") => MAGENTA, // Final result details
+        string s when s.Contains("Loading") => CYAN,      // Loading files
+        string s when s.Contains("<<") => GRAY,           // Reading file lines
+        string s when s.Contains(">>") => GREEN,          // Result of reading file lines
+        _ => RESET                                         // Default
     };
 
     public static void LogToConsole(string message) =>
-        Console.WriteLine(GetColor(message) + message.Replace("\t", _colors["reset"]) + _colors["reset"]);
+        Console.WriteLine($"{GetMessageColor(message)}{message.Replace("\t", RESET)}{RESET}");
 
     public async Task LogAsync(string message, bool toConsole = true)
     {
@@ -985,7 +1011,15 @@ public class Interpreter
 
     private bool GetEvalCache(Expr expr, out Expr result)
     {
-        if (expr is not null && _evaluationCache.TryGetValue(expr, out var cachedResult) && cachedResult is not null)
+        return GetFromCache(_evaluationCache, expr, out result);
+    }
+
+    // Consolidated cache access pattern
+    private bool GetFromCache<TKey, TValue>(Dictionary<TKey, TValue> cache, TKey key, out TValue result) 
+        where TKey : notnull
+        where TValue : class
+    {
+        if (key is not null && cache.TryGetValue(key, out var cachedResult) && cachedResult is not null)
         {
             _stats.CacheHits++;
             result = cachedResult;
@@ -1012,6 +1046,8 @@ public class Interpreter
             }
             if (string.IsNullOrWhiteSpace(line)) continue;
             await _logger.LogAsync($"λ> {line}", false);
+            
+            // Use consolidated line processing
             if (line.EndsWith('\\'))
             {
                 currentInput.Append(line[..^1]);
@@ -1027,28 +1063,57 @@ public class Interpreter
     }
     public async Task RunInteractiveLoopAsync()
         => await InputLoopAsync(async input => await ProcessAndDisplayInputAsync(input!));
+    // Helper method to safely load a file if it exists
+    public async Task<string> LoadFileIfExistsAsync(string path)
+    {
+        if (!File.Exists(path))
+            return $"File not found: {path}";
+        
+        try
+        {
+            return await LoadFileAsync(path);
+        }
+        catch (Exception ex)
+        {
+            return $"Error loading {path}: {ex.Message}";
+        }
+    }
+
+    // Consolidated line processing logic shared between interactive and file loading
+    private async Task ProcessLineWithContinuation(string line, System.Text.StringBuilder currentInput, Func<string, Task> processInput, bool isFromFile = false, int lineNumber = 0)
+    {
+        if (isFromFile)
+            await _logger.LogAsync($"line {lineNumber} <<: {line}");
+        
+        var trimmed = isFromFile ? line.TrimEnd() : line;
+        
+        if (isFromFile && (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#')))
+            return;
+        
+        if (trimmed.EndsWith('\\'))
+        {
+            currentInput.Append(trimmed[..^1]);
+            return;
+        }
+        
+        currentInput.Append(trimmed);
+        var input = currentInput.ToString();
+        currentInput.Clear();
+        await processInput(input);
+    }
+
     public async Task<string> LoadFileAsync(string path)
     {
         int lineCount = 0;
         _logger.Log($"Loading commands from '{path}'");
         var lines = await File.ReadAllLinesAsync(path);
         var currentInput = new System.Text.StringBuilder();
+        
         foreach (var line in lines)
         {
-            await _logger.LogAsync($"line {lineCount++} <<: {line}");
-            var trimmed = line.TrimEnd();
-            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#'))
-                continue;
-            if (trimmed.EndsWith('\\'))
-            {
-                currentInput.Append(trimmed[..^1]);
-                continue;
-            }
-            currentInput.Append(trimmed);
-            var input = currentInput.ToString();
-            currentInput.Clear();
-            await ProcessAndDisplayInputAsync(input);
+            await ProcessLineWithContinuation(line, currentInput, ProcessAndDisplayInputAsync, true, lineCount++);
         }
+        
         if (currentInput.Length > 0)
             await ProcessAndDisplayInputAsync(currentInput.ToString());
         return $"Loaded {path}";
@@ -1131,51 +1196,9 @@ public class Interpreter
         return _parser.DefineInfixOperator(symbol, precedence, associativity);
     }
 
-    private string FormatApplicationWithNumerals(Expr app, HashSet<Expr> visited)
-    {
-        var leftStr = app.AppLeft!.Type == ExprType.Abs
-            ? $"({FormatWithNumerals2(app.AppLeft!, visited)})"
-            : FormatWithNumerals2(app.AppLeft!, visited);
-
-        var rightStr = app.AppRight!.Type is ExprType.App or ExprType.Abs
-            ? $"({FormatWithNumerals2(app.AppRight!, visited)})"
-            : FormatWithNumerals2(app.AppRight!, visited);
-
-        return $"{leftStr} {rightStr}";
-    }
-
-    private string FormatWithNumerals(Expr expr) => FormatWithNumerals2(expr, new HashSet<Expr>());
-    private string FormatWithNumerals2(Expr expr, HashSet<Expr> visited, int maxDepth = 1000)
-    {
-        if (maxDepth <= 0) return "...";
-        if (visited.Contains(expr)) return "<cycle>";
-        if (!_formatNumerals)
-            return expr.ToString();
-
-        visited.Add(expr);
-        try
-        {
-            var number = ExtractChurchNumeralValue(expr);
-            if (number.HasValue)
-                return number.Value.ToString();
-
-            return expr.Type switch
-            {
-                ExprType.Var => expr.VarName!,
-                ExprType.Abs => $"λ{expr.AbsVarName}.{FormatWithNumerals2(expr.AbsBody!, visited, maxDepth - 1)}",
-                ExprType.App => FormatApplicationWithNumerals(expr, visited),
-                ExprType.Thunk => expr.ThunkValue!.IsForced
-                    ? $"<forced:{FormatWithNumerals2(expr.ThunkValue.ForcedValue!, visited, maxDepth - 1)}>"
-                    : $"<thunk:{FormatWithNumerals2(expr.ThunkValue.Expression, visited, maxDepth - 1)}>",
-                ExprType.YCombinator => "Y",
-                _ => "?"
-            };
-        }
-        finally
-        {
-            visited.Remove(expr);
-        }
-    }
+    // Consolidated formatting method that uses the enhanced Expr.ToString()
+    private string FormatWithNumerals(Expr expr) => 
+        expr.ToString(_formatNumerals, _formatNumerals ? ExtractChurchNumeralValue : null);
 
     // Force evaluation of a thunk (lazy value)
     private Expr Force(Expr expr)
@@ -1485,10 +1508,7 @@ public class Interpreter
     private Expr? GetSubCache(Expr root, string var, Expr val)
     {
         var cacheKey = new SubstitutionCacheKey(root, var, val);
-        var hasResult = _substitutionCache.TryGetValue(cacheKey, out Expr? result);
-
-        _ = hasResult ? _stats.CacheHits++ : _stats.CacheMisses++;
-        return result;
+        return GetFromCache(_substitutionCache, cacheKey, out var result) ? result : null;
     }
 
     private void PutSubCache(Expr root, string var, Expr val, Expr result)
@@ -1937,15 +1957,15 @@ public class Program
         var interpreter = new Interpreter(logger: new());
 
         // Load standard library if available
-        if (File.Exists("stdlib.lambda"))
-            await interpreter.LoadFileAsync("stdlib.lambda");
+        await interpreter.LoadFileIfExistsAsync("stdlib.lambda");
 
         // Process any command line files before starting interactive mode
         foreach (var filePath in args)
-            if (File.Exists(filePath))
-                await interpreter.LoadFileAsync(filePath);
-            else
-                Console.WriteLine($"File not found: {filePath}");
+        {
+            var result = await interpreter.LoadFileIfExistsAsync(filePath);
+            if (result.StartsWith("File not found:"))
+                Console.WriteLine(result);
+        }
 
         Logger.LogToConsole("");
         Logger.LogToConsole("Lambda Calculus Interpreter - Interactive Mode");
