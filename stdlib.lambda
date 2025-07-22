@@ -2,6 +2,7 @@
 
 # =============================================================================
 # BOOLEAN OPERATIONS
+
 # =============================================================================
 
 id       = λx.x 
@@ -170,6 +171,8 @@ fact-rec = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
 
 fib-rec = Y (\f.\n. if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
 
+sum-upto-rec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n)))) # Recursive sum of numbers up to n
+
 # =============================================================================
 # ADDITIONAL COMPUTATIONAL FUNCTIONS
 # =============================================================================
@@ -190,6 +193,10 @@ gcd              = λm n.if (iszero n) m \
 lcm              = λm n.div (mult m n) (gcd m n)              # Least common multiple
 factorial        = fact                                       # Alias for fact
 fibonacci        = fib                                        # Alias for fib
+
+# Recursive GCD and LCM
+gcd-rec = Y (\f.\a.\b.if (iszero b) a (f b (mod a b)))
+lcm-rec = \a.\b.div (mult a b) (gcd-rec a b)
 
 # =============================================================================
 # ITERATION UTILITIES
