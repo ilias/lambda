@@ -1212,6 +1212,9 @@ public class Interpreter
         if (expr.ThunkValue.IsBeingForced)
             return expr; // Return the thunk itself to handle recursion.
 
+        if (_showStep)
+            _logger.Log($"Step: Forcing thunk: \t{expr.ThunkValue.Expression}");
+
         _perfStopwatch.Restart();
         _stats.ThunkForceCount++;
 
@@ -1219,7 +1222,7 @@ public class Interpreter
 
         // Evaluate the thunk's expression in its captured environment
         var forced = EvaluateCEK(expr.ThunkValue.Expression, expr.ThunkValue.Environment);
-        
+
         _stats.TimeInForcing += _perfStopwatch.ElapsedTicks;
 
         // In-place update of the thunk
@@ -1517,6 +1520,9 @@ public class Interpreter
     private Expr Substitute(Expr root, string var, Expr val)
     {
         // Fast-path: If substituting a variable with itself, return the original expression
+        if (_showStep)
+            _logger.Log($"Step: Substitute \t{var} := {val} in {root}");
+
         if (val.Type == ExprType.Var && val.VarName == var)
             return root;
 
@@ -1533,6 +1539,8 @@ public class Interpreter
         // Ultra-fast path for variables with aggressive caching
         if (root.Type == ExprType.Var)
         {
+            if (_showStep && root.VarName == var)
+                _logger.Log($"Step: Substitute variable \t{var} with {val}");
             if (root.VarName == var) return val;
 
             if (_expressionPool.TryGetValue(root.VarName!, out var cached)) return cached;
@@ -1549,6 +1557,8 @@ public class Interpreter
         // Handle thunks
         if (root.Type == ExprType.Thunk && root.ThunkValue is not null)
         {
+            if (_showStep)
+                _logger.Log($"Step: Substitute in thunk: \t{root.ThunkValue.Expression}");
             var substitutedExpr = Substitute(root.ThunkValue.Expression, var, val);
             var newThunk = new Thunk(substitutedExpr, root.ThunkValue.Environment);
             if (root.ThunkValue.IsForced)
@@ -1700,6 +1710,8 @@ public class Interpreter
             switch (op)
             {
                 case SubstOp.Evaluate when node.Type == ExprType.Var:
+                    if (_showStep && node.VarName == currentVar)
+                        _logger.Log($"Step: Substitute variable \t{currentVar} with {currentVal}");
                     resultStack.Push(node.VarName == currentVar ? currentVal : Intern(node));
                     continue;
 
@@ -1712,6 +1724,8 @@ public class Interpreter
                     // Handle thunk substitution
                     if (node.ThunkValue is not null)
                     {
+                        if (_showStep)
+                            _logger.Log($"Step: Substitute in thunk: \t{node.ThunkValue.Expression}");
                         var substitutedExpr = Substitute(node.ThunkValue.Expression, currentVar, currentVal);
                         var newThunk = new Thunk(substitutedExpr, node.ThunkValue.Environment);
                         if (node.ThunkValue.IsForced)
@@ -1739,6 +1753,8 @@ public class Interpreter
 
                                 // Perform variable renaming
                                 (currentVar, currentVal) = (absVarName, Expr.Var(newVar));
+                                if (_showStep)
+                                    _logger.Log($"Step: Alpha-convert \t{absVarName} to {newVar}");
                             }
                             else
                             {
