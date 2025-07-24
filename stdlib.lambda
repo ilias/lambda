@@ -113,13 +113,14 @@ cond     = λp t e.if p t e                  # Alias for if for readability
 pair     = λx y f.f x y
 first    = λp.p (λx y.x)
 second   = λp.p (λx y.y)
-swap     = λp.p (λx y.y x) (λx y.x y)
+swap     = λp.λf.p (λx y.f y x)
 
 # =============================================================================
 # BASIC LIST OPERATIONS
 # =============================================================================
 
 nil      = λf z.z                              # Empty list
+isnil    = λl.l (λx xs.false) true             # Check if list is empty
 cons     = λx xs f z.f x (xs f z)              # Create a list node with head x and tail xs
 head     = λl.l (λx xs.x) nil                  # Extract the first element
 tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil nil)) # Extract the rest of the list
@@ -148,8 +149,8 @@ take     = λn l.n (λf prev.if (isempty prev) nil \
                   (λx.nil) l
 drop     = λn l.n tail l                  # Drop first n elements
 nth      = λn l.head (drop n l)           # Get nth element (0-indexed)
-any      = λf l.foldr (λx acc.or (f x) acc) false l     # True if any element satisfies predicate
-all      = λf l.foldr (λx acc.and (f x) acc) true l     # True if all elements satisfy predicate
+any      = λl.foldr or false l     # True if any element satisfies predicate
+all      = λl.foldr and true l     # True if all elements satisfy predicate
 sum      = λl.foldr plus zero l           # Sum all elements
 product  = λl.foldr mult 1 l              # Product of all elements
 maximum  = λl.foldr (λx acc.if (gt x acc) x acc) zero l    # Maximum element
