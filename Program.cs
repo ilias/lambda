@@ -345,6 +345,39 @@ public class Parser
             pos++;
             if (ch == '#') break; // Comments
 
+            // Check for symbolic infix operator
+            var remainingInput = input.AsSpan(i);
+            string? bestMatch = null;
+            if (!char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch))
+            {
+                foreach (var opSymbol in _infixOperators.Keys)
+                {
+                    if (remainingInput.StartsWith(opSymbol))
+                    {
+                        if (bestMatch == null || opSymbol.Length > bestMatch.Length)
+                        {
+                            bestMatch = opSymbol;
+                        }
+                    }
+                }
+            }
+
+            if (bestMatch != null)
+            {
+                if (currentTerm.Length > 0)
+                {
+                    var termValue = currentTerm.ToString();
+                    var tokenType = MyTokenType(termValue);
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
+                    currentTerm.Clear();
+                }
+                
+                result.Add(new Token(TokenType.InfixOp, pos, bestMatch));
+                i += bestMatch.Length - 1;
+                pos += bestMatch.Length - 1;
+                continue;
+            }
+
             // Only treat '=' as TokenType.Equals when it is the only character in the token
             Token? nextToken = ch switch
             {
@@ -888,6 +921,8 @@ public class Interpreter
                 _context[statement.VarName!] = evaluatedExpression;
                 return (null, $"-> {statement.VarName} = {FormatWithNumerals(evaluatedExpression)}");
             }
+            if (_showStep)
+                _logger.Log($"Processing: {statement}");
             var result = EvaluateCEK(statement.Expression);
             var normalizedResult = NormalizeExpression(result);
             _stats.TotalIterations += _stats.Iterations; 
@@ -1213,7 +1248,7 @@ public class Interpreter
             return expr; // Return the thunk itself to handle recursion.
 
         if (_showStep)
-            _logger.Log($"Step: Forcing thunk: \t{expr.ThunkValue.Expression}");
+            _logger.Log($"Step: Forcing thunk: \t{FormatWithNumerals(expr.ThunkValue.Expression)}");
 
         _perfStopwatch.Restart();
         _stats.ThunkForceCount++;
@@ -1521,7 +1556,7 @@ public class Interpreter
     {
         // Fast-path: If substituting a variable with itself, return the original expression
         if (_showStep)
-            _logger.Log($"Step: Substitute \t{var} := {val} in {root}");
+            _logger.Log($"Step: Substitute \t{var} := {FormatWithNumerals(val)} in {FormatWithNumerals(root)}");
 
         if (val.Type == ExprType.Var && val.VarName == var)
             return root;
@@ -1540,7 +1575,7 @@ public class Interpreter
         if (root.Type == ExprType.Var)
         {
             if (_showStep && root.VarName == var)
-                _logger.Log($"Step: Substitute variable \t{var} with {val}");
+                _logger.Log($"Step: Substitute variable \t{var} with {FormatWithNumerals(val)}");
             if (root.VarName == var) return val;
 
             if (_expressionPool.TryGetValue(root.VarName!, out var cached)) return cached;
@@ -1558,7 +1593,7 @@ public class Interpreter
         if (root.Type == ExprType.Thunk && root.ThunkValue is not null)
         {
             if (_showStep)
-                _logger.Log($"Step: Substitute in thunk: \t{root.ThunkValue.Expression}");
+                _logger.Log($"Step: Substitute in thunk: \t{FormatWithNumerals(root.ThunkValue.Expression)}");
             var substitutedExpr = Substitute(root.ThunkValue.Expression, var, val);
             var newThunk = new Thunk(substitutedExpr, root.ThunkValue.Environment);
             if (root.ThunkValue.IsForced)
@@ -1711,7 +1746,7 @@ public class Interpreter
             {
                 case SubstOp.Evaluate when node.Type == ExprType.Var:
                     if (_showStep && node.VarName == currentVar)
-                        _logger.Log($"Step: Substitute variable \t{currentVar} with {currentVal}");
+                        _logger.Log($"Step: Substitute variable \t{currentVar} with {FormatWithNumerals(currentVal)}");
                     resultStack.Push(node.VarName == currentVar ? currentVal : Intern(node));
                     continue;
 
@@ -1725,7 +1760,7 @@ public class Interpreter
                     if (node.ThunkValue is not null)
                     {
                         if (_showStep)
-                            _logger.Log($"Step: Substitute in thunk: \t{node.ThunkValue.Expression}");
+                            _logger.Log($"Step: Substitute in thunk: \t{FormatWithNumerals(node.ThunkValue.Expression)}");
                         var substitutedExpr = Substitute(node.ThunkValue.Expression, currentVar, currentVal);
                         var newThunk = new Thunk(substitutedExpr, node.ThunkValue.Environment);
                         if (node.ThunkValue.IsForced)
