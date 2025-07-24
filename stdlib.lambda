@@ -1,7 +1,7 @@
 # Church encoding of lambmult     = λm n f.m (n f)    
 iszero   = λn.n (λx.false) true
 exp      = λm n f.n (m f)
-minus    = λm n.n pred malculus
+minus    = λm n.n pred m
 
 # =============================================================================
 # BOOLEAN OPERATIONS
@@ -32,16 +32,19 @@ exp      = Y (λf. λb n. if (iszero n) 1 (mult b (f b (pred n))))
 minus    = λm n.n pred m
 
 # =============================================================================
-# DIVISION AND MODULO (iterative implementation)
+# DIVISION AND MODULO (more efficient iterative implementation)
 # =============================================================================
 
-# Iterative division: repeatedly subtract divisor from dividend
-# State: (quotient, remainder)
-DIV_STEP        = λn p.if (lt (second p) n) p \
-                         (pair (succ (first p)) (minus (second p) n))
-DIV_ITER_HELPER = λm n.m (DIV_STEP n) (pair 0 m)
-div             = λm n.first (DIV_ITER_HELPER m n)
-mod             = λm n.second (DIV_ITER_HELPER m n)
+# Iterative division helper. Returns a pair (quotient, remainder).
+# It works by repeatedly subtracting n from m.
+DIV_ITER = Y(λf. λq m n. \
+    if (lt m n) \
+        (pair q m)\
+        (f (succ q) (minus m n) n)\
+)
+
+div = λm n. first (DIV_ITER 0 m n)
+mod = λm n. second (DIV_ITER 0 m n)
 
 # =============================================================================
 # COMPARISON OPERATIONS
@@ -181,26 +184,24 @@ sum-upto-rec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n)))) # Recursive sum o
 # ADDITIONAL COMPUTATIONAL FUNCTIONS
 # =============================================================================
 
-# Iterative GCD using Euclidean algorithm
-GCD_STEP         = λp.if (eq (first p) (second p)) \
-                          p \
-                          (if (gt (first p) (second p)) \
-                              (pair (minus (first p) (second p)) (second p)) \
-                              (pair (first p) (minus (second p) (first p))))
+# A proper WHILE loop combinator
+WHILE = Y (λloop. λcond body state. if (cond state) (loop cond body (body state)) state)
 
-GCD_ITER_HELPER  = λm n.(plus m n) GCD_STEP (pair m n)
+# GCD using the Euclidean algorithm with the WHILE combinator
+GCD_STEP = λp. if (gt (first p) (second p)) \
+                 (pair (minus (first p) (second p)) (second p)) \
+                 (pair (first p) (minus (second p) (first p)))
 
-gcd              = λm n.if (iszero n) m \
-                           (if (iszero m) n \
-                               (first (GCD_ITER_HELPER m n)))  # Iterative GCD using subtraction
+gcd = λm n. if (or (iszero m) (iszero n)) (if (iszero m) n m) \
+    (first (WHILE (λp. neq (first p) (second p)) GCD_STEP (pair m n)))
 
-lcm              = λm n.div (mult m n) (gcd m n)              # Least common multiple
+# Least Common Multiple
+lcm = λa b. \
+  if (or (iszero a) (iszero b)) 0 \
+    (div (mult a b) (gcd a b))
+
 factorial        = fact                                       # Alias for fact
 fibonacci        = fib                                        # Alias for fib
-
-# Recursive GCD and LCM
-gcd-rec = Y (\f.\a.\b.if (iszero b) a (f b (mod a b)))
-lcm-rec = \a.\b.div (mult a b) (gcd-rec a b)
 
 # =============================================================================
 # ITERATION UTILITIES
@@ -286,20 +287,15 @@ SQRT_ITER_HELPER = λn guess limit.limit (λp.if (leq (abs (minus (mult (first p
                                           (pair guess guess)
 sqrt             = λn.if (iszero n) zero (first (SQRT_ITER_HELPER n n n))  # Bounded iterations
 
-# Simple prime check without recursion - limited to small numbers for safety
-isPrime          = λn.if (leq n 1) false \
-                         (if (eq n 2) true \
-                             (if (eq n 3) true \
-                                 (and (neq (mod n 2) zero) \
-                                      (and (neq (mod n 3) zero) \
-                                           (and (neq (mod n 5) zero) \
-                                                (neq (mod n 7) zero))))))
-
-# Bounded nextPrime search - only tries up to a limit
-nextPrime        = λn.if (isPrime (succ n)) (succ n) \
-                         (if (isPrime (succ (succ n))) (succ (succ n)) \
-                             (if (isPrime (plus n 3)) (plus n 3) \
-                                 (plus n 4)))  # Bounded search, fallback after few attempts
+# Simple prime check using trial division up to sqrt(n)
+isPrime = Y (λf n. \
+    let iter = Y (λiter i. \
+        if (gt (mult i i) n) true \
+        (if (eq (mod n i) 0) false \
+            (iter (succ i))) \
+    ) \
+    if (lt n 2) false (iter 2) \
+)
 
 primes           = λn.filter isPrime (enumFromTo 2 n)       # Generate primes up to n
 
