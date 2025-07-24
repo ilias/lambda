@@ -1,8 +1,3 @@
-# Church encoding of lambmult     = λm n f.m (n f)    
-iszero   = λn.n (λx.false) true
-exp      = λm n f.n (m f)
-minus    = λm n.n pred m
-
 # =============================================================================
 # BOOLEAN OPERATIONS
 
@@ -11,7 +6,7 @@ minus    = λm n.n pred m
 id       = λx.x 
 true     = λx y.x 
 false    = λx y.y 
-and      = λp q.p q p 
+and      = λp q.p q false 
 not      = λp.p false true 
 or       = λp q.p true q 
 xor      = λp q.p (not q) q 
