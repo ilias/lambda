@@ -169,11 +169,11 @@ FIB_ITER_HELPER  = λn.n (λp.pair (second p) \
                          (pair 0 1)
 fib              = λn.first (FIB_ITER_HELPER n)
 
-fact-rec = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
+factRec = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
 
-fib-rec = Y (\f.\n. if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
+fibRec = Y (\f.\n. if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
 
-sum-upto-rec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n)))) # Recursive sum of numbers up to n
+sumUptoRec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n)))) # Recursive sum of numbers up to n
 
 # =============================================================================
 # ADDITIONAL COMPUTATIONAL FUNCTIONS
@@ -187,13 +187,18 @@ GCD_STEP = λp. if (gt (first p) (second p)) \
                  (pair (minus (first p) (second p)) (second p)) \
                  (pair (first p) (minus (second p) (first p)))
 
-gcd = λm n. if (or (iszero m) (iszero n)) (if (iszero m) n m) \
+gcd1 = λm n. if (or (iszero m) (iszero n)) (if (iszero m) n m) \
     (first (WHILE (λp. neq (first p) (second p)) GCD_STEP (pair m n)))
 
+gcd = Y (λg.λa.λb. if (iszero b) a (g b (mod a b)))  # Recursive GCD using mod
+# GCD using the iterative method
+gcdIter = λa b. first (WHILE (λp. neq (second p) 0) \
+                              (λp.pair (second p) (mod (first p) (second p))) \
+                              (pair a b))  
+
+
 # Least Common Multiple
-lcm = λa b. \
-  if (or (iszero a) (iszero b)) 0 \
-    (div (mult a b) (gcd a b))
+lcm = λa.λb. if (or (iszero a) (iszero b)) 0 (div (mult a b) (gcd a b))
 
 factorial        = fact                                       # Alias for fact
 fibonacci        = fib                                        # Alias for fib

@@ -902,7 +902,6 @@ public class Interpreter
     {
         try
         {
-            _stats.Iterations = 0; // Reset iterations for each input
             if (string.IsNullOrWhiteSpace(input)) return (null, "");
             input = input.TrimEnd('\\');
 
