@@ -1614,9 +1614,7 @@ public class Interpreter
         {
             result = root.Type switch
             {
-                ExprType.Abs when val.Type != ExprType.Var &&
-                                  root.AbsVarName != var &&
-                                  QuickFreeVarCheck(val, root.AbsVarName!) =>
+                ExprType.Abs when root.AbsVarName != var && QuickFreeVarCheck(val, root.AbsVarName!) =>
                     AlphaConvert(root.AbsVarName!, root.AbsBody!) is var (newVar, newBody)
                         ? Expr.Abs(newVar, Substitute(newBody, var, val))
                         : throw new InvalidOperationException("Alpha conversion failed"),
