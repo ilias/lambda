@@ -890,7 +890,7 @@ public class Interpreter
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
     private bool _lazyEvaluation = true;
-    private bool _formatNumerals = true;
+    private bool _formatNumerals = false;
 
     public Interpreter(Logger logger, InterpreterStats? stats = null)
     {
@@ -1393,7 +1393,7 @@ public class Interpreter
           :log clear             Clear the current log file (if enabled)
           :step on|off           Toggle step-by-step evaluation logging
           :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
-          :numerals on|off       Toggle formatting of Church numerals as integers (default: on)
+          :numerals on|off       Toggle formatting of Church numerals as integers (default: off)
           :stats                 Show detailed performance and environment statistics
           :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
           :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
