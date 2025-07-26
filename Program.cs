@@ -915,6 +915,7 @@ public class Interpreter
 
             var statement = _parser.Parse(input);
             if (statement == null) return (null, "");
+            _stats.Iterations = 0;
             if (statement.Type == StatementType.Assignment)
             {
                 var evaluatedExpression = EvaluateCEK(statement.Expression);
