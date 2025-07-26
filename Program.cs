@@ -915,7 +915,6 @@ public class Interpreter
 
             var statement = _parser.Parse(input);
             if (statement == null) return (null, "");
-            _stats.Iterations = 0;
             if (statement.Type == StatementType.Assignment)
             {
                 var evaluatedExpression = EvaluateCEK(statement.Expression);
@@ -926,13 +925,18 @@ public class Interpreter
                 _logger.Log($"Processing: {statement}");
             var result = EvaluateCEK(statement.Expression);
             var normalizedResult = NormalizeExpression(result);
-            _stats.TotalIterations += _stats.Iterations; 
+            _stats.TotalIterations += _stats.Iterations;
 
             return (normalizedResult, $"-> {FormatWithNumerals(normalizedResult)}");
         }
         catch (Exception ex)
         {
             return (null, $"Error: {ex.Message}");
+        }
+        finally
+        {
+            _stats.VarCounter = 0; // Reset recursion depth counter
+            _stats.Iterations = 0; // Reset iteration counter
         }
     }
 

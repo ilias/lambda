@@ -293,7 +293,7 @@ isPrime = Y (λf n. \
         if (gt (mult i i) n) true \
         (if (eq (mod n i) 0) false \
             (iter (succ i))) \
-    ) \
+    ) in \
     if (lt n 2) false (iter 2) \
 )
 
