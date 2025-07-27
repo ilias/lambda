@@ -1059,11 +1059,6 @@ public class Interpreter
     // Native arithmetic for Church numerals
     private Expr? TryNativeArithmetic(Expr app, Dictionary<string, Expr> env)
     {
-        bool DoNativeArithmetic()
-        {
-            _nativeArithmetic++;
-            return true;
-        }
         if (!_useNativeArithmetic)
             return null;
 
@@ -1099,7 +1094,7 @@ public class Interpreter
 
         if (result != null)
         {
-            DoNativeArithmetic();
+            _nativeArithmetic++;
             return MakeChurchNumeral(result.Value);
         }
         return null;
