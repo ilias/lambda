@@ -891,6 +891,8 @@ public class Interpreter
     private bool _showStep = false;
     private bool _lazyEvaluation = true;
     private bool _formatNumerals = false;
+    private int _nativeArithmetic = 0;
+    private bool _useNativeArithmetic = true;
 
     public Interpreter(Logger logger, InterpreterStats? stats = null)
     {
@@ -1057,6 +1059,14 @@ public class Interpreter
     // Native arithmetic for Church numerals
     private Expr? TryNativeArithmetic(Expr app, Dictionary<string, Expr> env)
     {
+        bool DoNativeArithmetic()
+        {
+            _nativeArithmetic++;
+            return true;
+        }
+        if (!_useNativeArithmetic)
+            return null;
+
         // Unroll left-associative applications: (((op a) b) c) ...
         var args = new List<Expr>();
         Expr? cur = app;
@@ -1072,39 +1082,35 @@ public class Interpreter
         int? result = null;
         switch (opName)
         {
-            case "plus" or "+" when args.Count == 2:
+            case "plus" or "+" when args.Count == 2 && DoNativeArithmetic():
                 if (TryGetChurchInt(args[0], env, out var a) && TryGetChurchInt(args[1], env, out var b))
                     result = a + b;
                 break;
-            case "minus" or "-" when args.Count == 2:
+            case "minus" or "-" when args.Count == 2 && DoNativeArithmetic():
                 if (TryGetChurchInt(args[0], env, out var a2) && TryGetChurchInt(args[1], env, out var b2))
                     result = Math.Max(0, a2 - b2);
                 break;
-            case "mult" or "*" when args.Count == 2:
+            case "mult" or "*" when args.Count == 2 && DoNativeArithmetic():
                 if (TryGetChurchInt(args[0], env, out var a3) && TryGetChurchInt(args[1], env, out var b3))
                     result = a3 * b3;
                 break;
-            case "div" or "/" when args.Count == 2:
-                if (TryGetChurchInt(args[0], env, out var a4) && TryGetChurchInt(args[1], env, out var b4) && b4 != 0)
-                    result = a4 / b4;
-                else if (TryGetChurchInt(args[0], env, out var a4b) && TryGetChurchInt(args[1], env, out var b4b) && b4b == 0)
-                    result = 0;
+            case "div" or "/" when args.Count == 2 && DoNativeArithmetic():
+                if (TryGetChurchInt(args[0], env, out var a4) && TryGetChurchInt(args[1], env, out var b4))
+                    result = b4 == 0 ? 0 : a4 / b4;
                 break;
-            case "mod" or "%" when args.Count == 2:
-                if (TryGetChurchInt(args[0], env, out var a5) && TryGetChurchInt(args[1], env, out var b5) && b5 != 0)
-                    result = a5 % b5;
-                else if (TryGetChurchInt(args[0], env, out var a5b) && TryGetChurchInt(args[1], env, out var b5b) && b5b == 0)
-                    result = 0;
+            case "mod" or "%" when args.Count == 2 && DoNativeArithmetic():
+                if (TryGetChurchInt(args[0], env, out var a5) && TryGetChurchInt(args[1], env, out var b5))
+                    result = b5 == 0 ? 0 : a5 % b5;
                 break;
-            case "exp" or "^" when args.Count == 2:
+            case "exp" or "^" when args.Count == 2 && DoNativeArithmetic():
                 if (TryGetChurchInt(args[0], env, out var a6) && TryGetChurchInt(args[1], env, out var b6))
                     result = (int)Math.Pow(a6, b6);
                 break;
-            case "succ" when args.Count == 1:
+            case "succ" when args.Count == 1 && DoNativeArithmetic():
                 if (TryGetChurchInt(args[0], env, out var s1))
                     result = s1 + 1;
                 break;
-            case "pred" when args.Count == 1:
+            case "pred" when args.Count == 1 && DoNativeArithmetic():
                 if (TryGetChurchInt(args[0], env, out var p1))
                     result = Math.Max(0, p1 - 1);
                 break;
@@ -1282,8 +1288,15 @@ public class Interpreter
             ":exit" or ":quit" => "bye",
             ":depth" => HandleRecursionDepth(arg),
             ":infix" => HandleInfixCommand(arg),
+            ":native" => HandleNativeArithmetic(arg),
             _ => $"Unknown command: {command}"
         };
+    }
+
+    private string HandleNativeArithmetic(string arg)
+    {
+        _useNativeArithmetic = arg == "on";
+        return "Native arithmetic " + (_useNativeArithmetic ? "enabled" : "disabled");
     }
 
     private string HandleNumerals(string arg)
@@ -1453,7 +1466,8 @@ public class Interpreter
         Thunks forced:            {_stats.ThunkForceCount:#,##0}
         Total iterations:         {_stats.TotalIterations:#,##0}
         Hash code calls:          {Expr.HashCodeCount:#,##0}
-        
+        Native arithmetic calls:  {_nativeArithmetic:#,##0}, {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}
+
         -- Memoization/Caching --
         Cache sizes:              {cacheStats}
         Cache hits/misses:        {_stats.CacheHits:#,##0} / {_stats.CacheMisses:#,##0} ({cacheHitRate})
@@ -1507,6 +1521,8 @@ public class Interpreter
           :env                   Show current environment definitions
           :help                  Show this help message
           :memo                  Clear all memoization/caches
+          :clear                 Clear the current environment and caches
+          :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
           :exit, :quit           Exit the interpreter
 
         -- Interactive Features --
