@@ -474,7 +474,6 @@ const2   = λx y.x  # Alias for const/K
 
 && = and
 || = or
-^^ = xor
 == = eq
 != = neq
 <  = lt
@@ -483,7 +482,6 @@ const2   = λx y.x  # Alias for const/K
 >= = geq
 :infix && 3 left
 :infix || 2 left
-:infix ^^ 3 left
 :infix == 4 left
 :infix != 4 left
 :infix <  5 left
