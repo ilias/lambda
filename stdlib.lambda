@@ -445,16 +445,6 @@ safeMaximum = λl.if (isempty l) nothing (just (foldr (λx acc.if (gt x acc) x a
 # init: handle single-element and empty lists
 safeInit = λl.if (isempty l) nil (reverse (tail (reverse l)))
 
-# reverse: add comment for clarity
-# reverse = λl.foldl (λacc x.cons x acc) nil l  # Already present, iterative and safe
-
-# =============================================================================
-# ADDITIONAL FUNCTION UTILITIES
-# =============================================================================
-
-id2      = λx.x  # Alias for id, for clarity
-const2   = λx y.x  # Alias for const/K
-
 # =============================================================================
 # INFIX OPERATORS
 # =============================================================================

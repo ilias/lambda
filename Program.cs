@@ -1466,7 +1466,7 @@ public class Interpreter
         Thunks forced:            {_stats.ThunkForceCount:#,##0}
         Total iterations:         {_stats.TotalIterations:#,##0}
         Hash code calls:          {Expr.HashCodeCount:#,##0}
-        Native arithmetic calls:  {_nativeArithmetic:#,##0}, {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}
+        Native arithmetic:        {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}, {_nativeArithmetic:#,##0} calls
 
         -- Memoization/Caching --
         Cache sizes:              {cacheStats}

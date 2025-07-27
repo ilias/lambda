@@ -114,6 +114,60 @@ false || true            # expect true
 4 > 3                    # expect true
 4 >= 4                   # expect true
 
+# --- Maybe/Optional Type ---
+just 42                        # expect just 42
+nothing                        # expect nil
+isJust (just 1)                # expect true
+isNothing nothing              # expect true
+fromJust (just 7)              # expect 7
+fromMaybe 99 (just 5)          # expect 5
+fromMaybe 99 nothing           # expect 99
+maybe 0 succ (just 3)          # expect 4
+maybe 0 succ nothing           # expect 0
+
+# --- Either Type ---
+left 1                         # expect left 1
+right 2                        # expect right 2
+isLeft (left 5)                # expect true
+isRight (right 6)              # expect true
+either succ pred (left 10)     # expect 11
+either succ pred (right 10)    # expect 9
+
+# --- Tree Data Structure ---
+leaf 7                         # expect (7, (nil, nil))
+node 1 (leaf 2) (leaf 3)       # expect (1, ((2, (nil, nil)), (3, (nil, nil))))
+treeValue (leaf 8)             # expect 8
+treeLeft (node 1 (leaf 2) (leaf 3))  # expect (2, (nil, nil))
+treeRight (node 1 (leaf 2) (leaf 3)) # expect (3, (nil, nil))
+isLeaf (leaf 9)                # expect true
+isLeaf (node 1 (leaf 2) (leaf 3))    # expect false
+
+# --- zipWith, scanl, scanr, find, partition, splitAt ---
+zipWith plus (cons 1 (cons 2 nil)) (cons 10 (cons 20 nil)) # expect [11,22]
+scanl plus 0 (cons 1 (cons 2 (cons 3 nil))) # expect [0,1,3,6]
+scanr plus 0 (cons 1 (cons 2 (cons 3 nil))) # expect [6,5,3,0]
+find (eq 2) (cons 1 (cons 2 (cons 3 nil)))  # expect 2
+partition even (cons 1 (cons 2 (cons 3 (cons 4 nil)))) # expect ([2,4],[1,3])
+splitAt 2 (cons 1 (cons 2 (cons 3 (cons 4 nil)))) # expect ([1,2],[3,4])
+
+# --- Edge Cases and Safe Functions ---
+safeMinimum nil                 # expect nothing
+safeMaximum nil                 # expect nothing
+safeMinimum (cons 3 (cons 1 (cons 2 nil))) # expect just 1
+safeMaximum (cons 3 (cons 1 (cons 2 nil))) # expect just 3
+clamp 2 4 1                    # expect 2
+clamp 2 4 3                    # expect 3
+clamp 2 4 5                    # expect 4
+
+# --- Miscellaneous ---
+compose succ succ 1             # expect 3
+flip minus 2 5                  # expect 3
+on plus succ 2 3                # expect 7
+apply succ 4                    # expect 5
+partial plus 2 3                # expect 5
+partial2 plus 2 3 4             # expect 9
+memoize succ 10                 # expect 11
+
 # --- End of Test Suite ---
-# To run: :load stdlib.lambda, then :load tests.lambda
 # Review the output for each test variable above.
+# To run: :load stdlib.lambda, then :load tests.lambda
