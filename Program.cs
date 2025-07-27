@@ -1072,31 +1072,31 @@ public class Interpreter
         int? result = null;
         switch (opName)
         {
-            case "plus" when args.Count == 2:
+            case "plus" or "+" when args.Count == 2:
                 if (TryGetChurchInt(args[0], env, out var a) && TryGetChurchInt(args[1], env, out var b))
                     result = a + b;
                 break;
-            case "minus" when args.Count == 2:
+            case "minus" or "-" when args.Count == 2:
                 if (TryGetChurchInt(args[0], env, out var a2) && TryGetChurchInt(args[1], env, out var b2))
                     result = Math.Max(0, a2 - b2);
                 break;
-            case "mult" when args.Count == 2:
+            case "mult" or "*" when args.Count == 2:
                 if (TryGetChurchInt(args[0], env, out var a3) && TryGetChurchInt(args[1], env, out var b3))
                     result = a3 * b3;
                 break;
-            case "div" when args.Count == 2:
+            case "div" or "/" when args.Count == 2:
                 if (TryGetChurchInt(args[0], env, out var a4) && TryGetChurchInt(args[1], env, out var b4) && b4 != 0)
                     result = a4 / b4;
                 else if (TryGetChurchInt(args[0], env, out var a4b) && TryGetChurchInt(args[1], env, out var b4b) && b4b == 0)
                     result = 0;
                 break;
-            case "mod" when args.Count == 2:
+            case "mod" or "%" when args.Count == 2:
                 if (TryGetChurchInt(args[0], env, out var a5) && TryGetChurchInt(args[1], env, out var b5) && b5 != 0)
                     result = a5 % b5;
                 else if (TryGetChurchInt(args[0], env, out var a5b) && TryGetChurchInt(args[1], env, out var b5b) && b5b == 0)
                     result = 0;
                 break;
-            case "exp" when args.Count == 2:
+            case "exp" or "^" when args.Count == 2:
                 if (TryGetChurchInt(args[0], env, out var a6) && TryGetChurchInt(args[1], env, out var b6))
                     result = (int)Math.Pow(a6, b6);
                 break;
