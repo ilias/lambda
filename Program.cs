@@ -979,7 +979,7 @@ public class Interpreter
         int currentStep = 0;
         Expr? finalResult = null;
         const int maxIterations = 100000; // Prevent infinite loops
-        
+
         while (stateStack.Count > 0 && _stats.Iterations < maxIterations)
         {
             _stats.Iterations++;
@@ -991,6 +991,20 @@ public class Interpreter
                 ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
                 continue;
             }
+
+            // Native arithmetic shortcut for Church numerals
+            if (control.Type == ExprType.App)
+            {
+                var nativeResult = TryNativeArithmetic(control, env);
+                if (nativeResult != null)
+                {
+                    ApplyContinuation(nativeResult, env, kont, stateStack, ref finalResult);
+                    if (finalResult != null)
+                        break;
+                    continue;
+                }
+            }
+
             switch (control)
             {
                 case { Type: ExprType.Var, VarName: var v }:
@@ -1022,13 +1036,13 @@ public class Interpreter
             if (finalResult != null)
                 break;
         }
-        
+
         // Check if we hit the iteration limit
         if (_stats.Iterations >= maxIterations)
         {
             throw new InvalidOperationException($"Evaluation exceeded maximum iterations ({maxIterations}). This may indicate an infinite loop, possibly due to undefined variables or non-terminating recursion.");
         }
-        
+
         _stats.TimeInEvaluation += _perfStopwatch.ElapsedTicks;
         if (finalResult != null)
         {
@@ -1038,6 +1052,94 @@ public class Interpreter
             return finalResult;
         }
         throw new InvalidOperationException("CEK evaluation completed without returning a value");
+    }
+
+    // Native arithmetic for Church numerals
+    private Expr? TryNativeArithmetic(Expr app, Dictionary<string, Expr> env)
+    {
+        // Unroll left-associative applications: (((op a) b) c) ...
+        var args = new List<Expr>();
+        Expr? cur = app;
+        while (cur is { Type: ExprType.App, AppLeft: var l, AppRight: var r })
+        {
+            args.Insert(0, r!);
+            cur = l;
+        }
+        if (cur is not { Type: ExprType.Var, VarName: var opName })
+            return null;
+
+        // Only intercept known arithmetic primitives
+        int? result = null;
+        switch (opName)
+        {
+            case "plus" when args.Count == 2:
+                if (TryGetChurchInt(args[0], env, out var a) && TryGetChurchInt(args[1], env, out var b))
+                    result = a + b;
+                break;
+            case "minus" when args.Count == 2:
+                if (TryGetChurchInt(args[0], env, out var a2) && TryGetChurchInt(args[1], env, out var b2))
+                    result = Math.Max(0, a2 - b2);
+                break;
+            case "mult" when args.Count == 2:
+                if (TryGetChurchInt(args[0], env, out var a3) && TryGetChurchInt(args[1], env, out var b3))
+                    result = a3 * b3;
+                break;
+            case "div" when args.Count == 2:
+                if (TryGetChurchInt(args[0], env, out var a4) && TryGetChurchInt(args[1], env, out var b4) && b4 != 0)
+                    result = a4 / b4;
+                else if (TryGetChurchInt(args[0], env, out var a4b) && TryGetChurchInt(args[1], env, out var b4b) && b4b == 0)
+                    result = 0;
+                break;
+            case "mod" when args.Count == 2:
+                if (TryGetChurchInt(args[0], env, out var a5) && TryGetChurchInt(args[1], env, out var b5) && b5 != 0)
+                    result = a5 % b5;
+                else if (TryGetChurchInt(args[0], env, out var a5b) && TryGetChurchInt(args[1], env, out var b5b) && b5b == 0)
+                    result = 0;
+                break;
+            case "exp" when args.Count == 2:
+                if (TryGetChurchInt(args[0], env, out var a6) && TryGetChurchInt(args[1], env, out var b6))
+                    result = (int)Math.Pow(a6, b6);
+                break;
+            case "succ" when args.Count == 1:
+                if (TryGetChurchInt(args[0], env, out var s1))
+                    result = s1 + 1;
+                break;
+            case "pred" when args.Count == 1:
+                if (TryGetChurchInt(args[0], env, out var p1))
+                    result = Math.Max(0, p1 - 1);
+                break;
+        }
+        if (result != null)
+            return MakeChurchNumeral(result.Value);
+        return null;
+    }
+
+    // Try to extract a Church numeral as int, resolving variables if needed
+    private bool TryGetChurchInt(Expr expr, Dictionary<string, Expr> env, out int value)
+    {
+        // Resolve variables
+        while (expr.Type == ExprType.Var && env.TryGetValue(expr.VarName!, out var v))
+            expr = v;
+        var n = ExtractChurchNumeralValue(expr);
+        if (n != null)
+        {
+            value = n.Value;
+            return true;
+        }
+        value = 0;
+        return false;
+    }
+
+    // Build a Church numeral expression for a given int
+    private Expr MakeChurchNumeral(int n)
+    {
+        // λf.λx.f^n(x)
+        var f = "f";
+        var x = "x";
+        Expr body = Expr.Var(x);
+        for (int i = 0; i < n; i++)
+            body = Expr.App(Expr.Var(f), body);
+        return Expr.Abs(f, Expr.Abs(x, body));
     }
 
     private Expr Intern(Expr expr)

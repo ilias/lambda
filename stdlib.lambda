@@ -11,7 +11,7 @@ not      = λp.p false true
 or       = λp q.p true q 
 xor      = λp q.p (not q) q 
 if       = λp a b.p a b 
-eq-bool  = λx y.x y (not y)
+eqBool   = λx y.x y (not y)
 
 # =============================================================================
 # CHURCH NUMERALS
@@ -69,8 +69,8 @@ pow      = exp                                # Power (alias for exp)
 # =============================================================================
 # NUMERIC RANGES AND SEQUENCES
 # =============================================================================
-range    = λn.n (λf acc.cons (length acc) (f acc)) (λx.nil) nil  # Generate [0, 1, ..., n-1]
-countdown = λn.reverse (range (succ n))                      # Generate [n, n-1, ..., 1, 0]
+range = λn. Y (λf k. if (eq k n) nil (cons k (f (succ k)))) 0  # Generate [0, 1, ..., n-1]
+countdown = λn. Y (λf k. if (iszero k) (cons 0 nil) (cons k (f (pred k)))) n  # Generate [n, n-1, ..., 0]
 
 # =============================================================================
 # COMBINATORS
@@ -190,15 +190,10 @@ GCD_STEP = λp. if (gt (first p) (second p)) \
 gcd1 = λm n. if (or (iszero m) (iszero n)) (if (iszero m) n m) \
     (first (WHILE (λp. neq (first p) (second p)) GCD_STEP (pair m n)))
 
-gcd = Y (λg.λa.λb. if (iszero b) a (g b (mod a b)))  # Recursive GCD using mod
-# GCD using the iterative method
-gcdIter = λa b. first (WHILE (λp. neq (second p) 0) \
-                              (λp.pair (second p) (mod (first p) (second p))) \
-                              (pair a b))  
 
-
-# Least Common Multiple
-lcm = λa.λb. if (or (iszero a) (iszero b)) 0 (div (mult a b) (gcd a b))
+# Robust GCD and LCM definitions
+gcd = Y (λg a b. if (iszero b) a (g b (mod a b)))  # Euclidean algorithm
+lcm = λa b. if (or (iszero a) (iszero b)) 0 (div (mult a b) (gcd a b))
 
 factorial        = fact                                       # Alias for fact
 fibonacci        = fib                                        # Alias for fib
