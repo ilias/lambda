@@ -275,12 +275,25 @@ unlines          = λl.intercalate (cons 10 nil) l          # Join with newlines
 # ADVANCED NUMERIC FUNCTIONS
 # =============================================================================
 
-# Iterative square root using Newton's method with bounded iterations
-SQRT_ITER_HELPER = λn guess limit.limit (λp.if (leq (abs (minus (mult (first p) (first p)) n)) (first p)) \
-                                                      p \
-                                                      (pair (half (plus (first p) (div n (first p)))) (second p))) \
-                                          (pair guess guess)
-sqrt             = λn.if (iszero n) zero (first (SQRT_ITER_HELPER n n n))  # Bounded iterations
+# Iterative square root using Newton's method with proper convergence
+# Newton's method: x_{n+1} = (x_n + n/x_n) / 2
+SQRT_NEWTON_STEP = λn x. half (plus x (div n x))
+
+# Check if we've converged (difference is small enough)
+SQRT_CONVERGED = λn x. leq (abs (minus (mult x x) n)) 1
+
+# Iterative sqrt with convergence check and maximum iterations
+SQRT_ITER = Y (λf n x iterations. \
+    if (or (SQRT_CONVERGED n x) (iszero iterations)) \
+        x \
+        (f n (SQRT_NEWTON_STEP n x) (pred iterations)) \
+)
+
+# Square root function with better initial guess and iteration limit
+sqrt = λn. \
+    if (iszero n) zero \
+    (if (eq n 1) 1 \
+        (SQRT_ITER n (half (plus n 1)) 20))  # Better initial guess, 20 iterations max
 
 # Simple prime check using trial division up to sqrt(n)
 isPrime = Y (λf n. \
