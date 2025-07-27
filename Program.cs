@@ -1078,45 +1078,30 @@ public class Interpreter
         if (cur is not { Type: ExprType.Var, VarName: var opName })
             return null;
 
+        if (args.Count < 1 || args.Count > 2)
+            return null; // Only support unary or binary operations
+
         // Only intercept known arithmetic primitives
-        int? result = null;
-        switch (opName)
+        int? result = (opName, args.Count, TryGetChurchInt(args[0], env, out var a)) switch
         {
-            case "plus" or "+" when args.Count == 2 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var a) && TryGetChurchInt(args[1], env, out var b))
-                    result = a + b;
-                break;
-            case "minus" or "-" when args.Count == 2 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var a2) && TryGetChurchInt(args[1], env, out var b2))
-                    result = Math.Max(0, a2 - b2);
-                break;
-            case "mult" or "*" when args.Count == 2 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var a3) && TryGetChurchInt(args[1], env, out var b3))
-                    result = a3 * b3;
-                break;
-            case "div" or "/" when args.Count == 2 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var a4) && TryGetChurchInt(args[1], env, out var b4))
-                    result = b4 == 0 ? 0 : a4 / b4;
-                break;
-            case "mod" or "%" when args.Count == 2 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var a5) && TryGetChurchInt(args[1], env, out var b5))
-                    result = b5 == 0 ? 0 : a5 % b5;
-                break;
-            case "exp" or "^" when args.Count == 2 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var a6) && TryGetChurchInt(args[1], env, out var b6))
-                    result = (int)Math.Pow(a6, b6);
-                break;
-            case "succ" when args.Count == 1 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var s1))
-                    result = s1 + 1;
-                break;
-            case "pred" when args.Count == 1 && DoNativeArithmetic():
-                if (TryGetChurchInt(args[0], env, out var p1))
-                    result = Math.Max(0, p1 - 1);
-                break;
-        }
+            ("plus" or "+", 2, true) when TryGetChurchInt(args[1], env, out var b) => a + b,
+            ("minus" or "-", 2, true) when TryGetChurchInt(args[1], env, out var b2) => Math.Max(0, a - b2),   
+            ("mult" or "*", 2, true) when TryGetChurchInt(args[1], env, out var b3) => a * b3,
+            ("div" or "/", 2, true) when TryGetChurchInt(args[1], env, out var b4) => b4 == 0 ? 0 : a / b4,
+            ("mod" or "%", 2, true) when TryGetChurchInt(args[1], env, out var b5) => b5 == 0 ? 0 : a % b5,
+            ("exp" or "^", 2, true) when TryGetChurchInt(args[1], env, out var b6) => (int)Math.Pow(a, b6),
+            ("max", 2, true) when TryGetChurchInt(args[1], env, out var b7) => Math.Max(a, b7),
+            ("min", 2, true) when TryGetChurchInt(args[1], env, out var b8) => Math.Min(a, b8),
+            ("succ", 1, true) => a + 1,
+            ("pred", 1, true) => Math.Max(0, a - 1),
+            _ => null
+        };
+
         if (result != null)
+        {
+            DoNativeArithmetic();
             return MakeChurchNumeral(result.Value);
+        }
         return null;
     }
 
