@@ -147,8 +147,8 @@ take     = λn l.n (λf prev.if (isempty prev) nil \
                   (λx.nil) l
 drop     = λn l.n tail l                  # Drop first n elements
 nth      = λn l.head (drop n l)           # Get nth element (0-indexed)
-any      = λl.foldr or false l     # True if any element satisfies predicate
-all      = λl.foldr and true l     # True if all elements satisfy predicate
+any      = λp l.foldr (λx acc.or (p x) acc) false l     # True if any element satisfies predicate
+all      = λp l.foldr (λx acc.and (p x) acc) true l     # True if all elements satisfy predicate
 sum      = λl.foldr plus zero l           # Sum all elements
 product  = λl.foldr mult 1 l              # Product of all elements
 maximum  = λl.foldr (λx acc.if (gt x acc) x acc) zero l    # Maximum element

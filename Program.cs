@@ -838,7 +838,7 @@ public class Logger
         string s when s.StartsWith("->") => GREEN,        // Results/Assignments
         string s when s.StartsWith("Step") => YELLOW,     // Evaluation steps
         string s when s.StartsWith("Time:") => BLUE,      // Timing info
-        string s when s.StartsWith("Result ") => MAGENTA, // Final result details
+        string s when s.StartsWith("Result:") => MAGENTA, // Final result details
         string s when s.Contains("Loading") => CYAN,      // Loading files
         string s when s.Contains("<<") => GRAY,           // Reading file lines
         string s when s.Contains(">>") => GREEN,          // Result of reading file lines
@@ -946,12 +946,13 @@ public class Interpreter
         if (result.expr is not null)
         {
             var number = ExtractChurchNumeralValue(result.expr);
-            string? resultName = _context.FirstOrDefault(kv => kv.Value.StructuralEquals(result.expr)).Key;
+            var names = _context.Where(kv => kv.Value.StructuralEquals(result.expr))
+                .Select(kv => kv.Key).ToList(); 
 
-            if (number is not null || !string.IsNullOrEmpty(resultName))
-                await _logger.LogAsync("Result is" +
-                    (number is not null ? $" (Church numeral {number:#,##0})" : "") +
-                    (!string.IsNullOrEmpty(resultName) ? $" (named '{resultName}')" : ""));
+            if (number is not null || names.Count > 0)
+                await _logger.LogAsync("Result: " +
+                    (number is not null ? $" (Church numeral: {number:#,##0})" : "") +
+                    (names.Count > 0 ? $" (named: {string.Join(", ", names)})" : ""));
 
             var timeInfo = elapsed.TotalSeconds >= 1
                 ? $"{elapsed.TotalSeconds:F2} s"
