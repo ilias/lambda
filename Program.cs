@@ -938,7 +938,6 @@ public class Interpreter
         finally
         {
             _stats.VarCounter = 0; // Reset recursion depth counter
-            _stats.Iterations = 0; // Reset iteration counter
         }
     }
 
@@ -980,7 +979,7 @@ public class Interpreter
         stateStack.Push(new CEKState(expr, environment, Kontinuation.Empty));
         int currentStep = 0;
         Expr? finalResult = null;
-        const int maxIterations = 100000; // Prevent infinite loops
+        const int maxIterations = 200000; // Prevent infinite loops
 
         while (stateStack.Count > 0 && _stats.Iterations < maxIterations)
         {
@@ -1076,28 +1075,56 @@ public class Interpreter
         if (args.Count < 1 || args.Count > 2)
             return null; // Only support unary or binary operations
 
+        if (!TryGetChurchInt(args[0], env, out var a))
+            return null; // First argument must be a Church numeral
+        var b = 0; // Default value for second argument if avaiable
+        var isArg2Number = args.Count == 2 && TryGetChurchInt(args[1], env, out b);
+
         // Only intercept known arithmetic primitives
-        int? result = (opName, args.Count, TryGetChurchInt(args[0], env, out var a)) switch
+        int? result = (opName, args.Count, isArg2Number) switch
         {
-            ("plus" or "+", 2, true) when TryGetChurchInt(args[1], env, out var b) => a + b,
-            ("minus" or "-", 2, true) when TryGetChurchInt(args[1], env, out var b2) => Math.Max(0, a - b2),   
-            ("mult" or "*", 2, true) when TryGetChurchInt(args[1], env, out var b3) => a * b3,
-            ("div" or "/", 2, true) when TryGetChurchInt(args[1], env, out var b4) => b4 == 0 ? 0 : a / b4,
-            ("mod" or "%", 2, true) when TryGetChurchInt(args[1], env, out var b5) => b5 == 0 ? 0 : a % b5,
-            ("exp" or "^", 2, true) when TryGetChurchInt(args[1], env, out var b6) => (int)Math.Pow(a, b6),
-            ("max", 2, true) when TryGetChurchInt(args[1], env, out var b7) => Math.Max(a, b7),
-            ("min", 2, true) when TryGetChurchInt(args[1], env, out var b8) => Math.Min(a, b8),
-            ("succ", 1, true) => a + 1,
-            ("pred", 1, true) => Math.Max(0, a - 1),
+            ("plus" or "+", 2, true) => a + b,
+            ("minus" or "-", 2, true) => Math.Max(0, a - b),   
+            ("mult" or "*", 2, true) => a * b,
+            ("div" or "/", 2, true) => b == 0 ? 0 : a / b,
+            ("mod" or "%", 2, true) => b == 0 ? 0 : a % b,
+            ("exp" or "pow" or "^", 2, true) => (int)Math.Pow(a, b),
+            ("max", 2, true) => Math.Max(a, b),
+            ("min", 2, true) => Math.Min(a, b),
+            ("succ" or "++", 1, _) => a + 1,
+            ("pred" or "--", 1, _) => Math.Max(0, a - 1),
+
+            ("iszero", 1, _) => a == 0 ? -1 : -2,
+            ("even", 1, _) => a % 2 == 0 ? -1 : -2,
+            ("odd", 1, _) => a % 2 != 0 ? -1 : -2,
+
+            ("lt" or "<", 2, true) => a < b ? -1 : -2,
+            ("leq" or "<=", 2, true) => a <= b ? -1 : -2,
+            ("eq" or "==", 2, true) => a == b ? -1 : -2,
+            ("geq" or ">=", 2, true) => a >= b ? -1 : -2,
+            ("gt" or ">", 2, true) => a > b ? -1 : -2,
+            ("neq" or "!=", 2, true) => a != b ? -1 : -2,
+
+            // Mathematical functions
+            ("square", 1, _) => a * a,
+            ("double", 1, _) => a * 2,
+            ("half", 1, _) => a / 2,
+            ("sqrt", 1, _) => (int)Math.Sqrt(a),
+
             _ => null
         };
 
-        if (result != null)
+        if (result is null)
+            return null; // Not a recognized operation or invalid arguments
+
+        _nativeArithmetic++;
+        // Negative results are used for boolean-like values
+        return result.Value switch
         {
-            _nativeArithmetic++;
-            return MakeChurchNumeral(result.Value);
-        }
-        return null;
+            -1 => Expr.Abs("f", Expr.Abs("x", Expr.Var("f"))), // Church true
+            -2 => Expr.Abs("f", Expr.Abs("x", Expr.Var("x"))), // Church false
+            _ => MakeChurchNumeral(result.Value) // Return Church numeral for non-negative results
+        };
     }
 
     // Try to extract a Church numeral as int, resolving variables if needed
