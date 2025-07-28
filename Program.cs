@@ -1091,8 +1091,13 @@ public class Interpreter
             ("exp" or "pow" or "^", 2, true) => (int)Math.Pow(a, b),
             ("max", 2, true) => Math.Max(a, b),
             ("min", 2, true) => Math.Min(a, b),
+
             ("succ" or "++", 1, _) => a + 1,
             ("pred" or "--", 1, _) => Math.Max(0, a - 1),
+            ("square", 1, _) => a * a,
+            ("double", 1, _) => a * 2,
+            ("half", 1, _) => a / 2,
+            ("sqrt", 1, _) => (int)Math.Sqrt(a),
 
             ("iszero", 1, _) => a == 0 ? -1 : -2,
             ("even", 1, _) => a % 2 == 0 ? -1 : -2,
@@ -1104,12 +1109,6 @@ public class Interpreter
             ("geq" or ">=", 2, true) => a >= b ? -1 : -2,
             ("gt" or ">", 2, true) => a > b ? -1 : -2,
             ("neq" or "!=", 2, true) => a != b ? -1 : -2,
-
-            // Mathematical functions
-            ("square", 1, _) => a * a,
-            ("double", 1, _) => a * 2,
-            ("half", 1, _) => a / 2,
-            ("sqrt", 1, _) => (int)Math.Sqrt(a),
 
             _ => null
         };
