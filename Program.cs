@@ -1143,10 +1143,9 @@ public class Interpreter
         return false;
     }
 
-    // Build a Church numeral expression for a given int
+    // Build a Church numeral expression for a given int λf.λx.f^n(x)
     private Expr MakeChurchNumeral(int n)
     {
-        // λf.λx.f^n(x)
         var f = "f";
         var x = "x";
         Expr body = Expr.Var(x);
