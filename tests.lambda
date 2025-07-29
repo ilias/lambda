@@ -208,20 +208,20 @@ unless false succ 5                              # expect 6
 cond true 42 99                                  # expect 42
 
 # --- Pair Operations ---
-pair 1 2                                         # expect (1,2)
-first (pair 10 20)                              # expect 10
-second (pair 10 20)                             # expect 20
-swap (pair 1 2)                                  # expect pair that when applied to f gives f 2 1
+pair 1 2                                      # expect (1,2)
+first (pair 10 20)                            # expect 10
+second (pair 10 20)                           # expect 20
+swap (pair 1 2)                               # expect pair that when applied to f gives f 2 1
 
 # --- Advanced Numeric Functions ---
-abs 5                                            # expect 5 (Church numerals are non-negative)
-sqrt 16                                          # expect approximately 4
-sqrt 25                                          # expect 5
-isPrime 7                                        # expect true
-isPrime 8                                        # expect false
-isPrime 2                                        # expect true
-isPrime 1                                        # expect false
-primes 10                                        # expect [2,3,5,7]
+abs 5                                         # expect 5 (Church numerals are non-negative)
+sqrt 16                                       # expect approximately 4
+sqrt 25                                       # expect 5
+isPrime 7                                     # expect true
+isPrime 8                                     # expect false
+isPrime 2                                     # expect true
+isPrime 1                                     # expect false
+primes 10                                     # expect [2,3,5,7]
 
 # --- String/Character Operations (treating numbers as char codes) ---
 # Note: These are simplified for demo purposes
@@ -236,44 +236,44 @@ isSubset (cons 1 (cons 2 nil)) (cons 1 (cons 2 (cons 3 nil)))           # expect
 isSuperset (cons 1 (cons 2 (cons 3 nil))) (cons 1 (cons 2 nil))         # expect true
 
 # --- Advanced Combinators ---
-omega I                                          # expect I (omega applied to identity)
-mockingbird I                                   # expect I
-thrush 5 succ                                   # expect 6
-cardinal minus 3 10                             # expect 7
-bluebird succ pred 5                            # expect 5
-kestrel 42 99                                   # expect 42
-warbler plus 3                                  # expect 6
-starling (K succ) (K 2) 0                      # expect 2
+omega I                                       # expect I (omega applied to identity)
+mockingbird I                                 # expect I
+thrush 5 succ                                 # expect 6
+cardinal minus 3 10                           # expect 7
+bluebird succ pred 5                          # expect 5
+kestrel 42 99                                 # expect 42
+warbler plus 3                                # expect 6
+starling (K succ) (K 2) 0                     # expect 2
 
 # --- Curry and Uncurry Functions ---
 curry3 (λt.plus (first t) (plus (first (second t)) (second (second t)))) 1 2 3  # expect 6
-uncurry plus (pair 7 3)                        # expect 10
+uncurry plus (pair 7 3)                       # expect 10
 uncurry3 (λx y z.plus x (plus y z)) (pair 1 (pair 2 3))  # expect 6
 
 # --- More Maybe/Optional Operations ---
-maybeMap succ (just 5)                         # expect just 6
-maybeMap succ nothing                          # expect nothing
+maybeMap succ (just 5)                        # expect just 6
+maybeMap succ nothing                         # expect nothing
 
 # --- State Monad (simplified) ---
-runState (returnState 42) 0                    # expect (42, 0)
-runState getState 123                          # expect (123, 123)
+runState (returnState 42) 0                   # expect (42, 0)
+runState getState 123                         # expect (123, 123)
 
 # --- Advanced Tree Operations ---
-treeSize (leaf 1)                              # expect 1
-treeSize nil                                   # expect 0
-treeDepth (leaf 1)                             # expect 1
-treeDepth nil                                  # expect 0
-inOrder (leaf 5)                               # expect [5]
-preOrder (leaf 5)                              # expect [5]
-postOrder (leaf 5)                             # expect [5]
+treeSize (leaf 1)                             # expect 1
+treeSize nil                                  # expect 0
+treeDepth (leaf 1)                            # expect 1
+treeDepth nil                                 # expect 0
+inOrder (leaf 5)                              # expect [5]
+preOrder (leaf 5)                             # expect [5]
+postOrder (leaf 5)                            # expect [5]
 
 # --- Edge Cases and Error Conditions ---
-div 5 0                                        # expect 0 (division by zero returns 0)
-mod 5 0                                        # expect 0 (modulo by zero returns 0)
-head nil                                       # expect nil
-tail nil                                       # expect nil
-pred 0                                         # expect 0 (predecessor of 0 is 0)
-minus 3 5                                      # expect 0 (Church arithmetic doesn't go negative)
+div 5 0                                       # expect 0 (division by zero returns 0)
+mod 5 0                                       # expect 0 (modulo by zero returns 0)
+head nil                                      # expect nil
+tail nil                                      # expect nil
+pred 0                                        # expect 0 (predecessor of 0 is 0)
+minus 3 5                                     # expect 0 (Church arithmetic doesn't go negative)
 
 # --- Complex Expressions ---
 map (λx.mult x x) (range 5)                   # expect [0,1,4,9,16]
@@ -282,15 +282,15 @@ foldr max 0 (cons 3 (cons 7 (cons 2 (cons 9 (cons 1 nil))))) # expect 9
 foldl min 999 (cons 3 (cons 7 (cons 2 (cons 9 (cons 1 nil))))) # expect 1
 
 # --- Recursive Function Tests ---
-factRec 4                                      # expect 24
-fibRec 6                                       # expect 8
-sumUptoRec 5                                   # expect 15
+factRec 4                                     # expect 24
+fibRec 6                                      # expect 8
+sumUptoRec 5                                  # expect 15
 
 # --- Performance and Stress Tests ---
-length (range 50)                              # expect 50
-sum (range 10)                                 # expect 45
-fact 6                                         # expect 720
-fib 10                                         # expect 55
+length (range 50)                             # expect 50
+sum (range 10)                                # expect 45
+fact 6                                        # expect 720
+fib 10                                        # expect 55
 
 # --- test Y combinator ---
 factY 4                                       # expect 24
