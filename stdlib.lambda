@@ -492,5 +492,24 @@ safeInit = λl.if (isempty l) nil (reverse (tail (reverse l)))
 :infix >  5 left
 :infix >= 5 left
 
+# =============================================================================
+# RECURSIVE FUNCTIONS USING Y COMBINATOR
+# =============================================================================
 
-
+fibY       = Y (\f. \n. if (n == 0) 1 ((f (n - 1)) + (f (n - 2))))          # Fibonacci using Y combinator
+factY      = Y (\f. \n. if (n == 0) 1 (n * (f (n - 1))))                    # Factorial using Y combinator
+sumUptoY   = Y (\f. \n. if (n == 0) 0 (n + (f (n - 1))))                    # Sum of numbers up to n
+expY       = Y (\f. \b n. if (n == 0) 1 (b * (f b (n - 1))))                # Exponentiation
+rangeY     = \n. Y (\f k. if (k == n) nil (cons k (f (k + 1)))) 0           # Generate [0, 1, ..., n-1]
+countdownY = \n. Y (\f k. if (k == 0) (cons 0 nil) (cons k (f (k - 1)))) n  # Generate [n, n-1, ..., 0]
+gcdY       = Y (\f. \a b. if (b == 0) a (f b (a % b)))                      # GCD using Y combinator
+lcmY       = Y (\f. \a b. if (a == 0 || b == 0) 0 ((a * b) / (gcdY a b)))   # LCM using Y combinator
+mapY       = Y (\f. \g l. if (isnil l) nil (cons (g (head l)) (f g (tail l)))) # Map function using Y combinator
+filterY    = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (cons (head l) (f p (tail l))) (f p (tail l)))) # Filter function using Y combinator
+lengthY    = Y (\f. \l. if (isnil l) 0 (1 + (f (tail l))))                  # Length of list using Y combinator
+reverseY   = \l. Y (\f l acc. if (isnil l) acc (f (tail l) (cons (head l) acc))) l nil # Reverse list using Y combinator
+sumY       = Y (\f. \l. if (isnil l) 0 ((head l) + (f (tail l))))           # Sum of list using Y combinator
+productY   = Y (\f. \l. if (isnil l) 1 ((head l) * (f (tail l))))           # Product of list using Y combinator
+anyY       = Y (\f. \p l. if (isnil l) false (or (p (head l)) (f p (tail l)))) # Any element satisfies predicate using Y combinator
+allY       = Y (\f. \p l. if (isnil l) true (and (p (head l)) (f p (tail l)))) # All elements satisfy predicate using Y combinator
+findY      = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (head l) (f p (tail l)))) # Find element satisfying predicate using Y combinator

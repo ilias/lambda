@@ -890,7 +890,7 @@ public class Interpreter
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
     private bool _lazyEvaluation = true;
-    private bool _formatNumerals = false;
+    private bool _formatNumerals = true;
     private int _nativeArithmetic = 0;
     private bool _useNativeArithmetic = true;
 
@@ -947,7 +947,7 @@ public class Interpreter
         {
             var number = ExtractChurchNumeralValue(result.expr);
             var names = _context.Where(kv => kv.Value.StructuralEquals(result.expr))
-                .Select(kv => kv.Key).ToList(); 
+                .Select(kv => kv.Key).ToList();
 
             if (number is not null || names.Count > 0)
                 await _logger.LogAsync("Result: " +
@@ -1520,7 +1520,7 @@ public class Interpreter
           :log clear             Clear the current log file (if enabled)
           :step on|off           Toggle step-by-step evaluation logging
           :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
-          :numerals on|off       Toggle formatting of Church numerals as integers (default: off)
+          :numerals on|off       Toggle formatting of Church numerals as integers (default: on)
           :stats                 Show detailed performance and environment statistics
           :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
           :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
