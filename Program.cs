@@ -51,7 +51,7 @@ public record Expr(
     {
         if (maxDepth <= 0) return "...";
         if (visited.Contains(this)) return "<cycle>";
-        
+
         // Check for Church numeral formatting if enabled
         if (formatNumerals && churchNumeralExtractor != null)
         {
@@ -59,7 +59,7 @@ public record Expr(
             if (number.HasValue)
                 return number.Value.ToString();
         }
-        
+
         visited.Add(this);
         try
         {
@@ -67,7 +67,7 @@ public record Expr(
             {
                 ExprType.Var => VarName!,
                 ExprType.Abs => $"λ{AbsVarName}.{AbsBody?.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor) ?? "null"}",
-                ExprType.App => FormatApplicationWithOptions(maxDepth, visited, formatNumerals, churchNumeralExtractor),
+                ExprType.App => FormatApplicationWithOptions_NoParensForNumbers(maxDepth, visited, formatNumerals, churchNumeralExtractor),
                 ExprType.Thunk => ThunkValue!.IsForced ?
                     $"<forced:{ThunkValue.ForcedValue?.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor) ?? "null"}>" :
                     $"<thunk:{ThunkValue.Expression.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)}>",
@@ -80,16 +80,37 @@ public record Expr(
             visited.Remove(this);
         }
     }
-    
-    private string FormatApplicationWithOptions(int maxDepth, HashSet<Expr> visited, bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor)
-    {
-        var leftStr = AppLeft!.Type == ExprType.Abs
-            ? $"({AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)})"
-            : AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
 
-        var rightStr = AppRight!.Type is ExprType.App or ExprType.Abs
-            ? $"({AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)})"
-            : AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
+    // Like FormatApplicationWithOptions, but never puts parens around numbers
+    private string FormatApplicationWithOptions_NoParensForNumbers(int maxDepth, HashSet<Expr> visited, bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor)
+    {
+        string leftStr;
+        if (AppLeft!.Type == ExprType.Abs)
+        {
+            // Only parenthesize if not a number
+            var asNum = (formatNumerals && churchNumeralExtractor != null && churchNumeralExtractor(AppLeft) != null);
+            leftStr = asNum
+                ? AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)
+                : $"({AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)})";
+        }
+        else
+        {
+            leftStr = AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
+        }
+
+        string rightStr;
+        if (AppRight!.Type is ExprType.App or ExprType.Abs)
+        {
+            // Only parenthesize if not a number
+            var asNum = (formatNumerals && churchNumeralExtractor != null && churchNumeralExtractor(AppRight) != null);
+            rightStr = asNum
+                ? AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)
+                : $"({AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)})";
+        }
+        else
+        {
+            rightStr = AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
+        }
 
         return $"{leftStr} {rightStr}";
     }
