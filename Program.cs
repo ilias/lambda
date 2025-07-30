@@ -982,6 +982,7 @@ public class Interpreter
         int currentStep = 0;
         Expr? finalResult = null;
         const int maxIterations = 200000; // Prevent infinite loops
+        bool usedRandom = false;
 
         while (stateStack.Count > 0 && _stats.Iterations < maxIterations)
         {
@@ -989,7 +990,7 @@ public class Interpreter
             var (control, env, kont) = stateStack.Pop();
             if (_showStep)
                 _logger.Log($"Step {currentStep++}: CEK \tC: {FormatWithNumerals(control)}, K: {kont.Type}");
-            if (GetEvalCache(control, out var cachedResult))
+            if (!usedRandom && GetEvalCache(control, out var cachedResult))
             {
                 ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
                 continue;
@@ -998,9 +999,10 @@ public class Interpreter
             // Native arithmetic shortcut for Church numerals
             if (control.Type == ExprType.App)
             {
-                var nativeResult = TryNativeArithmetic(control, env);
+                var (nativeResult, isRandom) = TryNativeArithmeticWithRandomFlag(control, env);
                 if (nativeResult != null)
                 {
+                    if (isRandom) usedRandom = true;
                     ApplyContinuation(nativeResult, env, kont, stateStack, ref finalResult);
                     if (finalResult != null)
                         break;
@@ -1051,17 +1053,18 @@ public class Interpreter
         {
             // Normalization is now handled at the top-level processing loop
             // to avoid recursive loops with Force/Normalize.
-            PutEvalCache(currentStep, expr, finalResult);
+            if (!usedRandom)
+                PutEvalCache(currentStep, expr, finalResult);
             return finalResult;
         }
         throw new InvalidOperationException("CEK evaluation completed without returning a value");
     }
 
-    // Native arithmetic for Church numerals
-    private Expr? TryNativeArithmetic(Expr app, Dictionary<string, Expr> env)
+    // Native arithmetic for Church numerals, returns (Expr? result, bool isRandom)
+    private (Expr? result, bool isRandom) TryNativeArithmeticWithRandomFlag(Expr app, Dictionary<string, Expr> env)
     {
         if (!_useNativeArithmetic)
-            return null;
+            return (null, false);
 
         // Unroll left-associative applications: (((op a) b) c) ...
         var args = new List<Expr>();
@@ -1072,17 +1075,17 @@ public class Interpreter
             cur = l;
         }
         if (cur is not { Type: ExprType.Var, VarName: var opName })
-            return null;
+            return (null, false);
 
         if (args.Count < 1 || args.Count > 2)
-            return null; // Only support unary or binary operations
+            return (null, false); // Only support unary or binary operations
 
         if (!TryGetChurchInt(args[0], env, out var a))
-            return null; // First argument must be a Church numeral
+            return (null, false); // First argument must be a Church numeral
         var b = 0; // Default value for second argument if avaiable
         var isArg2Number = args.Count == 2 && TryGetChurchInt(args[1], env, out b);
 
-        // Only intercept known arithmetic primitives
+        bool isRandom = false;
         int? result = (opName, args.Count, isArg2Number) switch
         {
             ("plus" or "+", 2, true) => a + b,
@@ -1100,7 +1103,7 @@ public class Interpreter
             ("double", 1, _) => a * 2,
             ("half", 1, _) => a / 2,
             ("sqrt", 1, _) => (int)Math.Sqrt(a),
-            ("random", 1, _) => new Random().Next(0, a + 1), // Random number in range [0, a]
+            ("random", 1, _) => (isRandom = true, new Random().Next(0, a + 1)).Item2, // Random number in range [0, a]
 
             ("iszero", 1, _) => a == 0 ? -1 : -2,
             ("even", 1, _) => a % 2 == 0 ? -1 : -2,
@@ -1117,16 +1120,17 @@ public class Interpreter
         };
 
         if (result is null)
-            return null; // Not a recognized operation or invalid arguments
+            return (null, false); // Not a recognized operation or invalid arguments
 
         _nativeArithmetic++;
         // Negative results are used for boolean-like values
-        return result.Value switch
+        Expr? exprResult = result.Value switch
         {
             -1 => Expr.Abs("f", Expr.Abs("x", Expr.Var("f"))), // Church true
             -2 => Expr.Abs("f", Expr.Abs("x", Expr.Var("x"))), // Church false
             _ => MakeChurchNumeral(result.Value) // Return Church numeral for non-negative results
         };
+        return (exprResult, isRandom);
     }
 
     // Try to extract a Church numeral as int, resolving variables if needed
