@@ -1564,23 +1564,23 @@ public class Interpreter
           a + b                  Infix operations (when operators are defined)
 
         -- Commands (prefix with ':') --
+          :clear                 Clear the current environment and caches
+          :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
+          :env                   Show current environment definitions
+          :exit, :quit           Exit the interpreter
+          :help                  Show this help message
+          :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
+          :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
           :load <file>           Load definitions from file (e.g., :load stdlib.lambda)
-          :save <file>           Save current environment to file (e.g., :save myenv.lambda)
           :log <file|off>        Log output to file or disable logging (e.g., :log session.log, :log off)
           :log clear             Clear the current log file (if enabled)
-          :step on|off           Toggle step-by-step evaluation logging
-          :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
-          :numerals on|off       Toggle formatting of Church numerals as integers (default: on)
-          :stats                 Show detailed performance and environment statistics
-          :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
-          :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
-          :env                   Show current environment definitions
-          :help                  Show this help message
           :memo                  Clear all memoization/caches
-          :clear                 Clear the current environment and caches
           :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
           :native show           Show all supported native arithmetic functions/operators
-          :exit, :quit           Exit the interpreter
+          :numerals on|off       Toggle formatting of Church numerals as integers (default: on)
+          :save <file>           Save current environment to file (e.g., :save myenv.lambda)
+          :stats                 Show detailed performance and environment statistics
+          :step on|off           Toggle step-by-step evaluation logging
 
         -- Interactive Features --
           - Line continuation: Use '\' at end of line to continue input
