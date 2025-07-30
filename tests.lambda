@@ -306,7 +306,7 @@ filterY (λx.eq (mod x 2) 0) (range 10)        # expect [0,2,4,6,8]
 lengthY (range 50)                            # expect 50
 reverseY (range 5)                            # expect [4,3,2,1,0]
 sumY (range 5)                                # expect 10
-productY (range 6)                            # expect 720
+productY (tail (range 7))                     # expect 720 - tail to avoid 0
 anyY (λx.gt x 3) (range 5)                    # expect true
 allY (λx.leq x 5) (range 5)                   # expect true
 findY (λx.eq x 3) (range 5)                   # expect 3

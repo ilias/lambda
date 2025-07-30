@@ -961,6 +961,7 @@ public class Interpreter
         }
 
         await _logger.LogAsync(result.str);
+        await _logger.LogAsync($" ");
     }
 
     // Common input processing for both REPL and file loading
@@ -1099,6 +1100,7 @@ public class Interpreter
             ("double", 1, _) => a * 2,
             ("half", 1, _) => a / 2,
             ("sqrt", 1, _) => (int)Math.Sqrt(a),
+            ("random", 1, _) => new Random().Next(0, a + 1), // Random number in range [0, a]
 
             ("iszero", 1, _) => a == 0 ? -1 : -2,
             ("even", 1, _) => a % 2 == 0 ? -1 : -2,
@@ -1299,8 +1301,52 @@ public class Interpreter
         };
     }
 
+    // Display all supported native arithmetic functions/operators
+    private string ShowNativeFunctions()
+    {
+        return $"""
+                Supported native arithmetic functions/operators (for Church numerals):
+
+                Binary (two arguments):
+                    plus, +         : addition
+                    minus, -        : subtraction (clamped to 0)
+                    mult, *         : multiplication
+                    div, /          : integer division (0 if divisor is 0)
+                    mod, %          : modulo (0 if divisor is 0)
+                    exp, pow, ^     : exponentiation
+                    max             : maximum
+                    min             : minimum
+                    lt, <           : less than (returns true/false)
+                    leq, <=         : less than or equal (returns true/false)
+                    eq, ==          : equal (returns true/false)
+                    geq, >=         : greater than or equal (returns true/false)
+                    gt, >           : greater than (returns true/false)
+                    neq, !=         : not equal (returns true/false)
+
+                Unary (one argument):
+                    succ, ++        : successor (n+1)
+                    pred, --        : predecessor (clamped to 0)
+                    square          : n*n
+                    double          : n*2
+                    half            : n/2
+                    sqrt            : integer square root
+                    random          : random integer in [0, n]
+                    iszero          : returns true if n==0, else false
+                    even            : returns true if n is even
+                    odd             : returns true if n is odd
+
+                Notes:
+                    - Boolean results are Church booleans (true = λf.λx.f, false = λf.λx.x)
+                    - All arguments must be Church numerals (integers)
+                    - These functions are only available when native arithmetic is enabled (:native on)
+                """;
+    }
+
     private string HandleNativeArithmetic(string arg)
     {
+        if (arg == "show")
+            return ShowNativeFunctions();
+
         _useNativeArithmetic = arg == "on";
         return "Native arithmetic " + (_useNativeArithmetic ? "enabled" : "disabled");
     }
@@ -1529,6 +1575,7 @@ public class Interpreter
           :memo                  Clear all memoization/caches
           :clear                 Clear the current environment and caches
           :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
+          :native show           Show all supported native arithmetic functions/operators
           :exit, :quit           Exit the interpreter
 
         -- Interactive Features --
