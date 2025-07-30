@@ -1589,7 +1589,42 @@ public class Interpreter
           - Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
         """;
 
-    private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
+private void PutEvalCache(int step, Expr expr, Expr result)
+{
+    if (ContainsRandom(expr))
+        return;
+    _evaluationCache.TryAdd(expr, result);
+}
+
+// Returns true if the expression tree contains a native random call
+private bool ContainsRandom(Expr expr)
+{
+    var stack = new Stack<Expr>();
+    stack.Push(expr);
+    while (stack.Count > 0)
+    {
+        var current = stack.Pop();
+        switch (current.Type)
+        {
+            case ExprType.App:
+                if (current.AppLeft != null) stack.Push(current.AppLeft);
+                if (current.AppRight != null) stack.Push(current.AppRight);
+                // Check for (random n)
+                if (current.AppLeft is { Type: ExprType.Var, VarName: var v } && (v == "random"))
+                    return true;
+                break;
+            case ExprType.Abs:
+                if (current.AbsBody != null) stack.Push(current.AbsBody);
+                break;
+            case ExprType.Thunk:
+                if (current.ThunkValue != null && current.ThunkValue.Expression != null)
+                    stack.Push(current.ThunkValue.Expression);
+                break;
+            // No need to check YCombinator or Var
+        }
+    }
+    return false;
+}
 
     private void ApplyContinuation(Expr value, Dictionary<string, Expr> env, Kontinuation kont, Stack<CEKState> stateStack, ref Expr? finalResult)
     {
