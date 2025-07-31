@@ -1635,13 +1635,14 @@ public class Interpreter
         === Lambda Interpreter Statistics ===
         
         -- Environment --
-        Definitions:              {_context.Count:#,##0}, infix operators: {_parser._infixOperators.Count:#,##0}    
-        Recursion depth limit:    {_stats.MaxRecursionDepth:#,##0}
+        Definitions:              {_context.Count:#,##0}, infix operators: {_parser._infixOperators.Count:#,##0}, native arithmetic: {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}
+        Unique expressions:       {_expressionPool.Count:#,##0}
         Unique var counter:       {_stats.VarCounter:#,##0}
         Pretty printing:          {(_prettyPrint ? "ENABLED" : "DISABLED")}
         
         -- Evaluation --
         Mode:                     {evalMode}
+        Recursion depth limit:    {_stats.MaxRecursionDepth:#,##0}, max iterations: {200_000:#,##0}
         Step-by-step:             {(_showStep ? "ENABLED" : "DISABLED")}
         Normalizations:           {_stats.NormalizeCEKCount:#,##0}
         Thunks forced:            {_stats.ThunkForceCount:#,##0}
