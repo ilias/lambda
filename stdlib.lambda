@@ -513,3 +513,5 @@ productY   = Y (\f. \l. if (isnil l) 1 ((head l) * (f (tail l))))           # Pr
 anyY       = Y (\f. \p l. if (isnil l) false (or (p (head l)) (f p (tail l)))) # Any element satisfies predicate using Y combinator
 allY       = Y (\f. \p l. if (isnil l) true (and (p (head l)) (f p (tail l)))) # All elements satisfy predicate using Y combinator
 findY      = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (head l) (f p (tail l)))) # Find element satisfying predicate using Y combinator
+
+ackermann  = \p.(p (\a.\q.(a (q a 1))) succ)                                # ackermann function

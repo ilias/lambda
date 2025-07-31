@@ -834,11 +834,35 @@ public class Parser
         while (i <= end && tokens[i].Type != TokenType.RBracket)
         {
             var elementStart = i;
-            
+            // Check for range syntax: Integer .. Integer
+            if (tokens[i].Type == TokenType.Integer && i + 2 <= end && tokens[i + 1].Type == TokenType.Dot && tokens[i + 2].Type == TokenType.Dot)
+            {
+                // Find end of range
+                int rangeEndIdx = i + 3;
+                if (rangeEndIdx <= end && tokens[rangeEndIdx].Type == TokenType.Integer)
+                {
+                    if (int.TryParse(tokens[i].Value, out int from) && int.TryParse(tokens[rangeEndIdx].Value, out int to))
+                    {
+                        if (from <= to)
+                        {
+                            for (int v = from; v <= to; v++)
+                                elements.Add(CreateChurchNumeral(v));
+                        }
+                        else
+                        {
+                            for (int v = from; v >= to; v--)
+                                elements.Add(CreateChurchNumeral(v));
+                        }
+                        i = rangeEndIdx + 1;
+                        if (i <= end && tokens[i].Type == TokenType.Comma)
+                            i++;
+                        continue;
+                    }
+                }
+            }
             // Find the end of this element (up to comma or closing bracket)
             var elementEnd = i;
             var nesting = 0;
-            
             while (elementEnd <= end)
             {
                 var token = tokens[elementEnd];
@@ -852,18 +876,14 @@ public class Parser
                 }
                 else if (nesting == 0 && token.Type == TokenType.Comma)
                     break;
-                    
                 elementEnd++;
             }
-            
             if (elementStart < elementEnd)
             {
                 var element = BuildExpressionTree(tokens, elementStart, elementEnd - 1);
                 elements.Add(element);
             }
-            
             i = elementEnd;
-            
             if (i <= end && tokens[i].Type == TokenType.Comma)
                 i++; // Skip comma
         }
@@ -1646,6 +1666,7 @@ public class Interpreter
     }
 
     private static string ShowHelp() =>
+
         """
         ================= Lambda Calculus Interpreter Help =================
 
@@ -1660,6 +1681,7 @@ public class Interpreter
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
+          [a .. b]               List range (syntactic sugar for [a, a+1, ..., b]) both asc and desc
           Y f1                   Y combinator (e.g., Y \f.\x.f (f x))
           a + b                  Infix operations (when operators are defined)
 
