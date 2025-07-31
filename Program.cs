@@ -60,6 +60,50 @@ public record Expr(
                 return number.Value.ToString();
         }
 
+        // List pretty-printing: [a, b, c] (only if formatNumerals is enabled)
+        if (formatNumerals)
+        {
+            // 1. cons/nil lists
+            if (Expr.TryExtractListElements(this, out var elements))
+            {
+                bool AllListyOrNumeral(Expr e)
+                {
+                    if (churchNumeralExtractor != null && churchNumeralExtractor(e).HasValue)
+                        return true;
+                    if (Expr.TryExtractListElements(e, out var subElems))
+                        return subElems.All(AllListyOrNumeral);
+                    if (Expr.TryExtractChurchListElements(e, out var subElems2, churchNumeralExtractor))
+                        return subElems2.All(AllListyOrNumeral);
+                    return false;
+                }
+                if (elements.All(AllListyOrNumeral))
+                {
+                    var elemsStr = string.Join(", ", elements.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)));
+                    return "[" + elemsStr + "]";
+                }
+            }
+            // 2. Church-encoded lists: λf.λz.f a1 (f a2 (... (f an z)...))
+            if (Expr.TryExtractChurchListElements(this, out var chElems, churchNumeralExtractor))
+            {
+                bool AllListyOrNumeral(Expr e)
+                {
+                    if (churchNumeralExtractor != null && churchNumeralExtractor(e).HasValue)
+                        return true;
+                    if (Expr.TryExtractListElements(e, out var subElems))
+                        return subElems.All(AllListyOrNumeral);
+                    if (Expr.TryExtractChurchListElements(e, out var subElems2, churchNumeralExtractor))
+                        return subElems2.All(AllListyOrNumeral);
+                    return false;
+                }
+                if (chElems.All(AllListyOrNumeral))
+                {
+                    var elemsStr = string.Join(", ", chElems.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)));
+                    return "[" + elemsStr + "]";
+                }
+            }
+        }
+
+        // Fallback: default pretty-printing for all other cases
         visited.Add(this);
         try
         {
@@ -80,6 +124,79 @@ public record Expr(
             visited.Remove(this);
         }
     }
+
+    // Recognize cons a b as App(App(Var("cons"), a), b) and nil as Var("nil")
+    public static bool TryExtractListElements(Expr expr, out List<Expr> elements)
+    {
+        elements = new List<Expr>();
+        Expr cur = expr;
+        while (IsCons(cur, out var head, out var tail))
+        {
+            elements.Add(head);
+            cur = tail;
+        }
+        if (IsNil(cur))
+            return true;
+        elements.Clear();
+        return false;
+    }
+
+    // Try to extract elements from a Church-encoded list λf.λz.f a1 (f a2 (... (f an z)...))
+    public static bool TryExtractChurchListElements(Expr expr, out List<Expr> elements, Func<Expr, int?>? churchNumeralExtractor)
+    {
+        elements = new List<Expr>();
+        // Must be λf.λz.body
+        if (expr.Type != ExprType.Abs || expr.AbsBody == null) return false;
+        var fvar = expr.AbsVarName;
+        var body = expr.AbsBody;
+        if (body.Type != ExprType.Abs || body.AbsBody == null) return false;
+        var zvar = body.AbsVarName;
+        var cur = body.AbsBody;
+        // Now cur should be a chain of f a (f b (... (f n z)...))
+        while (true)
+        {
+            // f a rest = App(App(Var(f), a), rest)
+            if (cur.Type == ExprType.App && cur.AppLeft is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: var fname }, AppRight: var arg } && cur.AppRight is var rest)
+            {
+                if (fname != fvar)
+                    break;
+                elements.Add(arg!);
+                cur = rest!;
+            }
+            else if (cur.Type == ExprType.Var && cur.VarName == zvar)
+            {
+                // End of list
+                return true;
+            }
+            else
+            {
+                // Not a valid Church-encoded list
+                elements.Clear();
+                return false;
+            }
+        }
+        // Should not reach here
+        elements.Clear();
+        return false;
+    }
+
+
+    // Recognize cons a b as App(App(Var("cons"), a), b)
+    private static bool IsCons(Expr expr, out Expr head, out Expr tail)
+    {
+        head = tail = null!;
+        if (expr.Type == ExprType.App && expr.AppLeft is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: "cons" }, AppRight: var h } && expr.AppRight is var t)
+        {
+            head = h!;
+            tail = t!;
+            return true;
+        }
+        return false;
+    }
+
+    // Recognize nil as Var("nil")
+    private static bool IsNil(Expr expr)
+        => expr.Type == ExprType.Var && expr.VarName == "nil";
 
     // never puts parens around numbers
     private string FormatApplicationWithOptions(int maxDepth, HashSet<Expr> visited, bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor)
@@ -899,7 +1016,7 @@ public class Interpreter
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
     private bool _lazyEvaluation = true;
-    private bool _formatNumerals = true;
+    private bool _prettyPrint = true;
     private int _nativeArithmetic = 0;
     private bool _useNativeArithmetic = true;
     private bool _usedRandom = false;
@@ -1298,7 +1415,6 @@ public class Interpreter
             ":save" => await SaveFileAsync(arg),
             ":step" => HandleStep(arg),
             ":lazy" => HandleLazy(arg),
-            ":numerals" => HandleNumerals(arg),
             ":clear" => ClearEnvironment(),
             ":stats" => ShowStats(),
             ":help" => ShowHelp(),
@@ -1308,6 +1424,7 @@ public class Interpreter
             ":depth" => HandleRecursionDepth(arg),
             ":infix" => HandleInfixCommand(arg),
             ":native" => HandleNativeArithmetic(arg),
+            ":pretty" => HandlePrettyPrint(arg),
             _ => $"Unknown command: {command}"
         };
     }
@@ -1362,10 +1479,10 @@ public class Interpreter
         return "Native arithmetic " + (_useNativeArithmetic ? "enabled" : "disabled");
     }
 
-    private string HandleNumerals(string arg)
+    private string HandlePrettyPrint(string arg)
     {
-        _formatNumerals = arg != "off";
-        return $"Numeral formatting {(_formatNumerals ? "enabled" : "disabled")}";
+        _prettyPrint = arg != "off";
+        return $"Pretty printing {(_prettyPrint ? "enabled" : "disabled")}";
     }
 
     private string HandleStep(string arg)
@@ -1416,7 +1533,7 @@ public class Interpreter
 
     // Consolidated formatting method that uses the enhanced Expr.ToString()
     private string FormatWithNumerals(Expr expr) => 
-        expr.ToString(_formatNumerals, _formatNumerals ? ExtractChurchNumeralValue : null);
+        expr.ToString(_prettyPrint, _prettyPrint ? ExtractChurchNumeralValue : null);
 
     // Force evaluation of a thunk (lazy value)
     private Expr Force(Expr expr)
@@ -1518,9 +1635,10 @@ public class Interpreter
         === Lambda Interpreter Statistics ===
         
         -- Environment --
-        Definitions:              {_context.Count:#,##0}
+        Definitions:              {_context.Count:#,##0}, infix operators: {_parser._infixOperators.Count:#,##0}    
         Recursion depth limit:    {_stats.MaxRecursionDepth:#,##0}
         Unique var counter:       {_stats.VarCounter:#,##0}
+        Pretty printing:          {(_prettyPrint ? "ENABLED" : "DISABLED")}
         
         -- Evaluation --
         Mode:                     {evalMode}
@@ -1571,22 +1689,22 @@ public class Interpreter
           a + b                  Infix operations (when operators are defined)
 
         -- Commands (prefix with ':') --
-          :load <file>           Load definitions from file (e.g., :load stdlib.lambda)
-          :save <file>           Save current environment to file (e.g., :save myenv.lambda)
-          :log <file|off>        Log output to file or disable logging (e.g., :log session.log, :log off)
-          :log clear             Clear the current log file (if enabled)
-          :step on|off           Toggle step-by-step evaluation logging
-          :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
-          :numerals on|off       Toggle formatting of Church numerals as integers (default: on)
-          :stats                 Show detailed performance and environment statistics
+          :clear                 Clear the current environment and caches
           :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
-          :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
           :env                   Show current environment definitions
           :help                  Show this help message
+          :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
+          :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
+          :load <file>           Load definitions from file (e.g., :load stdlib.lambda)
+          :log <file|off>        Log output to file or disable logging (e.g., :log session.log, :log off)
+          :log clear             Clear the current log file (if enabled)
           :memo                  Clear all memoization/caches
-          :clear                 Clear the current environment and caches
           :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
           :native show           Show all supported native arithmetic functions/operators
+          :pretty on|off         Toggle pretty printing (default: on) - numerals and lists
+          :save <file>           Save current environment to file (e.g., :save myenv.lambda)
+          :stats                 Show detailed performance and environment statistics
+          :step on|off           Toggle step-by-step evaluation logging
           :exit, :quit           Exit the interpreter
 
         -- Interactive Features --
