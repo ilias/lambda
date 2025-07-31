@@ -41,19 +41,19 @@ public record Expr(
     
     public override string ToString() => ToString(false, null);
     
-    public string ToString(bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor = null)
+    public string ToString(bool prettyPrint, Func<Expr, int?>? churchNumeralExtractor = null)
     {
-        var result = ToStringWithOptions(1000, new HashSet<Expr>(), formatNumerals, churchNumeralExtractor);
+        var result = ToStringWithOptions(1000, new HashSet<Expr>(), prettyPrint, churchNumeralExtractor);
         return result.Length <= 5000 ? result : result[..5000] + "... (output truncated)";
     }
-    
-    private string ToStringWithOptions(int maxDepth, HashSet<Expr> visited, bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor)
+
+    private string ToStringWithOptions(int maxDepth, HashSet<Expr> visited, bool prettyPrint, Func<Expr, int?>? churchNumeralExtractor)
     {
         if (maxDepth <= 0) return "...";
         if (visited.Contains(this)) return "<cycle>";
 
         // Check for Church numeral formatting if enabled
-        if (formatNumerals && churchNumeralExtractor != null)
+        if (prettyPrint && churchNumeralExtractor != null)
         {
             var number = churchNumeralExtractor(this);
             if (number.HasValue)
@@ -61,45 +61,19 @@ public record Expr(
         }
 
         // List pretty-printing: [a, b, c] (only if formatNumerals is enabled)
-        if (formatNumerals)
+        if (prettyPrint)
         {
             // 1. cons/nil lists
             if (Expr.TryExtractListElements(this, out var elements))
             {
-                bool AllListyOrNumeral(Expr e)
-                {
-                    if (churchNumeralExtractor != null && churchNumeralExtractor(e).HasValue)
-                        return true;
-                    if (Expr.TryExtractListElements(e, out var subElems))
-                        return subElems.All(AllListyOrNumeral);
-                    if (Expr.TryExtractChurchListElements(e, out var subElems2, churchNumeralExtractor))
-                        return subElems2.All(AllListyOrNumeral);
-                    return false;
-                }
-                if (elements.All(AllListyOrNumeral))
-                {
-                    var elemsStr = string.Join(", ", elements.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)));
-                    return "[" + elemsStr + "]";
-                }
+                var elemsStr = string.Join(", ", elements.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor)));
+                return "[" + elemsStr + "]";
             }
             // 2. Church-encoded lists: λf.λz.f a1 (f a2 (... (f an z)...))
             if (Expr.TryExtractChurchListElements(this, out var chElems, churchNumeralExtractor))
             {
-                bool AllListyOrNumeral(Expr e)
-                {
-                    if (churchNumeralExtractor != null && churchNumeralExtractor(e).HasValue)
-                        return true;
-                    if (Expr.TryExtractListElements(e, out var subElems))
-                        return subElems.All(AllListyOrNumeral);
-                    if (Expr.TryExtractChurchListElements(e, out var subElems2, churchNumeralExtractor))
-                        return subElems2.All(AllListyOrNumeral);
-                    return false;
-                }
-                if (chElems.All(AllListyOrNumeral))
-                {
-                    var elemsStr = string.Join(", ", chElems.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)));
-                    return "[" + elemsStr + "]";
-                }
+                var elemsStr = string.Join(", ", chElems.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor)));
+                return "[" + elemsStr + "]";
             }
         }
 
@@ -110,11 +84,11 @@ public record Expr(
             return Type switch
             {
                 ExprType.Var => VarName!,
-                ExprType.Abs => $"λ{AbsVarName}.{AbsBody?.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor) ?? "null"}",
-                ExprType.App => FormatApplicationWithOptions(maxDepth, visited, formatNumerals, churchNumeralExtractor),
+                ExprType.Abs => $"λ{AbsVarName}.{AbsBody?.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor) ?? "null"}",
+                ExprType.App => FormatApplicationWithOptions(maxDepth, visited, prettyPrint, churchNumeralExtractor),
                 ExprType.Thunk => ThunkValue!.IsForced ?
-                    $"<forced:{ThunkValue.ForcedValue?.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor) ?? "null"}>" :
-                    $"<thunk:{ThunkValue.Expression.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor)}>",
+                    $"<forced:{ThunkValue.ForcedValue?.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor) ?? "null"}>" :
+                    $"<thunk:{ThunkValue.Expression.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor)}>",
                 ExprType.YCombinator => "Y",
                 _ => "?"
             };
