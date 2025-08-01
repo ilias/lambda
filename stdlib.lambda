@@ -515,3 +515,4 @@ allY       = Y (\f. \p l. if (isnil l) true (and (p (head l)) (f p (tail l)))) #
 findY      = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (head l) (f p (tail l)))) # Find element satisfying predicate using Y combinator
 
 ackermann  = \p.(p (\a.\q.(a (q a 1))) succ)                                # ackermann function
+

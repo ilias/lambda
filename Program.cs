@@ -402,7 +402,11 @@ public class Parser
 {
     public readonly Dictionary<string, InfixOperator> _infixOperators = new(StringComparer.Ordinal);
 
-    public Parser() { }
+    public Parser()
+    {
+        // Register pipeline operator as right-associative, low precedence
+        DefineInfixOperator("|>", 1, "left");
+    }
     public string DefineInfixOperator(string symbol, int precedence, string associativity)
     {
         if (string.IsNullOrWhiteSpace(symbol))
@@ -645,10 +649,10 @@ public class Parser
                     while (operatorStack.Count > 0)
                     {
                         var topOp = operatorStack.Peek();
-                        
-                        // Pop operators with higher precedence or same precedence with left associativity
+                        // For left-associative: pop while (top > current) or (top == current && left-assoc)
+                        // For right-associative: pop while (top > current)
                         if (topOp.Precedence > currentOp.Precedence ||
-                            (topOp.Precedence == currentOp.Precedence && currentOp.Associativity == Associativity.Left))
+                            (topOp.Precedence == currentOp.Precedence && topOp.Associativity == Associativity.Left))
                         {
                             outputQueue.Enqueue(operatorStack.Pop());
                         }
@@ -666,11 +670,10 @@ public class Parser
         
         // Build expression tree from postfix notation
         var stack = new Stack<Expr>();
-        
+
         while (outputQueue.Count > 0)
         {
             var item = outputQueue.Dequeue();
-            
             if (item is Expr expr)
             {
                 stack.Push(expr);
@@ -679,20 +682,27 @@ public class Parser
             {
                 if (stack.Count < 2)
                     throw new ParseException(TreeErrorType.EmptyExprList, 0);
-                
                 var right = stack.Pop();
                 var left = stack.Pop();
-                
-                // Convert infix operation to function application: op a b -> ((op a) b)
-                var functionVar = Expr.Var(op.GetFunctionName());
-                var result = Expr.App(Expr.App(functionVar, left), right);
-                stack.Push(result);
+                if (op.Symbol == "|>")
+                {
+                    // For chaining: a |> f |> g ==> g (f a)
+                    // So, if right is another pipeline, nest accordingly
+                    // But since we process postfix, just always do Expr.App(right, left)
+                    stack.Push(Expr.App(right, left));
+                }
+                else
+                {
+                    // Convert infix operation to function application: op a b -> ((op a) b)
+                    var functionVar = Expr.Var(op.GetFunctionName());
+                    var result = Expr.App(Expr.App(functionVar, left), right);
+                    stack.Push(result);
+                }
             }
         }
-        
+        // For pipeline operator, chaining produces nested Expr.Apps as desired
         if (stack.Count != 1)
             throw new ParseException(TreeErrorType.EmptyExprList, 0);
-        
         return stack.Pop();
     }
     private Expr ParseParenthesizedExpr(List<Token> tokens, ref int i, int end)
@@ -1710,13 +1720,14 @@ public class Interpreter
           expr1 expr2            Application (e.g., succ 0)
           let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0)
           let x = a, y = b in B  Multiple assignments in let (e.g., let x = 1, y = 2 in x + y)
-          let rec f = E in B     Recursive local binding desugar to (\f. Y (\f. B)) E
+          let rec f = E in B     Recursive local binding desugar to (\f.B) (Y (\f.E))
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
           [a .. b]               List range (syntactic sugar for [a, a+1, ..., b]) both asc and desc
           Y f1                   Y combinator (e.g., Y \f.\x.f (f x))
           a + b                  Infix operations (when operators are defined)
+          a |> f |> g            Pipeline operator desugar to g (f a)
 
         -- Commands (prefix with ':') --
           :clear                 Clear the current environment and caches
