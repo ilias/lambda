@@ -336,6 +336,31 @@ let rec sumTo = \n. if (eq n 0) 0 (plus n (sumTo (pred n))) in sumTo 4   # expec
 5 |> (square |> succ)       # expect 26
 2 |> succ |> square |> pred # expect 8
 
+# --- Arrow Function Syntax Tests ---
+(x -> x + 1) 5                       # expect 6 (simple arrow function)
+(x -> succ x) 4                      # expect 5 (arrow function with stdlib)
+(x, y -> x + y) 3 2                  # expect 5 (multi-parameter arrow function)
+(x, y -> mult x y) 4 3               # expect 12 (multiplication with arrow syntax)
+(x -> x * x) 6                       # expect 36 (arrow function with multiplication)
+(x, y, z -> x + y + z) 1 2 3         # expect 6 (three parameter arrow function)
+let f = x -> x + 1 in f 10           # expect 11 (arrow function in let binding)
+let add = x, y -> x + y in add 7 8   # expect 15 (multi-param arrow in let)
+let add = x -> y -> x + y in \
+let mult2 = x -> x * 2 in \
+let div2 = x -> x / 2 in \
+    (add 5 3) |> mult2 |> div2       # expect 8 (div2 of (mult2 of (add 5 3)))
+let add = x, y -> x + y in \
+let mult2 = x -> x * 2 in \
+let div2 = x -> x / 2 in \
+    (add 5 3) |> mult2 |> div2       # expect 8 (div2 of (mult2 of (add 5 3)))
+(x -> x + 1) |> (y -> y * 2) 3       # expect 8 (arrow function with pipeline)
+(x -> y -> x + y) 5 3                # expect 8 (curried arrow functions)
+(f -> x -> f (f x)) succ 0           # expect 2 (higher-order arrow function)
+map (x -> x + 1) [1, 2, 3]           # expect [2, 3, 4] (arrow function with map)
+filter (x -> x > 2) [1, 2, 3, 4, 5]  # expect [3, 4, 5] (arrow function with filter)
+x -> x + 1 + 2                       # should parse as x -> (x + 1 + 2), not (x -> x + 1) + 2
+
+
 # --- End of Test Suite ---
 # Review the output for each test variable above.
 # To run: :load stdlib.lambda, then :load tests.lambda

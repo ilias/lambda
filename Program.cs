@@ -334,7 +334,7 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody }
 public class ParseException(TreeErrorType errorType, int position)
@@ -449,8 +449,25 @@ public class Parser
             pos++;
             if (ch == '#') break; // Comments
 
-            // Check for symbolic infix operator
+            // Check for arrow operator first
             var remainingInput = input.AsSpan(i);
+            if (remainingInput.StartsWith("->"))
+            {
+                if (currentTerm.Length > 0)
+                {
+                    var termValue = currentTerm.ToString();
+                    var tokenType = MyTokenType(termValue);
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
+                    currentTerm.Clear();
+                }
+                
+                result.Add(new Token(TokenType.Arrow, pos));
+                i += 1; // Skip the next character too
+                pos += 1;
+                continue;
+            }
+
+            // Check for symbolic infix operator
             string? bestMatch = null;
             if (!char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch))
             {
@@ -553,11 +570,23 @@ public class Parser
                 tokens[0].Value!,
                 BuildExpressionTree(tokens, 2, tokens.Count - 1));
 
+        // Let expression: let ... in ...
+        if (tokens.Count > 0 && tokens[0].Type == TokenType.Let)
+        {
+            var i = 0;
+            var letExpr = ParseLetExpr(tokens, ref i, tokens.Count - 1);
+            return Statement.ExprStatement(letExpr);
+        }
+
         // Expression statement
         return Statement.ExprStatement(BuildExpressionTree(tokens, 0, tokens.Count - 1));
     }
     private Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
+        // Handle arrow functions first (they have lowest precedence)
+        if (HasArrowFunction(tokens, start, end))
+            return ParseArrowFunction(tokens, start, end);
+            
         // Handle infix expressions using the Shunting Yard algorithm
         if (HasInfixOperators(tokens, start, end))
             return ParseInfixExpression(tokens, start, end);
@@ -578,6 +607,7 @@ public class Parser
                 TokenType.Term => Expr.Var(token.Value!),
                 TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
                 TokenType.InfixOp => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position), // Should be handled by infix parser
+                TokenType.Arrow => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position), // Should be handled by arrow parser
                 TokenType.Equals => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position),
                 _ => throw new ParseException(TreeErrorType.EmptyExprList, token.Position)
             });
@@ -598,6 +628,115 @@ public class Parser
             else if (nesting == 0 && token.Type == TokenType.InfixOp) return true;
         }
         return false;
+    }
+
+    private bool HasArrowFunction(List<Token> tokens, int start, int end)
+    {
+        var nesting = 0;
+        for (var i = start; i <= end; i++)
+        {
+            var token = tokens[i];
+            if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket) nesting++;
+            else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket) nesting--;
+            else if (nesting == 0 && token.Type == TokenType.Arrow) return true;
+            // Stop at keywords that should not be part of an arrow function
+            else if (nesting == 0 && (token.Type == TokenType.In || token.Type == TokenType.Let)) break;
+        }
+        return false;
+    }
+
+    private Expr ParseArrowFunction(List<Token> tokens, int start, int end)
+    {
+        // Find the leftmost arrow at the top level (arrows are right-associative)
+        // For right-associativity, we parse from left to right: x -> y -> z becomes x -> (y -> z)
+        var arrowPos = -1;
+        var nesting = 0;
+        
+        for (var i = start; i <= end; i++)
+        {
+            var token = tokens[i];
+            if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket) nesting++;
+            else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket) nesting--;
+            else if (nesting == 0 && token.Type == TokenType.Arrow)
+            {
+                arrowPos = i;
+                break; // Take the first (leftmost) arrow for right-associativity
+            }
+            // Stop at keywords that should not be part of an arrow function
+            else if (nesting == 0 && (token.Type == TokenType.In || token.Type == TokenType.Let)) break;
+        }
+        
+        if (arrowPos == -1 || arrowPos == start || arrowPos == end)
+            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[start].Position);
+        
+        // Find the actual end of the arrow function body
+        // It should stop at keywords like 'in' or 'let' at the top level
+        var bodyEnd = end;
+        var nesting2 = 0;
+        for (var i = arrowPos + 1; i <= end; i++)
+        {
+            var token = tokens[i];
+            if (token.Type == TokenType.LParen || token.Type == TokenType.LBracket) nesting2++;
+            else if (token.Type == TokenType.RParen || token.Type == TokenType.RBracket) nesting2--;
+            else if (nesting2 == 0 && (token.Type == TokenType.In || token.Type == TokenType.Let))
+            {
+                bodyEnd = i - 1;
+                break;
+            }
+        }
+        
+        // Check if the left side is a simple parameter list (only terms and commas)
+        var isSimpleParamList = true;
+        for (var i = start; i < arrowPos; i++)
+        {
+            var token = tokens[i];
+            if (token.Type != TokenType.Term && token.Type != TokenType.Comma)
+            {
+                isSimpleParamList = false;
+                break;
+            }
+        }
+        
+        if (isSimpleParamList)
+        {
+            // Parse parameter list (left side of arrow)
+            var paramTokens = new List<string>();
+            for (var i = start; i < arrowPos; i++)
+            {
+                var token = tokens[i];
+                if (token.Type == TokenType.Term)
+                    paramTokens.Add(token.Value!);
+                else if (token.Type != TokenType.Comma)
+                    throw new ParseException(TreeErrorType.IllegalAssignment, token.Position);
+            }
+            
+            if (paramTokens.Count == 0)
+                throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[start].Position);
+            
+            // Parse body (right side of arrow)
+            var body = BuildExpressionTree(tokens, arrowPos + 1, bodyEnd);
+            
+            // Build nested lambdas from right to left (innermost to outermost)
+            return paramTokens.AsEnumerable().Reverse()
+                .Aggregate(body, (expr, param) => Expr.Abs(param, expr));
+        }
+        else
+        {
+            // Left side is not a simple parameter list but could be a single term
+            // For cases like "x -> y -> x + y", left side is "x" (single term)
+            if (arrowPos == start + 1 && tokens[start].Type == TokenType.Term)
+            {
+                // Single parameter case: "x -> (body)"
+                var param = tokens[start].Value!;
+                var body = BuildExpressionTree(tokens, arrowPos + 1, bodyEnd);
+                return Expr.Abs(param, body);
+            }
+            else
+            {
+                // Left side is complex expression, which is not valid for arrow functions
+                throw new ParseException(TreeErrorType.IllegalAssignment, tokens[start].Position);
+            }
+        }
     }
 
     private Expr ParseInfixExpression(List<Token> tokens, int start, int end)
@@ -755,14 +894,69 @@ public class Parser
                 throw new ParseException(TreeErrorType.MissingLetEquals, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
             i++;
 
+            // Debug all tokens in the range first
+            
             // Find end of value expression (comma or 'in' at top level)
+            // Need to handle arrow functions properly
             var valueStart = i;
             var valueEnd = -1;
             var nesting = 0;
+            var letNesting = 0;
+            var hasArrowInThisExpression = false;
+            
+            // First pass: check if this value expression contains an arrow function
+            // Also track nested let expressions properly
+            for (var k = i; k <= end; k++) {
+                var token = tokens[k];
+                if (token.Type is TokenType.LParen or TokenType.LBracket) {
+                    nesting++;
+                } 
+                else if (token.Type is TokenType.RParen or TokenType.RBracket) {
+                    nesting--;
+                } 
+                else if (nesting == 0 && token.Type == TokenType.Let) {
+                    letNesting++;
+                }
+                else if (nesting == 0 && token.Type == TokenType.In) {
+                    if (letNesting > 0) {
+                        letNesting--;
+                    } else {
+                        break; // This 'in' belongs to our let - stop scanning
+                    }
+                }
+                else if (nesting == 0 && letNesting == 0 && token.Type == TokenType.Arrow) {
+                    hasArrowInThisExpression = true;
+                    // Don't break here - we still need to find the proper end of our expression
+                }
+            }
+            
+            // Second pass: find boundary with arrow function awareness and proper let nesting
+            nesting = 0;
+            letNesting = 0;
             for (var j = i; j <= end; j++) {
-                if (tokens[j].Type is TokenType.LParen or TokenType.LBracket) nesting++;
-                else if (tokens[j].Type is TokenType.RParen or TokenType.RBracket) nesting--;
-                else if (nesting == 0 && (tokens[j].Type == TokenType.Comma || tokens[j].Type == TokenType.In)) {
+                var token = tokens[j];
+                
+                if (token.Type is TokenType.LParen or TokenType.LBracket) {
+                    nesting++;
+                } 
+                else if (token.Type is TokenType.RParen or TokenType.RBracket) {
+                    nesting--;
+                } 
+                else if (nesting == 0 && token.Type == TokenType.Let) {
+                    letNesting++;
+                }
+                else if (nesting == 0 && token.Type == TokenType.In) {
+                    if (letNesting > 0) {
+                        letNesting--;
+                    } else {
+                        // This 'in' belongs to our current let - stop here
+                        valueEnd = j - 1;
+                        break;
+                    }
+                }
+                else if (nesting == 0 && letNesting == 0 && token.Type == TokenType.Comma && !hasArrowInThisExpression) {
+                    // Only treat comma as boundary if this expression doesn't contain an arrow function
+                    // and we're not inside a nested let
                     valueEnd = j - 1;
                     break;
                 }
@@ -771,6 +965,9 @@ public class Parser
                 valueEnd = end;
             if (valueStart > valueEnd)
                 throw new ParseException(TreeErrorType.MissingLetValue, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
+            
+            // Debug the value expression tokens
+            
             valueExprs.Add(BuildExpressionTree(tokens, valueStart, valueEnd));
             i = valueEnd + 1;
 
@@ -1716,10 +1913,13 @@ public class Interpreter
           x                      Variable (e.g., myVar)
           \x.expr or λx.expr     Lambda abstraction (e.g., \x.x or λf.λx.f x)
           \x y z.expr            Multi-argument lambda (sugar for \x.\y.\z.expr)
+          x -> expr              Arrow function (sugar for \x.expr, e.g., x -> x + 1)
+          x, y -> expr           Multi-parameter arrow function (sugar for \x.\y.expr)
           (expr)                 Grouping (e.g., (\x.x) y)
           expr1 expr2            Application (e.g., succ 0)
           let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0)
           let x = a, y = b in B  Multiple assignments in let (e.g., let x = 1, y = 2 in x + y)
+          let f = x -> x+1 in f  Arrow functions in let (e.g., let add = x, y -> x + y in add 3 4)
           let rec f = E in B     Recursive local binding desugar to (\f.B) (Y (\f.E))
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
