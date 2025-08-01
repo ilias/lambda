@@ -729,54 +729,86 @@ public class Parser
         if (i > end)
             throw new ParseException(TreeErrorType.MissingLetVariable, letTokenPos);
 
-        // The token after 'let' or 'let rec' is the variable name.
-        // We accept any token that has a string value, allowing keywords to be redefined.
-        var varToken = tokens[i];
-        if (varToken.Value is null)
-            throw new ParseException(TreeErrorType.MissingLetVariable, varToken.Position);
-        
-        var varName = varToken.Value;
-        i++;
+        // Parse multiple assignments: let x = 1, y = 2, ... in ...
+        var varNames = new List<string>();
+        var valueExprs = new List<Expr>();
+        while (i <= end) {
+            // Parse variable name
+            var varToken = tokens[i];
+            if (varToken.Value is null)
+                throw new ParseException(TreeErrorType.MissingLetVariable, varToken.Position);
+            var varName = varToken.Value;
+            varNames.Add(varName);
+            i++;
 
-        if (i > end || tokens[i].Type != TokenType.Equals)
-            throw new ParseException(TreeErrorType.MissingLetEquals, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
-        i++;
+            if (i > end || tokens[i].Type != TokenType.Equals)
+                throw new ParseException(TreeErrorType.MissingLetEquals, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
+            i++;
 
-        // Find 'in' token to determine the end of the value expression
-        var inTokenIndex = -1;
-        var nesting = 0;
-        for (var j = i; j <= end; j++)
-        {
-            if (tokens[j].Type is TokenType.LParen or TokenType.LBracket) nesting++;
-            else if (tokens[j].Type is TokenType.RParen or TokenType.RBracket) nesting--;
-            else if (nesting == 0 && tokens[j].Type == TokenType.In)
-            {
-                inTokenIndex = j;
+            // Find end of value expression (comma or 'in' at top level)
+            var valueStart = i;
+            var valueEnd = -1;
+            var nesting = 0;
+            for (var j = i; j <= end; j++) {
+                if (tokens[j].Type is TokenType.LParen or TokenType.LBracket) nesting++;
+                else if (tokens[j].Type is TokenType.RParen or TokenType.RBracket) nesting--;
+                else if (nesting == 0 && (tokens[j].Type == TokenType.Comma || tokens[j].Type == TokenType.In)) {
+                    valueEnd = j - 1;
+                    break;
+                }
+            }
+            if (valueEnd == -1) // No comma or in found, must be last assignment
+                valueEnd = end;
+            if (valueStart > valueEnd)
+                throw new ParseException(TreeErrorType.MissingLetValue, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
+            valueExprs.Add(BuildExpressionTree(tokens, valueStart, valueEnd));
+            i = valueEnd + 1;
+
+            // Accept comma, 'in', or next variable name (Term) as valid next tokens
+            while (i <= end && tokens[i].Type == TokenType.Comma) {
+                i++;
+            }
+            if (i <= end && tokens[i].Type == TokenType.In) {
+                i++;
                 break;
             }
+            // If next token is Term, assume it's the next variable assignment (no comma required)
+            if (i <= end && tokens[i].Type == TokenType.Term) {
+                continue;
+            }
+            // If not at end, and not comma, in, or Term, error
+            if (i <= end && tokens[i].Type != TokenType.Comma && tokens[i].Type != TokenType.In && tokens[i].Type != TokenType.Term)
+                throw new ParseException(TreeErrorType.MissingLetIn, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
         }
 
-        if (inTokenIndex == -1)
-            throw new ParseException(TreeErrorType.MissingLetIn, letTokenPos);
-        if (i >= inTokenIndex)
-            throw new ParseException(TreeErrorType.MissingLetValue, tokens[i].Position);
-
-        var valueExpr = BuildExpressionTree(tokens, i, inTokenIndex - 1);
-        i = inTokenIndex + 1; // Move past 'in'
-
         if (i > end)
-            throw new ParseException(TreeErrorType.MissingLetBody, tokens[inTokenIndex].Position);
+            throw new ParseException(TreeErrorType.MissingLetBody, tokens.ElementAtOrDefault(i - 1)?.Position ?? letTokenPos);
 
         var bodyExpr = BuildExpressionTree(tokens, i, end);
         i = end; // Consume the rest of the tokens for the parent loop
 
-        // Desugar `let var = value in body` into `(\var.body) value`
-        // For `let rec`, desugar `let rec f = E in B` into `(\f.B) (Y (\f.E))`
-        var finalValueExpr = isRecursive
-            ? Expr.App(Expr.YCombinator(), Expr.Abs(varName, valueExpr))
-            : valueExpr;
-
-        return Expr.App(Expr.Abs(varName, bodyExpr), finalValueExpr);
+        // Desugar let x = a, y = b in body as (\x y. body) a b
+        // For let rec, only allow one variable for now (could be extended)
+        // Desugar let rec x = a in body as (\x. Y (\x. body)) a
+        if (isRecursive)
+        {
+            if (varNames.Count != 1)
+                throw new ParseException(TreeErrorType.IllegalAssignment, letTokenPos); // Only one var for let rec
+            var recVar = varNames[0];
+            var recValue = valueExprs[0];
+            var finalValueExpr = Expr.App(Expr.YCombinator(), Expr.Abs(recVar, recValue));
+            return Expr.App(Expr.Abs(recVar, bodyExpr), finalValueExpr);
+        }
+        else
+        {
+            // Build nested lambdas for all variables
+            var abs = varNames.AsEnumerable().Reverse().Aggregate(bodyExpr, (body, v) => Expr.Abs(v, body));
+            // Apply all value expressions in order
+            var app = abs;
+            foreach (var val in valueExprs)
+                app = Expr.App(app, val);
+            return app;
+        }
     }
     private Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
     {
@@ -1677,7 +1709,8 @@ public class Interpreter
           (expr)                 Grouping (e.g., (\x.x) y)
           expr1 expr2            Application (e.g., succ 0)
           let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0)
-          let rec f = E in B     Recursive local binding
+          let x = a, y = b in B  Multiple assignments in let (e.g., let x = 1, y = 2 in x + y)
+          let rec f = E in B     Recursive local binding desugar to (\f. Y (\f. B)) E
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
