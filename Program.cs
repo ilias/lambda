@@ -406,6 +406,8 @@ public class Parser
     {
         // Register pipeline operator as right-associative, low precedence
         DefineInfixOperator("|>", 1, "left");
+        // Register composition operator ':' as right-associative, high precedence
+        DefineInfixOperator(":", 9, "right");
     }
     public string DefineInfixOperator(string symbol, int precedence, string associativity)
     {
@@ -743,48 +745,48 @@ public class Parser
     {
         var outputQueue = new Queue<object>(); // Contains Expr or InfixOperator
         var operatorStack = new Stack<InfixOperator>();
-        
+
         for (var i = start; i <= end; i++)
         {
             var token = tokens[i];
-            
+
             switch (token.Type)
             {
                 case TokenType.LParen:
                     var parenExpr = ParseParenthesizedExpr(tokens, ref i, end);
                     outputQueue.Enqueue(parenExpr);
                     break;
-                    
+
                 case TokenType.LBracket:
                     var listExpr = ParseListExpr(tokens, ref i, end);
                     outputQueue.Enqueue(listExpr);
                     break;
-                    
+
                 case TokenType.Lambda:
                     var lambdaExpr = ParseLambdaExpr(tokens, ref i, end);
                     outputQueue.Enqueue(lambdaExpr);
                     break;
-                    
+
                 case TokenType.Let:
                     var letExpr = ParseLetExpr(tokens, ref i, end);
                     outputQueue.Enqueue(letExpr);
                     break;
-                    
+
                 case TokenType.Y:
                     outputQueue.Enqueue(Expr.YCombinator());
                     break;
-                    
+
                 case TokenType.Term:
                     outputQueue.Enqueue(Expr.Var(token.Value!));
                     break;
-                    
+
                 case TokenType.Integer when int.TryParse(token.Value, out int value):
                     outputQueue.Enqueue(CreateChurchNumeral(value));
                     break;
-                    
+
                 case TokenType.InfixOp:
                     var currentOp = GetInfixOperator(token.Value!)!;
-                    
+
                     while (operatorStack.Count > 0)
                     {
                         var topOp = operatorStack.Peek();
@@ -797,16 +799,16 @@ public class Parser
                         }
                         else break;
                     }
-                    
+
                     operatorStack.Push(currentOp);
                     break;
             }
         }
-        
+
         // Pop remaining operators
         while (operatorStack.Count > 0)
             outputQueue.Enqueue(operatorStack.Pop());
-        
+
         // Build expression tree from postfix notation
         var stack = new Stack<Expr>();
 
@@ -823,11 +825,14 @@ public class Parser
                     throw new ParseException(TreeErrorType.EmptyExprList, 0);
                 var right = stack.Pop();
                 var left = stack.Pop();
-                if (op.Symbol == "|>")
+                if (op.Symbol == ":")
+                {
+                    // Desugar a : b as a (b)
+                    stack.Push(Expr.App(left, right));
+                }
+                else if (op.Symbol == "|>")
                 {
                     // For chaining: a |> f |> g ==> g (f a)
-                    // So, if right is another pipeline, nest accordingly
-                    // But since we process postfix, just always do Expr.App(right, left)
                     stack.Push(Expr.App(right, left));
                 }
                 else
@@ -839,7 +844,7 @@ public class Parser
                 }
             }
         }
-        // For pipeline operator, chaining produces nested Expr.Apps as desired
+        // For pipeline and composition operator, chaining produces nested Expr.Apps as desired
         if (stack.Count != 1)
             throw new ParseException(TreeErrorType.EmptyExprList, 0);
         return stack.Pop();
@@ -1927,6 +1932,7 @@ public class Interpreter
           [a .. b]               List range (syntactic sugar for [a, a+1, ..., b]) both asc and desc
           Y f1                   Y combinator (e.g., Y \f.\x.f (f x)) Y = λf.(λx.f (x x)) (λx.f (x x))
           a + b                  Infix operations (when operators are defined) desugar to plus a b
+          a : b : c              composition operator desugar to a (b c)
           a |> f |> g            Pipeline operator desugar to g (f a)
 
         -- Commands (prefix with ':') --
