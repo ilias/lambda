@@ -353,7 +353,7 @@ let add = x, y -> x + y in \
 let mult2 = x -> x * 2 in \
 let div2 = x -> x / 2 in \
     (add 5 3) |> mult2 |> div2       # expect 8 (div2 of (mult2 of (add 5 3)))
-(x -> x + 1) |> ((y -> y * 2) 3)     # expect 8 (arrow function with pipeline)
+3 |> (x -> x + 1) |> (y -> y * 2)    # expect 8 (arrow function with pipeline)
 (x -> y -> x + y) 5 3                # expect 8 (curried arrow functions)
 (f -> x -> f (f x)) succ 0           # expect 2 (higher-order arrow function)
 map (x -> x + 1) [1, 2, 3]           # expect [2, 3, 4] (arrow function with map)
