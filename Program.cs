@@ -1203,6 +1203,7 @@ public class Logger
         string s when s.StartsWith("Step") => YELLOW,     // Evaluation steps
         string s when s.StartsWith("Time:") => BLUE,      // Timing info
         string s when s.StartsWith("Result:") => MAGENTA, // Final result details
+        string s when s.StartsWith("Eval:") => MAGENTA,   // Evaluation expression
         string s when s.Contains("Loading") => CYAN,      // Loading files
         string s when s.Contains("<<") => GRAY,           // Reading file lines
         string s when s.Contains(">>") => GREEN,          // Result of reading file lines
@@ -1289,6 +1290,7 @@ public class Interpreter
                 _context[statement.VarName!] = evaluatedExpression;
                 return (null, $"-> {statement.VarName} = {FormatWithNumerals(evaluatedExpression)}");
             }
+            _logger.Log($"Eval: {FormatWithNumerals(statement.Expression)}");
             if (_showStep)
                 _logger.Log($"Processing: {statement}");
             var result = EvaluateCEK(statement.Expression);
@@ -1308,22 +1310,21 @@ public class Interpreter
     }
 
     private async Task DisplayOutput((Expr? expr, string str) result, TimeSpan elapsed)
-    {
+    {   
         if (result.expr is not null)
         {
             var number = ExtractChurchNumeralValue(result.expr);
             var names = _context.Where(kv => kv.Value.StructuralEquals(result.expr))
                 .Select(kv => kv.Key).ToList();
 
-            if (number is not null || names.Count > 0)
-                await _logger.LogAsync("Result: " +
-                    (number is not null ? $" (Church numeral: {number:#,##0})" : "") +
-                    (names.Count > 0 ? $" (named: {string.Join(", ", names)})" : ""));
+            var resultStr = 
+                (number is not null ? $"[Church numeral: {number:#,##0}] " : "") +
+                (names.Count > 0 ? $"[named: {string.Join(", ", names)}]" : "");
 
             var timeInfo = elapsed.TotalSeconds >= 1
                 ? $"{elapsed.TotalSeconds:F2} s"
                 : $"{elapsed.TotalMilliseconds:F1} ms";
-            await _logger.LogAsync($"Time: {timeInfo}, iterations: {_stats.Iterations:#,##0}");
+            await _logger.LogAsync($"Time: {timeInfo}, iterations: {_stats.Iterations:#,##0} {resultStr}");
         }
 
         await _logger.LogAsync(result.str);
