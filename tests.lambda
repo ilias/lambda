@@ -353,7 +353,7 @@ let add = x, y -> x + y in \
 let mult2 = x -> x * 2 in \
 let div2 = x -> x / 2 in \
     (add 5 3) |> mult2 |> div2       # expect 8 (div2 of (mult2 of (add 5 3)))
-(x -> x + 1) |> (y -> y * 2) 3       # expect 8 (arrow function with pipeline)
+(x -> x + 1) |> ((y -> y * 2) 3)     # expect 8 (arrow function with pipeline)
 (x -> y -> x + y) 5 3                # expect 8 (curried arrow functions)
 (f -> x -> f (f x)) succ 0           # expect 2 (higher-order arrow function)
 map (x -> x + 1) [1, 2, 3]           # expect [2, 3, 4] (arrow function with map)
@@ -361,6 +361,30 @@ filter (x -> x > 2) [1, 2, 3, 4, 5]  # expect [3, 4, 5] (arrow function with fil
 x -> x + 1 + 2                       # should parse as x -> (x + 1 + 2), not (x -> x + 1) + 2
 
 
+# --- Advanced Multi-Feature Tests ---
+foldr plus 0 (filter (λx.gt x 2) \
+                     (map (λx.mult x x) (range 5)))           # expect 29 (sum of squares > 2)
+let double = x -> x * 2 in \
+    (map double [1,2,3,4]) |> (filter (x -> x > 4))           # expect [6,8]
+let rec sumEvens = \xs. \
+    if (isnil xs) 0 \
+       (if (even (head xs)) \
+           (plus (head xs) (sumEvens (tail xs))) \
+           (sumEvens (tail xs))) in sumEvens [1,2,3,4,5,6]    # expect 12
+(maybeMap (x -> x * x) (just 7)) |> (maybe 0 (x -> x + 1))    # expect 50
+let tree = node 1 (leaf 2) (node 3 (leaf 4) (leaf 5)) in \
+    foldr plus 0 (inOrder tree)                               # expect 15
+map (x -> map (y -> x * y) [1,2,3]) [4,5]                     # expect [[4,8,12],[5,10,15]]
+let add3 = x -> y -> z -> x + y + z in \
+    (add3 1 2) |> (f -> f 3)                                  # expect 6
+find (x -> x % 2 == 0) (map (x -> x + 1) [1,3,5,7,8])         # expect 4
+foldl mult 1 (map (pair -> plus (first pair) (second pair)) \
+                  (zip [1,2,3] [4,5,6]))                      # expect 315 (5*7*9)
+let f = x -> x * 3 in \
+    (map f (filter (x -> x > 2) (range 7))) |> (foldl plus 0) # expect 54
+
+
 # --- End of Test Suite ---
 # Review the output for each test variable above.
 # To run: :load stdlib.lambda, then :load tests.lambda
+
