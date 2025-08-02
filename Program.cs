@@ -1917,16 +1917,16 @@ public class Interpreter
           x, y -> expr           Multi-parameter arrow function (sugar for \x.\y.expr)
           (expr)                 Grouping (e.g., (\x.x) y)
           expr1 expr2            Application (e.g., succ 0)
-          let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0)
-          let x = a, y = b in B  Multiple assignments in let (e.g., let x = 1, y = 2 in x + y)
-          let f = x -> x+1 in f  Arrow functions in let (e.g., let add = x, y -> x + y in add 3 4)
+          let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0) sugar for (\x.expr2) expr1
+          let x = a, y = b in B  Multiple assignments in let (e.g., let x = 1, y = 2 in x + y) sugar for (\x.\y.B) a b
+          let f = x -> x+1 in e1 Arrow functions in let (e.g., let add = x, y -> x + y in add 3 4)
           let rec f = E in B     Recursive local binding desugar to (\f.B) (Y (\f.E))
           name = expr            Assignment (e.g., id = \x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
           [a .. b]               List range (syntactic sugar for [a, a+1, ..., b]) both asc and desc
-          Y f1                   Y combinator (e.g., Y \f.\x.f (f x))
-          a + b                  Infix operations (when operators are defined)
+          Y f1                   Y combinator (e.g., Y \f.\x.f (f x)) Y = λf.(λx.f (x x)) (λx.f (x x))
+          a + b                  Infix operations (when operators are defined) desugar to plus a b
           a |> f |> g            Pipeline operator desugar to g (f a)
 
         -- Commands (prefix with ':') --
