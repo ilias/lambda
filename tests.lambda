@@ -396,6 +396,31 @@ let f = x -> x * 3 in \
     (map f (filter (x -> x > 2) (range 7))) |> (foldl plus 0) # expect 54
 
 
+# Example Church-encoded Maybe
+
+just = λx.λj.λn. j x
+nothing = λj.λn. n
+bind = λm.λf. m f nothing
+
+bind (just 3) (λx. just (x + 1))    # yields just 4
+bind nothing (λx. just (x + 1))     # yields nothing
+
+
+
+# --- Lambda Placeholder (Underscore) Examples ---
+# Each '_' in a lambda is treated as a unique, ignored parameter.
+
+# Single placeholder: ignores its argument
+(\_ . 42) 123                # expect 42
+(\_ _ . 99) 1 2              # expect 99
+(\x _ . x) 7 8               # expect 7
+(\_ y . y) 5 6               # expect 6
+(_ , _ -> 0) 10 20           # expect 0
+(x, _ -> x) 42 99            # expect 42
+let f = \_ . 123 in f 456    # expect 123
+let g = \_ _ . 1 in g 2 3    # expect 1
+let h = \_ y . y in h 0 9    # expect 9
+
 # --- End of Test Suite ---
 # Review the output for each test variable above.
 # To run: :load stdlib.lambda, then :load tests.lambda

@@ -1074,33 +1074,40 @@ public class Parser
     private Expr ParseLambdaExpr(List<Token> tokens, ref int i, int end)
     {
         var variables = new List<string>();
+        int underscoreCount = 0;
         i++; // Skip λ or \
-        
+
         // Collect all variables before the dot
         while (i <= end && tokens[i].Type == TokenType.Term)
         {
-            variables.Add(tokens[i].Value!);
+            var v = tokens[i].Value!;
+            if (v == "_")
+            {
+                underscoreCount++;
+                v = $"_placeholder{underscoreCount}";
+            }
+            variables.Add(v);
             i++;
         }
-        
+
         if (variables.Count == 0)
             throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[i - 1].Position);
-        
+
         // Check for dot separator
         if (i > end || tokens[i].Type != TokenType.Dot)
         {
             // Always require a dot after the parameter list for lambda abstractions
             throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
         }
-        
+
         i++; // Skip dot
-        
+
         if (i > end)
             throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
-        
+
         var lambdaBody = BuildExpressionTree(tokens, i, end);
         i = end;
-        
+
         // Build nested lambdas from right to left (innermost to outermost)
         return variables.AsEnumerable().Reverse()
             .Aggregate(lambdaBody, (body, var) => Expr.Abs(var, body));
@@ -1948,6 +1955,7 @@ public class Interpreter
     }
 
     private static string ShowHelp() =>
+
         """
         ================= Lambda Calculus Interpreter Help =================
 
@@ -1971,6 +1979,8 @@ public class Interpreter
           a + b                  Infix operations (when operators are defined) desugar to plus a b
           a . b . c              composition operator desugar to a (b c)
           a |> f |> g            Pipeline operator desugar to g (f a)
+          \_ . expr              Use '_' as a placeholder/ignored parameter in lambdas
+          (x, _, _ -> x) 42 9 8  Multiple '_'s are allowed; each is treated as a unique, ignorable variable
 
         -- Commands (prefix with ':') --
           :clear                 Clear the current environment and caches
@@ -1996,6 +2006,7 @@ public class Interpreter
           - Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
           - Command line arguments: Treated as files to load at startup
           - Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
+          - Internally, each '_' is renamed to a unique variable (_placeholder1, _placeholder2, ...)
         """;
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
