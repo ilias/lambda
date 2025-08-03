@@ -361,16 +361,16 @@ filter (x -> x > 2) [1, 2, 3, 4, 5]  # expect [3, 4, 5] (arrow function with fil
 x -> x + 1 + 2                       # should parse as x -> (x + 1 + 2), not (x -> x + 1) + 2
 
 
-# --- Infix Composition Operator (:) Tests ---
+# --- Infix Composition Operator (.) Tests ---
 inc = x -> x + 1
 double = x -> x * 2
 square = x -> x * x
-inc : double : 3           # expect 7   (inc (double 3) = 1 + (2*3) = 7)
-double : inc : 3           # expect 8   (double (inc 3) = 2*(3+1) = 8)
-square : inc : 4           # expect 25  (square (inc 4) = (4+1)^2 = 25)
-inc : double : square : 2  # expect 9   (inc (double (square 2)) = inc (double 4) = inc 8 = 9)
-double : inc : square : 2  # expect 10  (double (inc (square 2)) = double (inc 4) = double 5 = 10)
-inc : double : 3 |> square # expect 49  (square (inc (double 3)) = square 7 = 49)
+inc . double . 3           # expect 7   (inc (double 3) = 1 + (2*3) = 7)
+double . inc . 3           # expect 8   (double (inc 3) = 2*(3+1) = 8)
+square . inc . 4           # expect 25  (square (inc 4) = (4+1)^2 = 25)
+inc . double . square . 2  # expect 9   (inc (double (square 2)) = inc (double 4) = inc 8 = 9)
+double . inc . square . 2  # expect 10  (double (inc (square 2)) = double (inc 4) = double 5 = 10)
+inc . double . 3 |> square # expect 49  (square (inc (double 3)) = square 7 = 49)
 
 
 # --- Advanced Multi-Feature Tests ---

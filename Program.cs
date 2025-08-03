@@ -406,8 +406,8 @@ public class Parser
     {
         // Register pipeline operator as right-associative, low precedence
         DefineInfixOperator("|>", 1, "left");
-        // Register composition operator ':' as right-associative, high precedence
-        DefineInfixOperator(":", 9, "right");
+        // Register composition operator '.' as right-associative, high precedence
+        DefineInfixOperator(".", 9, "right");
     }
     public string DefineInfixOperator(string symbol, int precedence, string associativity)
     {
@@ -469,9 +469,46 @@ public class Parser
                 continue;
             }
 
-            // Check for symbolic infix operator
+            // Improved: treat the first '.' after a lambda (λ or \\) and its parameters as a lambda body separator, not as infix
             string? bestMatch = null;
-            if (!char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch))
+            bool isLambdaBodyDot = false;
+            if (ch == '.') {
+                // Look back through the tokens we've already produced
+                int t = result.Count - 1;
+                bool foundDotOrAssign = false;
+                while (t >= 0) {
+                    var tok = result[t];
+                    if (tok.Type == TokenType.Dot || tok.Type == TokenType.Equals) {
+                        foundDotOrAssign = true;
+                        break;
+                    }
+                    if (tok.Type == TokenType.Lambda) {
+                        if (!foundDotOrAssign) {
+                            isLambdaBodyDot = true;
+                        }
+                        break;
+                    }
+                    // Skip over identifiers, integers, etc.
+                    if (tok.Type == TokenType.Term || tok.Type == TokenType.Integer) {
+                        t--;
+                        continue;
+                    }
+                    // For all other tokens, stop
+                    break;
+                }
+            }
+            // Always treat the first dot after a lambda and its parameters as TokenType.Dot (lambda body separator)
+            if (ch == '.' && isLambdaBodyDot) {
+                if (currentTerm.Length > 0) {
+                    var termValue = currentTerm.ToString();
+                    var tokenType = MyTokenType(termValue);
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
+                    currentTerm.Clear();
+                }
+                result.Add(new Token(TokenType.Dot, pos));
+                continue;
+            }
+            if (!char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch) && !(ch == '.' && isLambdaBodyDot))
             {
                 foreach (var opSymbol in _infixOperators.Keys)
                 {
@@ -494,7 +531,6 @@ public class Parser
                     result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
                     currentTerm.Clear();
                 }
-                
                 result.Add(new Token(TokenType.InfixOp, pos, bestMatch));
                 i += bestMatch.Length - 1;
                 pos += bestMatch.Length - 1;
@@ -825,9 +861,9 @@ public class Parser
                     throw new ParseException(TreeErrorType.EmptyExprList, 0);
                 var right = stack.Pop();
                 var left = stack.Pop();
-                if (op.Symbol == ":")
+                if (op.Symbol == ".")
                 {
-                    // Desugar a : b as a (b)
+                    // Desugar a . b as a (b)
                     stack.Push(Expr.App(left, right));
                 }
                 else if (op.Symbol == "|>")
@@ -1040,14 +1076,7 @@ public class Parser
         // Check for dot separator
         if (i > end || tokens[i].Type != TokenType.Dot)
         {
-            // No dot found - fall back to old behavior for single variable
-            if (variables.Count == 1)
-            {
-                i--; // Go back to process the body starting from current position
-                var body = BuildExpressionTree(tokens, i, end);
-                i = end;
-                return Expr.Abs(variables[0], body);
-            }
+            // Always require a dot after the parameter list for lambda abstractions
             throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
         }
         
@@ -1911,7 +1940,6 @@ public class Interpreter
     }
 
     private static string ShowHelp() =>
-
         """
         ================= Lambda Calculus Interpreter Help =================
 
@@ -1933,7 +1961,7 @@ public class Interpreter
           [a .. b]               List range (syntactic sugar for [a, a+1, ..., b]) both asc and desc
           Y f1                   Y combinator (e.g., Y \f.\x.f (f x)) Y = λf.(λx.f (x x)) (λx.f (x x))
           a + b                  Infix operations (when operators are defined) desugar to plus a b
-          a : b : c              composition operator desugar to a (b c)
+          a . b . c              composition operator desugar to a (b c)
           a |> f |> g            Pipeline operator desugar to g (f a)
 
         -- Commands (prefix with ':') --

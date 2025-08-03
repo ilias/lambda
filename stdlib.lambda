@@ -91,7 +91,7 @@ C        = λx y z.x z y
 # =============================================================================
 
 const    = K                                # Constant function (alias for K)
-compose  = B                                # Function composition (alias for B)
+compose  = B                                # Function composition (alias for B, use . as infix)
 flip     = C                                # Flip arguments (alias for C)
 apply    = λf x.f x                         # Function application
 curry    = λf x y.f (pair x y)              # Curry a function

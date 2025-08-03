@@ -3,7 +3,7 @@ let x = e1 in e2
 let x = e1, y = e2 in e3
 let rec x = e1 in e2
 e1 |> e2 |> e3
-e1 : e2 : e3
+e1 . e2 . e3
 [a, b, c]
 [a, b .. c, d]
 x -> e1
