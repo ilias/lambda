@@ -1,0 +1,15 @@
+can we add a macro system that will be able to handle all the following existing feature
+let x = e1 in e2
+let x = e1, y = e2 in e3
+let rec x = e1 in e2
+e1 |> e2 |> e3
+e1 : e2 : e3
+[a, b, c]
+[a, b .. c, d]
+x -> e1
+x, y -> e1
+x + y
+x -> e1
+x, y -> e1
+Use a different parse class to replace the old one (keep the old one but do not use it - maybe rename it)
+With the macro system we should be able to expand the syntactic sugar
