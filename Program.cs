@@ -334,7 +334,7 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody }
 public class ParseException(TreeErrorType errorType, int position)
@@ -472,6 +472,19 @@ public class Parser
             // Improved: treat the first '.' after a lambda (λ or \\) and its parameters as a lambda body separator, not as infix
             string? bestMatch = null;
             bool isLambdaBodyDot = false;
+            // Special handling for range operator '..'
+            if (ch == '.' && i + 1 < input.Length && input[i + 1] == '.') {
+                if (currentTerm.Length > 0) {
+                    var termValue = currentTerm.ToString();
+                    var tokenType = MyTokenType(termValue);
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
+                    currentTerm.Clear();
+                }
+                result.Add(new Token(TokenType.Range, pos, ".."));
+                i++;
+                pos++;
+                continue;
+            }
             if (ch == '.') {
                 // Look back through the tokens we've already produced
                 int t = result.Count - 1;
@@ -1107,30 +1120,25 @@ public class Parser
         while (i <= end && tokens[i].Type != TokenType.RBracket)
         {
             var elementStart = i;
-            // Check for range syntax: Integer .. Integer
-            if (tokens[i].Type == TokenType.Integer && i + 2 <= end && tokens[i + 1].Type == TokenType.Dot && tokens[i + 2].Type == TokenType.Dot)
+            // Check for range syntax: Integer .. Integer (now using TokenType.Range)
+            if (tokens[i].Type == TokenType.Integer && i + 2 <= end && tokens[i + 1].Type == TokenType.Range && tokens[i + 2].Type == TokenType.Integer)
             {
-                // Find end of range
-                int rangeEndIdx = i + 3;
-                if (rangeEndIdx <= end && tokens[rangeEndIdx].Type == TokenType.Integer)
+                if (int.TryParse(tokens[i].Value, out int from) && int.TryParse(tokens[i + 2].Value, out int to))
                 {
-                    if (int.TryParse(tokens[i].Value, out int from) && int.TryParse(tokens[rangeEndIdx].Value, out int to))
+                    if (from <= to)
                     {
-                        if (from <= to)
-                        {
-                            for (int v = from; v <= to; v++)
-                                elements.Add(CreateChurchNumeral(v));
-                        }
-                        else
-                        {
-                            for (int v = from; v >= to; v--)
-                                elements.Add(CreateChurchNumeral(v));
-                        }
-                        i = rangeEndIdx + 1;
-                        if (i <= end && tokens[i].Type == TokenType.Comma)
-                            i++;
-                        continue;
+                        for (int v = from; v <= to; v++)
+                            elements.Add(CreateChurchNumeral(v));
                     }
+                    else
+                    {
+                        for (int v = from; v >= to; v--)
+                            elements.Add(CreateChurchNumeral(v));
+                    }
+                    i += 3;
+                    if (i <= end && tokens[i].Type == TokenType.Comma)
+                        i++;
+                    continue;
                 }
             }
             // Find the end of this element (up to comma or closing bracket)
