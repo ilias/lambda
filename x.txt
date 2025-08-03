@@ -11,5 +11,6 @@ x, y -> e1
 x + y
 x -> e1
 x, y -> e1
-Use a different parse class to replace the old one (keep the old one but do not use it - maybe rename it)
-With the macro system we should be able to expand the syntactic sugar
+Use a different parse class to replace the old one. 
+With the macro system we should be able to not only have the current feature available
+but also expand the syntactic sugar and make more robust.
