@@ -7,9 +7,9 @@ public class Thunk(Expr expr, Dictionary<string, Expr> env)
 {
     public Expr Expression { get; } = expr;
     public Dictionary<string, Expr> Environment { get; } = env;
-    public bool IsForced { get; private set; } = false;
-    public bool IsBeingForced { get; private set; } = false;
-    public Expr? ForcedValue { get; private set; } = null;
+    public bool IsForced { get; private set; }
+    public bool IsBeingForced { get; private set; }
+    public Expr? ForcedValue { get; private set; }
 
     public void Force(Expr value)
     {
@@ -18,10 +18,7 @@ public class Thunk(Expr expr, Dictionary<string, Expr> env)
         IsBeingForced = false;
     }
 
-    public void BeginForce()
-    {
-        IsBeingForced = true;
-    }
+    public void BeginForce() => IsBeingForced = true;
 }
 
 public record Expr(
@@ -43,7 +40,7 @@ public record Expr(
     
     public string ToString(bool prettyPrint, Func<Expr, int?>? churchNumeralExtractor = null)
     {
-        var result = ToStringWithOptions(1000, new HashSet<Expr>(), prettyPrint, churchNumeralExtractor);
+        var result = ToStringWithOptions(1000, [], prettyPrint, churchNumeralExtractor);
         return result.Length <= 5000 ? result : result[..5000] + "... (output truncated)";
     }
 
@@ -102,8 +99,8 @@ public record Expr(
     // Recognize cons a b as App(App(Var("cons"), a), b) and nil as Var("nil")
     public static bool TryExtractListElements(Expr expr, out List<Expr> elements)
     {
-        elements = new List<Expr>();
-        Expr cur = expr;
+        elements = [];
+        var cur = expr;
         while (IsCons(cur, out var head, out var tail))
         {
             elements.Add(head);
@@ -118,18 +115,15 @@ public record Expr(
     // Try to extract elements from a Church-encoded list λf.λz.f a1 (f a2 (... (f an z)...))
     public static bool TryExtractChurchListElements(Expr expr, out List<Expr> elements, Func<Expr, int?>? churchNumeralExtractor)
     {
-        elements = new List<Expr>();
-        // Must be λf.λz.body
+        elements = [];
         if (expr.Type != ExprType.Abs || expr.AbsBody == null) return false;
         var fvar = expr.AbsVarName;
         var body = expr.AbsBody;
         if (body.Type != ExprType.Abs || body.AbsBody == null) return false;
         var zvar = body.AbsVarName;
         var cur = body.AbsBody;
-        // Now cur should be a chain of f a (f b (... (f n z)...))
         while (true)
         {
-            // f a rest = App(App(Var(f), a), rest)
             if (cur.Type == ExprType.App && cur.AppLeft is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: var fname }, AppRight: var arg } && cur.AppRight is var rest)
             {
                 if (fname != fvar)
@@ -139,17 +133,14 @@ public record Expr(
             }
             else if (cur.Type == ExprType.Var && cur.VarName == zvar)
             {
-                // End of list
                 return true;
             }
             else
             {
-                // Not a valid Church-encoded list
                 elements.Clear();
                 return false;
             }
         }
-        // Should not reach here
         elements.Clear();
         return false;
     }
@@ -172,22 +163,19 @@ public record Expr(
     private static bool IsNil(Expr expr)
         => expr.Type == ExprType.Var && expr.VarName == "nil";
 
-    // never puts parens around numbers
     private string FormatApplicationWithOptions(int maxDepth, HashSet<Expr> visited, bool formatNumerals, Func<Expr, int?>? churchNumeralExtractor)
     {
-        // Handle formatting of the left part of the application
-        bool isLeftANumber = formatNumerals && churchNumeralExtractor != null && churchNumeralExtractor(AppLeft!) != null;
-        bool needsParens = AppLeft!.Type == ExprType.Abs && !isLeftANumber;
+        var isLeftANumber = formatNumerals && churchNumeralExtractor != null && churchNumeralExtractor(AppLeft!) != null;
+        var needsParens = AppLeft!.Type == ExprType.Abs && !isLeftANumber;
         
-        string leftStr = AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
+        var leftStr = AppLeft.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
         if (needsParens)
             leftStr = $"({leftStr})";
 
-        // Format the right part of the application
-        bool isRightANumber = formatNumerals && churchNumeralExtractor != null && churchNumeralExtractor(AppRight!) != null;
-        bool needsParens2 = AppRight!.Type is ExprType.App or ExprType.Abs && !isRightANumber;
+        var isRightANumber = formatNumerals && churchNumeralExtractor != null && churchNumeralExtractor(AppRight!) != null;
+        var needsParens2 = AppRight!.Type is ExprType.App or ExprType.Abs && !isRightANumber;
         
-        string rightStr = AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
+        var rightStr = AppRight.ToStringWithOptions(maxDepth - 1, visited, formatNumerals, churchNumeralExtractor);
         if (needsParens2)
             rightStr = $"({rightStr})";
 
@@ -207,22 +195,31 @@ public record Expr(
             if (ReferenceEquals(left, right)) continue;
             switch (left.Type)
             {
-                case ExprType.Var when left.VarName != right.VarName: return false;
-                case ExprType.Var: break;
-                case ExprType.Abs when left.AbsVarName != right.AbsVarName: return false;
-                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: continue;
-                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null: return false;
+                case ExprType.Var when left.VarName != right.VarName: 
+                    return false;
+                case ExprType.Var: 
+                    break;
+                case ExprType.Abs when left.AbsVarName != right.AbsVarName: 
+                    return false;
+                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: 
+                    continue;
+                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null: 
+                    return false;
                 case ExprType.Abs:
                     stack.Push((left.AbsBody!, right.AbsBody!));
                     break;
-                case ExprType.App when AreApplicationsEmpty(left, right): continue;
-                case ExprType.App when HasMissingApplicationParts(left, right): return false;
+                case ExprType.App when AreApplicationsEmpty(left, right): 
+                    continue;
+                case ExprType.App when HasMissingApplicationParts(left, right): 
+                    return false;
                 case ExprType.App:
                     stack.Push((left.AppRight!, right.AppRight!));
                     stack.Push((left.AppLeft!, right.AppLeft!));
                     break;
-                case ExprType.Thunk when left.ThunkValue is null && right.ThunkValue is null: continue;
-                case ExprType.Thunk when left.ThunkValue is null || right.ThunkValue is null: return false;
+                case ExprType.Thunk when left.ThunkValue is null && right.ThunkValue is null: 
+                    continue;
+                case ExprType.Thunk when left.ThunkValue is null || right.ThunkValue is null: 
+                    return false;
                 case ExprType.Thunk:
                     if (left.ThunkValue!.IsForced && right.ThunkValue!.IsForced)
                         stack.Push((left.ThunkValue.ForcedValue!, right.ThunkValue.ForcedValue!));
@@ -232,8 +229,9 @@ public record Expr(
                         return false;
                     break;
                 case ExprType.YCombinator:
-                    break; // Y combinators are always equal to other Y combinators
-                default: return false;
+                    break;
+                default: 
+                    return false;
             }
         }
         return true;
@@ -241,6 +239,7 @@ public record Expr(
     private static bool AreApplicationsEmpty(Expr left, Expr right) =>
         left.AppLeft is null && left.AppRight is null &&
         right.AppLeft is null && right.AppRight is null;
+        
     private static bool HasMissingApplicationParts(Expr left, Expr right) =>
         left.AppLeft is null || left.AppRight is null ||
         right.AppLeft is null || right.AppRight is null;
@@ -420,7 +419,7 @@ public class Parser
         if (!Enum.TryParse<Associativity>(associativity, true, out var assoc))
             return "Error: Associativity must be 'left' or 'right'";
         
-        _infixOperators[symbol] = new InfixOperator(symbol, precedence, assoc);
+        _infixOperators[symbol] = new(symbol, precedence, assoc);
         return $"Infix operator '{symbol}' defined with precedence {precedence} and {associativity} associativity";
     }
 
@@ -792,7 +791,7 @@ public class Parser
 
     private Expr ParseInfixExpression(List<Token> tokens, int start, int end)
     {
-        var outputQueue = new Queue<object>(); // Contains Expr or InfixOperator
+        var outputQueue = new Queue<object>();
         var operatorStack = new Stack<InfixOperator>();
 
         for (var i = start; i <= end; i++)
@@ -1193,11 +1192,10 @@ public class Parser
 
 public class Logger
 {
-    private string _logFile = string.Empty;
+    private string _logFile = "";
     private StreamWriter? _logWriter;
     private readonly SemaphoreSlim _logFileLock = new(1);
 
-    // ANSI color constants
     private const string RED = "\u001b[31m";
     private const string GREEN = "\u001b[32m";
     private const string YELLOW = "\u001b[33m";
@@ -1209,11 +1207,11 @@ public class Logger
     private const string RESET = "\u001b[0m";
 
     public static string Prompt(string txt) => $"{CYAN}{txt}{RESET} ";
-    public string LogStatus => _logFile == string.Empty ? "DISABLED" : _logFile;
+    public string LogStatus => _logFile == "" ? "DISABLED" : _logFile;
 
     public async Task<string> HandleLogCommandAsync(string arg) => arg switch
     {
-        "off" or "" => (_logFile = string.Empty, "Logging is disabled.").Item2,
+        "off" or "" => (_logFile = "", "Logging is disabled.").Item2,
         "clear" => await ClearLogFileAsync(),
         _ => (_logFile = arg, $"Logging is enabled to '{arg}'").Item2
     };
@@ -1223,7 +1221,7 @@ public class Logger
         try
         {
             await CloseLogFileAsync();
-            await File.WriteAllTextAsync(_logFile, string.Empty);
+            await File.WriteAllTextAsync(_logFile, "");
             return $"Log file '{_logFile}' cleared.";
         }
         catch (Exception ex)
@@ -1276,7 +1274,7 @@ public class Logger
     }
 
     public void Log(string message, bool toConsole = true) =>
-        LogAsync(message, toConsole).GetAwaiter().GetResult();
+        Task.Run(() => LogAsync(message, toConsole));
 }
 
 // Used for stack-based substitution in Interpreter
@@ -2600,15 +2598,13 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        Console.OutputEncoding = System.Text.Encoding.UTF8; // Ensure console output supports UTF-8
-        Console.InputEncoding = System.Text.Encoding.UTF8; // Ensure console input supports UTF-8
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        Console.InputEncoding = System.Text.Encoding.UTF8;
 
         var interpreter = new Interpreter(logger: new());
 
-        // Load standard library if available
         await interpreter.LoadFileIfExistsAsync("stdlib.lambda");
 
-        // Process any command line files before starting interactive mode
         foreach (var filePath in args)
         {
             var result = await interpreter.LoadFileIfExistsAsync(filePath);
