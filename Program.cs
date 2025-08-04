@@ -1274,7 +1274,9 @@ public class Logger
     }
 
     public void Log(string message, bool toConsole = true) =>
-        Task.Run(() => LogAsync(message, toConsole));
+        LogAsync(message, toConsole)
+            .GetAwaiter()
+            .GetResult(); // Synchronous version for compatibility with existing code
 }
 
 // Used for stack-based substitution in Interpreter
@@ -1877,7 +1879,8 @@ public class Interpreter
         foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
             _logger.Log($"  {key} = {FormatWithNumerals(value)}");
 
-        ShowInfixOperators();
+        var infixDefs = ShowInfixOperators();
+        _logger.Log(infixDefs);
         return $"# Displayed {_context.Count} definitions.";
     }
 
