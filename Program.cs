@@ -318,7 +318,7 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody }
 public class ParseException(TreeErrorType errorType, int position)
@@ -382,9 +382,47 @@ public record InfixOperator(string Symbol, int Precedence, Associativity Associa
     public string GetFunctionName() => FunctionName ?? Symbol;
 }
 
+// Macro system components
+public enum MacroPatternType : byte { Literal, Variable, List }
+
+public abstract record MacroPattern(MacroPatternType Type)
+{
+    public static MacroPattern Literal(string value) => new LiteralPattern(value);
+    public static MacroPattern Variable(string name) => new VariablePattern(name);
+    public static MacroPattern List(IList<MacroPattern> patterns) => new ListPattern(patterns);
+}
+
+public record LiteralPattern(string Value) : MacroPattern(MacroPatternType.Literal);
+public record VariablePattern(string Name) : MacroPattern(MacroPatternType.Variable);
+public record ListPattern(IList<MacroPattern> Patterns) : MacroPattern(MacroPatternType.List);
+
+public record MacroDefinition(string Name, IList<MacroPattern> Pattern, Expr Transformation)
+{
+    public override string ToString() => $":macro ({Name} {string.Join(" ", Pattern.Select(FormatPattern))}) => {Transformation}";
+    
+    private static string FormatPattern(MacroPattern pattern) => pattern switch
+    {
+        LiteralPattern lit => lit.Value,
+        VariablePattern var => $"${var.Name}",
+        ListPattern list => $"({string.Join(" ", list.Patterns.Select(FormatPattern))})",
+        _ => "?"
+    };
+}
+
+public class MacroExpansionResult
+{
+    public bool Success { get; init; }
+    public Expr? ExpandedExpr { get; init; }
+    public string? ErrorMessage { get; init; }
+    
+    public static MacroExpansionResult Successful(Expr expr) => new() { Success = true, ExpandedExpr = expr };
+    public static MacroExpansionResult Failed(string error) => new() { Success = false, ErrorMessage = error };
+}
+
 public class Parser
 {
     public readonly Dictionary<string, InfixOperator> _infixOperators = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, MacroDefinition> _macros = new(StringComparer.Ordinal);
 
     public Parser()
     {
@@ -417,6 +455,7 @@ public class Parser
         "let" => TokenType.Let,
         "in" => TokenType.In,
         "rec" => TokenType.Rec,
+        ":macro" => TokenType.Macro,
         _ when term != null && IsInfixOperator(term) => TokenType.InfixOp,
         _ => TokenType.Term
     }; 
@@ -435,8 +474,23 @@ public class Parser
             pos++;
             if (ch == '#') break; // Comments
 
-            // Check for arrow operator first
+            // Check for arrow operators first
             var remainingInput = input.AsSpan(i);
+            if (remainingInput.StartsWith("=>"))
+            {
+                if (currentTerm.Length > 0)
+                {
+                    var termValue = currentTerm.ToString();
+                    var tokenType = MyTokenType(termValue);
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
+                    currentTerm.Clear();
+                }
+                
+                result.Add(new Token(TokenType.FatArrow, pos));
+                i += 1; // Skip the next character too
+                pos += 1;
+                continue;
+            }
             if (remainingInput.StartsWith("->"))
             {
                 if (currentTerm.Length > 0)
@@ -537,6 +591,7 @@ public class Parser
                 '[' => new Token(TokenType.LBracket, pos),
                 ']' => new Token(TokenType.RBracket, pos),
                 ',' => new Token(TokenType.Comma, pos),
+                '$' => new Token(TokenType.Dollar, pos),
                 '=' when currentTerm.Length == 0 && (i + 1 == input.Length || !input[i + 1].Equals('=')) => new Token(TokenType.Equals, pos),
                 '.' => new Token(TokenType.Dot, pos),
                 char c when char.IsDigit(c) && currentTerm.Length == 0 => ParseInteger(input, ref i, ref pos),
@@ -591,11 +646,21 @@ public class Parser
         var tokens = Tokenize(input);
         if (tokens.Count == 0) return null;
 
+        // Macro definition: :macro (name pattern...) => transformation
+        if (tokens.Count > 0 && tokens[0].Type == TokenType.Macro)
+        {
+            var macro = ParseMacroDefinition(tokens);
+            _macros[macro.Name] = macro;
+            return null; // Macro definitions don't produce statements
+        }
+
         // Assignment: name = expr
         if (tokens.Count > 2 && tokens[0].Type == TokenType.Term && tokens[1].Type == TokenType.Equals)
-            return Statement.AssignmentStatement(
-                tokens[0].Value!,
-                BuildExpressionTree(tokens, 2, tokens.Count - 1));
+        {
+            var assignmentExpr = BuildExpressionTree(tokens, 2, tokens.Count - 1);
+            var expandedAssignmentExpr = ExpandMacros(assignmentExpr);
+            return Statement.AssignmentStatement(tokens[0].Value!, expandedAssignmentExpr);
+        }
 
         // Let expression: let ... in ...
         if (tokens.Count > 0 && tokens[0].Type == TokenType.Let)
@@ -605,8 +670,10 @@ public class Parser
             return Statement.ExprStatement(letExpr);
         }
 
-        // Expression statement
-        return Statement.ExprStatement(BuildExpressionTree(tokens, 0, tokens.Count - 1));
+        // Expression statement with macro expansion
+        var expr = BuildExpressionTree(tokens, 0, tokens.Count - 1);
+        var expandedExpr = ExpandMacros(expr);
+        return Statement.ExprStatement(expandedExpr);
     }
     private Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
@@ -1146,6 +1213,380 @@ public class Parser
         
         return result;
     }
+    
+    // Macro system methods
+    private MacroDefinition ParseMacroDefinition(List<Token> tokens)
+    {
+        // Expected format: :macro (name pattern...) => transformation
+        if (tokens.Count < 6 || tokens[0].Type != TokenType.Macro)
+            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[0].Position);
+        
+        if (tokens[1].Type != TokenType.LParen)
+            throw new ParseException(TreeErrorType.UnclosedParen, tokens[1].Position);
+        
+        if (tokens[2].Type != TokenType.Term)
+            throw new ParseException(TreeErrorType.MissingLetVariable, tokens[2].Position);
+        
+        var macroName = tokens[2].Value!;
+        var patterns = new List<MacroPattern>();
+        
+        // Parse pattern
+        var i = 3;
+        while (i < tokens.Count && tokens[i].Type != TokenType.RParen)
+        {
+            patterns.Add(ParseMacroPattern(tokens, ref i));
+        }
+        
+        if (i >= tokens.Count || tokens[i].Type != TokenType.RParen)
+            throw new ParseException(TreeErrorType.UnclosedParen, tokens[2].Position);
+        
+        i++; // Skip ')'
+        
+        if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
+            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
+        
+        i++; // Skip '=>'
+        
+        // Parse transformation
+        var transformation = BuildExpressionTree(tokens, i, tokens.Count - 1);
+        
+        return new MacroDefinition(macroName, patterns, transformation);
+    }
+    
+    private MacroPattern ParseMacroPattern(List<Token> tokens, ref int i)
+    {
+        var token = tokens[i];
+        
+        switch (token.Type)
+        {
+            case TokenType.Dollar:
+                i++; // Skip '$'
+                if (i >= tokens.Count || tokens[i].Type != TokenType.Term)
+                    throw new ParseException(TreeErrorType.MissingLetVariable, token.Position);
+                var varName = tokens[i].Value!;
+                i++; // Skip variable name
+                return MacroPattern.Variable(varName);
+                
+            case TokenType.LParen:
+                var nestedPatterns = new List<MacroPattern>();
+                i++; // Skip '('
+                while (i < tokens.Count && tokens[i].Type != TokenType.RParen)
+                {
+                    var nestedPattern = ParseMacroPattern(tokens, ref i);
+                    nestedPatterns.Add(nestedPattern);
+                }
+                if (i >= tokens.Count || tokens[i].Type != TokenType.RParen)
+                    throw new ParseException(TreeErrorType.UnclosedParen, token.Position);
+                i++; // Skip ')'
+                return MacroPattern.List(nestedPatterns);
+                
+            case TokenType.Term:
+                var value = token.Value!;
+                i++; // Skip term
+                return MacroPattern.Literal(value);
+                
+            default:
+                throw new ParseException(TreeErrorType.IllegalAssignment, token.Position);
+        }
+    }
+    
+    public Expr ExpandMacros(Expr expr)
+    {
+        return ExpandMacrosRecursive(expr, new Dictionary<string, Expr>(), 0);
+    }
+    
+    private Expr ExpandMacrosRecursive(Expr expr, Dictionary<string, Expr> bindings, int depth)
+    {
+        if (depth > 100) // Prevent infinite recursion
+            return expr;
+            
+        // Try to match against macro patterns
+        foreach (var (macroName, macro) in _macros)
+        {
+            var result = TryExpandMacro(expr, macro, depth);
+            if (result.Success)
+            {
+                return result.ExpandedExpr!;
+            }
+        }
+        
+        // Recursively expand subexpressions
+        return expr.Type switch
+        {
+            ExprType.Abs => Expr.Abs(expr.AbsVarName!, ExpandMacrosRecursive(expr.AbsBody!, bindings, depth)),
+            ExprType.App => Expr.App(
+                ExpandMacrosRecursive(expr.AppLeft!, bindings, depth),
+                ExpandMacrosRecursive(expr.AppRight!, bindings, depth)),
+            _ => expr
+        };
+    }
+    
+    private MacroExpansionResult TryExpandMacro(Expr expr, MacroDefinition macro, int depth)
+    {
+        var bindings = new Dictionary<string, Expr>();
+        
+        // Check if expression matches the macro pattern structure
+        if (!MatchesMacroStructure(expr, macro))
+        {
+            return MacroExpansionResult.Failed("Structure mismatch");
+        }
+        
+        // Try to match the pattern
+        if (TryMatchPattern(expr, macro.Pattern, bindings))
+        {
+            var expandedTransformation = SubstituteMacroVariables(macro.Transformation, bindings);
+            var result = ExpandMacrosRecursive(expandedTransformation, bindings, depth + 1);
+            return MacroExpansionResult.Successful(result);
+        }
+        
+        return MacroExpansionResult.Failed("Pattern match failed");
+    }
+    
+    private bool MatchesMacroStructure(Expr expr, MacroDefinition macro)
+    {
+        // Check if the expression has the right structure to match this macro
+        
+        // The patterns list contains only argument patterns, not the macro name
+        var expectedArgs = macro.Pattern.Count;
+        
+        if (expectedArgs == 0)
+        {
+            // Simple case: macro with no arguments, just check if expr is the macro name
+            var result = expr.Type == ExprType.Var && expr.VarName == macro.Name;
+            return result;
+        }
+        
+        // For macros with arguments, we need to find the macro name at the base of the application chain
+        var current = expr;
+        var actualArgs = 0;
+        
+        // Count how many applications we have by walking down the left side
+        while (current.Type == ExprType.App)
+        {
+            actualArgs++;
+            current = current.AppLeft!;
+        }
+        
+        // Check if we found the macro name at the base and have the right number of arguments
+        var result2 = current.Type == ExprType.Var && current.VarName == macro.Name && actualArgs == expectedArgs;
+        return result2;
+    }
+    
+    private bool TryMatchPattern(Expr expr, IList<MacroPattern> patterns, Dictionary<string, Expr> bindings)
+    {
+        if (patterns.Count == 0)
+            return true;
+        
+        // Since the macro name is checked separately in MatchesMacroStructure,
+        // we only need to match the argument patterns here.
+        // For (simple 42) matching macro (simple $x), we have:
+        // - expr = App(Var("simple"), Number(42))
+        // - patterns = [VariablePattern{Name="x"}]
+        
+        var current = expr;
+        var args = new List<Expr>();
+        
+        // Extract arguments from right-to-left application chain
+        for (int i = patterns.Count - 1; i >= 0; i--)
+        {
+            if (current.Type != ExprType.App)
+                return false;
+            args.Insert(0, current.AppRight!);
+            current = current.AppLeft!;
+        }
+        
+        // Match each argument against its pattern
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (!MatchSinglePattern(args[i], patterns[i], bindings))
+                return false;
+        }
+        
+        return true;
+    }
+    
+    private bool MatchSinglePattern(Expr expr, MacroPattern pattern, Dictionary<string, Expr> bindings)
+    {
+        return pattern switch
+        {
+            LiteralPattern literal => expr.Type == ExprType.Var && expr.VarName == literal.Value,
+            VariablePattern variable => (bindings[variable.Name] = expr) == expr, // Always succeeds, captures the expression
+            ListPattern list => TryMatchPattern(expr, list.Patterns, bindings),
+            _ => false
+        };
+    }
+    
+    private Expr SubstituteMacroVariables(Expr transformation, Dictionary<string, Expr> bindings)
+    {
+        return transformation.Type switch
+        {
+            ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_VAR_") =>
+                // Handle special macro variable placeholders
+                ExtractAndSubstituteMacroVariable(transformation.VarName, bindings) ?? transformation,
+            // Don't substitute regular variables - only macro variables should be substituted
+            // This fixes the bug where literal numbers like "10" in macro definitions were being treated as variables
+            ExprType.Abs => SubstituteInLambda(transformation, bindings),
+            ExprType.App => Expr.App(
+                SubstituteMacroVariables(transformation.AppLeft!, bindings),
+                SubstituteMacroVariables(transformation.AppRight!, bindings)),
+            _ => transformation
+        };
+    }
+    
+    private Expr SubstituteInLambda(Expr lambdaExpr, Dictionary<string, Expr> bindings)
+    {
+        // Process lambda parameter name - if it's a macro variable, substitute it
+        var paramName = lambdaExpr.AbsVarName!;
+        if (paramName.StartsWith("__MACRO_VAR_"))
+        {
+            var extractedVar = ExtractAndSubstituteMacroVariable(paramName, bindings);
+            if (extractedVar != null && extractedVar.Type == ExprType.Var && extractedVar.VarName != null)
+            {
+                paramName = extractedVar.VarName;
+            }
+        }
+        return Expr.Abs(paramName, SubstituteMacroVariables(lambdaExpr.AbsBody!, bindings));
+    }
+    
+    private Expr? ExtractAndSubstituteMacroVariable(string macroVarName, Dictionary<string, Expr> bindings)
+    {
+        // Extract variable name from "__MACRO_VAR_variablename" format
+        const string prefix = "__MACRO_VAR_";
+        if (macroVarName.StartsWith(prefix))
+        {
+            var varName = macroVarName.Substring(prefix.Length);
+            if (bindings.TryGetValue(varName, out var value))
+            {
+                return value;
+            }
+        }
+        return null;
+    }
+    
+    public string DefineMacro(string name, IList<MacroPattern> pattern, Expr transformation)
+    {
+        try
+        {
+            var macro = new MacroDefinition(name, pattern, transformation);
+            _macros[name] = macro;
+            return $"Macro '{name}' defined successfully";
+        }
+        catch (Exception ex)
+        {
+            return $"Error defining macro '{name}': {ex.Message}";
+        }
+    }
+    
+    public string ParseAndDefineMacro(string input)
+    {
+        try
+        {
+            var tokens = Tokenize(input);
+            var macro = ParseMacroDefinitionFromInput(tokens);
+            
+            _macros[macro.Name] = macro;
+            return $"Macro '{macro.Name}' defined successfully";
+        }
+        catch (Exception ex)
+        {
+            return $"Error defining macro: {ex.Message}";
+        }
+    }
+    
+    private MacroDefinition ParseMacroDefinitionFromInput(List<Token> tokens)
+    {
+        // Expected format: (name pattern...) => transformation
+        if (tokens.Count < 5)
+            throw new ParseException(TreeErrorType.IllegalAssignment, 0);
+        
+        if (tokens[0].Type != TokenType.LParen)
+            throw new ParseException(TreeErrorType.UnclosedParen, tokens[0].Position);
+        
+        if (tokens[1].Type != TokenType.Term)
+            throw new ParseException(TreeErrorType.MissingLetVariable, tokens[1].Position);
+        
+        var macroName = tokens[1].Value!;
+        var patterns = new List<MacroPattern>();
+        
+        // Parse pattern
+        var i = 2;
+        while (i < tokens.Count && tokens[i].Type != TokenType.RParen)
+        {
+            var pattern = ParseMacroPattern(tokens, ref i);
+            patterns.Add(pattern);
+        }
+        
+        if (i >= tokens.Count || tokens[i].Type != TokenType.RParen)
+            throw new ParseException(TreeErrorType.UnclosedParen, tokens[1].Position);
+        
+        i++; // Skip ')'
+        
+        if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
+            throw new ParseException(TreeErrorType.IllegalAssignment, i < tokens.Count ? tokens[i].Position : tokens[tokens.Count - 1].Position);
+        
+        i++; // Skip '=>'
+        
+        // Parse transformation
+        var transformation = ParseMacroTransformation(tokens, i, tokens.Count - 1);
+        
+        return new MacroDefinition(macroName, patterns, transformation);
+    }
+    
+    private Expr ParseMacroTransformation(List<Token> tokens, int startIndex, int endIndex)
+    {
+        // Simple approach: convert tokens then parse
+        // Special handling for lambda expressions with macro variables
+        var processedTokens = new List<Token>();
+        
+        for (int i = startIndex; i <= endIndex; i++)
+        {
+            if (tokens[i].Type == TokenType.Lambda && i + 2 <= endIndex && 
+                tokens[i + 1].Type == TokenType.Dollar && tokens[i + 2].Type == TokenType.Term)
+            {
+                // Handle λ$var pattern - convert to λ__MACRO_VAR_var and look for next dot
+                var varName = tokens[i + 2].Value!;
+                processedTokens.Add(tokens[i]); // Add λ
+                processedTokens.Add(new Token(TokenType.Term, tokens[i + 2].Position, $"__MACRO_VAR_{varName}"));
+                
+                // Check if the next token is a dot that should be a lambda body separator
+                if (i + 3 <= endIndex && tokens[i + 3].Type == TokenType.InfixOp && tokens[i + 3].Value == ".")
+                {
+                    processedTokens.Add(new Token(TokenType.Dot, tokens[i + 3].Position, "."));
+                    i += 3; // Skip $, Term, and InfixOp dot
+                }
+                else
+                {
+                    i += 2; // Skip $ and Term
+                }
+            }
+            else if (tokens[i].Type == TokenType.Dollar && i + 1 <= endIndex && tokens[i + 1].Type == TokenType.Term)
+            {
+                // Handle standalone $var
+                var varName = tokens[i + 1].Value!;
+                processedTokens.Add(new Token(TokenType.Term, tokens[i + 1].Position, $"__MACRO_VAR_{varName}"));
+                i++; // Skip the Term token
+            }
+            else
+            {
+                processedTokens.Add(tokens[i]);
+            }
+        }
+        
+        return BuildExpressionTree(processedTokens, 0, processedTokens.Count - 1);
+    }
+    
+    public string ListMacros()
+    {
+        if (_macros.Count == 0)
+            return "No macros defined";
+            
+        var result = new System.Text.StringBuilder("Defined macros:\n");
+        foreach (var (name, macro) in _macros)
+        {
+            result.AppendLine($"  {macro}");
+        }
+        return result.ToString().TrimEnd();
+    }
 }
 
 public class Logger
@@ -1666,6 +2107,8 @@ public class Interpreter
             ":infix" => HandleInfixCommand(arg),
             ":native" => HandleNativeArithmetic(arg),
             ":pretty" => HandlePrettyPrint(arg),
+            ":macros" => _parser.ListMacros(),
+            ":macro" => HandleMacroDefinition(arg),
             _ => $"Unknown command: {command}"
         };
     }
@@ -1770,6 +2213,22 @@ public class Interpreter
         var associativity = parts[2].ToLowerInvariant();
         
         return _parser.DefineInfixOperator(symbol, precedence, associativity);
+    }
+
+    private string HandleMacroDefinition(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg))
+            return "Usage: :macro (pattern) => transformation\nExample: :macro (when $cond $body) => (if $cond $body unit)";
+
+        try
+        {
+            // Parse the macro definition from the argument string
+            return _parser.ParseAndDefineMacro(arg);
+        }
+        catch (Exception ex)
+        {
+            return $"Error defining macro: {ex.Message}";
+        }
     }
 
     // Consolidated formatting method that uses the enhanced Expr.ToString()
@@ -1951,6 +2410,8 @@ public class Interpreter
           :load <file>           Load definitions from file (e.g., :load stdlib.lambda)
           :log <file|off>        Log output to file or disable logging (e.g., :log session.log, :log off)
           :log clear             Clear the current log file (if enabled)
+          :macro (pattern) => transformation  Define a macro (e.g., :macro (when $cond $body) => (if $cond $body unit))
+          :macros                List all defined macros
           :memo                  Clear all memoization/caches
           :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
           :native show           Show all supported native arithmetic functions/operators
@@ -1960,11 +2421,21 @@ public class Interpreter
           :step on|off           Toggle step-by-step evaluation logging
           :exit, :quit           Exit the interpreter
 
+        -- Macro System --
+          :macro (name $var1 $var2) => transformation
+                                 Define a macro with pattern matching
+          Examples:
+            :macro (when $cond $body) => (if $cond $body unit)
+            :macro (unless $cond $body) => (if $cond unit $body)
+            :macro (compose $f $g) => (\x. $f ($g x))
+            :macro (flip $f) => (\x y. $f y x)
+
         -- Interactive Features --
           - Line continuation: Use '\' at end of line to continue input
           - Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
           - Command line arguments: Treated as files to load at startup
           - Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
+          - Macro variables: Use $variable in patterns to capture expressions
           - Internally, each '_' is renamed to a unique variable (_placeholder1, _placeholder2, ...)
         """;
 

@@ -421,6 +421,208 @@ let f = \_ . 123 in f 456    # expect 123
 let g = \_ _ . 1 in g 2 3    # expect 1
 let h = \_ y . y in h 0 9    # expect 9
 
+
+
+
+# --- Macro System Tests ---
+# Testing the macro definition and expansion capabilities
+
+# Basic letbind macro test (already defined in previous tests)
+:macro (letbind $var $val $expr) => ((λ$var.$expr) $val)
+(letbind x 42 (plus x 10))                              # expect 52
+(letbind y 5 (mult y y))                                # expect 25
+(letbind z 3 (exp 2 z))                                 # expect 8
+
+# Simple replacement macro
+:macro (double $x) => (plus $x $x)
+(double 7)                                              # expect 14
+(double (succ 4))                                       # expect 10
+
+# Macro with multiple parameters
+:macro (triple $x) => (plus $x (plus $x $x))
+(triple 8)                                              # expect 24
+
+# Conditional macro (when construct)
+:macro (when $cond $expr) => (if $cond $expr I)
+(when true (succ 10))                                   # expect 11
+(when false (succ 10))                                  # expect I (identity function)
+
+# Unless macro (opposite of when)
+:macro (unless $cond $expr) => (if $cond I $expr)
+(unless false (succ 20))                               # expect 21
+(unless true (succ 20))                                # expect I (identity function)
+
+# Swap macro for pairs
+:macro (swappair $p) => (pair (second $p) (first $p))
+(swappair (pair 1 2))                                   # expect (2, 1)
+
+# List construction macro
+:macro (list3 $a $b $c) => (cons $a (cons $b (cons $c nil)))
+(list3 1 2 3)                                          # expect [1,2,3]
+
+# Math operation macros
+:macro (square $x) => (mult $x $x)
+(square 6)                                              # expect 36
+(square (plus 3 2))                                     # expect 25
+
+:macro (cube $x) => (mult $x (mult $x $x))
+(cube 3)                                                # expect 27
+
+# Comparison macro
+:macro (between $x $low $high) => (and (geq $x $low) (leq $x $high))
+(between 5 3 7)                                        # expect true
+(between 2 3 7)                                        # expect false
+(between 8 3 7)                                        # expect false
+
+# Increment/decrement macros
+:macro (inc $x) => (succ $x)
+:macro (dec $x) => (pred $x)
+(inc 10)                                                # expect 11
+(dec 10)                                                # expect 9
+
+# Nested macro usage
+(inc (square 4))                                        # expect 17 (16 + 1)
+(square (inc 4))                                        # expect 25 (5^2)
+
+# Complex expression macro
+:macro (quadratic $a $b $c $x) => (plus (mult $a (square $x)) (plus (mult $b $x) $c))
+(quadratic 2 3 1 4)                                     # expect 45 (2*16 + 3*4 + 1 = 32 + 12 + 1)
+
+# Factorial approximation using macros
+:macro (fact2 $n) => (if (iszero $n) 1 (mult $n (fact2 (pred $n))))
+# Note: This won't work due to recursive macro limitation, but tests macro parsing
+
+# List operation macros
+:macro (head2 $list) => (head $list)
+:macro (tail2 $list) => (tail $list)
+:macro (isempty2 $list) => (isnil $list)
+(head2 (cons 1 (cons 2 nil)))                          # expect 1
+(tail2 (cons 1 (cons 2 nil)))                          # expect [2]
+(isempty2 nil)                                          # expect true
+(isempty2 (cons 1 nil))                                 # expect false
+
+# Conditional assignment macro
+:macro (ifelse $cond $then $else) => (if $cond $then $else)
+(ifelse true (succ (succ (mult (succ (succ zero)) (mult 5 10)))) (mult 2 (succ (succ (mult (succ (succ zero)) (mult 5 10))))))                                  # expect 102
+(ifelse false (succ (succ (mult (succ (succ zero)) (mult 5 10)))) (mult 2 (succ (succ (mult (succ (succ zero)) (mult 5 10))))))                                 # expect 204
+
+# Function composition macro
+:macro (compose2 $f $g $x) => ($f ($g $x))
+(compose2 succ double 5)                               # expect 11 (succ (double 5) = succ 10)
+
+# Advanced letbind variations
+:macro (let2 $var $val $expr) => ((λ$var.$expr) $val)
+(let2 a 7 (plus a 3))                                  # expect 10
+
+# Multiple variable binding (simulated)
+:macro (let3 $var1 $val1 $var2 $val2 $expr) => ((λ$var1.(λ$var2.$expr) $val2) $val1)
+(let3 x 5 y 3 (plus x y))                              # expect 8
+
+# Boolean operation macros
+:macro (nand $a $b) => (not (and $a $b))
+:macro (nor $a $b) => (not (or $a $b))
+(nand true true)                                        # expect false
+(nand true false)                                       # expect true
+(nor false false)                                       # expect true
+(nor true false)                                        # expect false
+
+# Min/max macros
+:macro (min2 $a $b) => (if (leq $a $b) $a $b)
+:macro (max2 $a $b) => (if (geq $a $b) $a $b)
+(min2 5 3)                                              # expect 3
+(max2 5 3)                                              # expect 5
+
+# Absolute value macro (for Church numerals, always positive)
+:macro (abs2 $x) => $x
+(abs2 5)                                                # expect 5
+
+# Power of 2 macro
+:macro (pow2 $x) => (mult $x $x)
+(pow2 4)                                                # expect 16
+
+# List length macro using existing functions
+:macro (len $list) => (length $list)
+(len (cons 1 (cons 2 (cons 3 nil))))                   # expect 3
+
+# First and second element macros
+:macro (first2 $list) => (head $list)
+:macro (second2 $list) => (head (tail $list))
+(first2 (cons 10 (cons 20 (cons 30 nil))))             # expect 10
+(second2 (cons 10 (cons 20 (cons 30 nil))))            # expect 20
+
+# Range macro using existing function
+:macro (range2 $n) => (range $n)
+(range2 4)                                              # expect [0,1,2,3]
+
+# Map operation macro
+:macro (map2 $f $list) => (map $f $list)
+(map2 succ (cons 1 (cons 2 (cons 3 nil))))             # expect [2,3,4]
+
+# Filter operation macro
+:macro (filter2 $pred $list) => (filter $pred $list)
+(filter2 even (cons 1 (cons 2 (cons 3 (cons 4 nil))))) # expect [2,4]
+
+# Fold operation macro
+:macro (sum2 $list) => (foldr plus 0 $list)
+(sum2 (cons 1 (cons 2 (cons 3 nil))))                  # expect 6
+
+# Complex nested macro test
+:macro (process $x) => (inc (square (dec $x)))
+(process 5)                                             # expect 17 (inc (square (dec 5)) = inc (square 4) = inc 16)
+
+# Macro with conditional logic
+:macro (sign $x) => (if (iszero $x) zero (succ zero))
+(sign 0)                                                # expect 0
+(sign 5)                                                # expect 1
+
+# Testing macro with lambda expressions in parameters
+(letbind f (λx.plus x 1) (f 10))                       # expect 11
+
+# Testing macro variable scoping
+:macro (scope_test $x $y) => (letbind $x $y (plus $x (succ zero)))
+(scope_test a 15)                                       # expect 16
+
+# Multiple macro definitions with same structure
+:macro (add_one $x) => (plus $x (succ zero))
+:macro (add_two $x) => (plus $x (succ (succ zero)))
+:macro (add_three $x) => (plus $x (succ (succ (succ zero))))
+(add_one 10)                                            # expect 11
+(add_two 10)                                            # expect 12
+(add_three 10)                                          # expect 13
+
+# Macro parameter reuse
+:macro (duplicate $x) => (pair $x $x)
+(duplicate 7)                                           # expect (7, 7)
+
+# Complex expression with multiple macro calls
+(add_one (square (add_two 3)))                         # expect 26 (add_one (square 5) = add_one 25)
+
+# Testing macro expansion order
+:macro (outer $x) => (inner (plus $x (succ zero)))
+:macro (inner $y) => (mult $y (succ (succ zero)))
+(outer 4)                                               # expect 10 (inner (plus 4 1) = inner 5 = mult 5 2)
+
+# Macro with complex lambda body
+:macro (apply_twice $f $x) => ($f ($f $x))
+(apply_twice succ 0)                                    # expect 2
+(apply_twice (λx.mult x 2) 3)                          # expect 12
+
+# Edge case: macro with no parameters
+:macro (forty_two) => (mult 6 7)
+(forty_two)                                             # expect 42
+
+# Testing macro name collision avoidance
+:macro (test_macro $x) => (plus $x (mult 10 10))
+(test_macro 5)                                          # expect 105# Macro with Church numeral operations
+:macro (church_add $m $n) => (plus $m $n)
+:macro (church_mult $m $n) => (mult $m $n)
+(church_add 3 4)                                        # expect 7
+(church_mult 3 4)                                       # expect 12
+
+# Final complex test combining multiple features
+:macro (complex_calc $a $b $c) => (letbind x (plus $a $b) (letbind y (mult x $c) (square y)))
+(complex_calc 2 3 4)                                    # expect 400 (let x = 2+3=5, let y = 5*4=20, square 20 = 400)
+
 # --- End of Test Suite ---
 # Review the output for each test variable above.
 # To run: :load stdlib.lambda, then :load tests.lambda
