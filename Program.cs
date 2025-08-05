@@ -122,25 +122,21 @@ public record Expr(
         if (body.Type != ExprType.Abs || body.AbsBody == null) return false;
         var zvar = body.AbsVarName;
         var cur = body.AbsBody;
-        while (true)
+        
+        while (cur.Type == ExprType.App && 
+               cur.AppLeft?.Type == ExprType.App && 
+               cur.AppLeft.AppLeft?.Type == ExprType.Var &&
+               cur.AppLeft.AppLeft.VarName == fvar)
         {
-            if (cur.Type == ExprType.App && cur.AppLeft is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: var fname }, AppRight: var arg } && cur.AppRight is var rest)
-            {
-                if (fname != fvar)
-                    break;
-                elements.Add(arg!);
-                cur = rest!;
-            }
-            else if (cur.Type == ExprType.Var && cur.VarName == zvar)
-            {
-                return true;
-            }
-            else
-            {
-                elements.Clear();
-                return false;
-            }
+            elements.Add(cur.AppLeft.AppRight!);
+            cur = cur.AppRight!;
         }
+        
+        // If we end with the z variable, it's a valid Church-encoded list
+        if (cur.Type == ExprType.Var && cur.VarName == zvar)
+            return true;
+            
+        // Not a valid Church-encoded list
         elements.Clear();
         return false;
     }
@@ -195,31 +191,22 @@ public record Expr(
             if (ReferenceEquals(left, right)) continue;
             switch (left.Type)
             {
-                case ExprType.Var when left.VarName != right.VarName: 
-                    return false;
-                case ExprType.Var: 
-                    break;
-                case ExprType.Abs when left.AbsVarName != right.AbsVarName: 
-                    return false;
-                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: 
-                    continue;
-                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null: 
-                    return false;
+                case ExprType.Var when left.VarName != right.VarName: return false;
+                case ExprType.Var: break;
+                case ExprType.Abs when left.AbsVarName != right.AbsVarName: return false;
+                case ExprType.Abs when left.AbsBody is null && right.AbsBody is null: continue;
+                case ExprType.Abs when left.AbsBody is null || right.AbsBody is null: return false;
                 case ExprType.Abs:
                     stack.Push((left.AbsBody!, right.AbsBody!));
                     break;
-                case ExprType.App when AreApplicationsEmpty(left, right): 
-                    continue;
-                case ExprType.App when HasMissingApplicationParts(left, right): 
-                    return false;
+                case ExprType.App when AreApplicationsEmpty(left, right): continue;
+                case ExprType.App when HasMissingApplicationParts(left, right): return false;
                 case ExprType.App:
                     stack.Push((left.AppRight!, right.AppRight!));
                     stack.Push((left.AppLeft!, right.AppLeft!));
                     break;
-                case ExprType.Thunk when left.ThunkValue is null && right.ThunkValue is null: 
-                    continue;
-                case ExprType.Thunk when left.ThunkValue is null || right.ThunkValue is null: 
-                    return false;
+                case ExprType.Thunk when left.ThunkValue is null && right.ThunkValue is null: continue;
+                case ExprType.Thunk when left.ThunkValue is null || right.ThunkValue is null: return false;
                 case ExprType.Thunk:
                     if (left.ThunkValue!.IsForced && right.ThunkValue!.IsForced)
                         stack.Push((left.ThunkValue.ForcedValue!, right.ThunkValue.ForcedValue!));
@@ -228,10 +215,8 @@ public record Expr(
                     else
                         return false;
                     break;
-                case ExprType.YCombinator:
-                    break;
-                default: 
-                    return false;
+                case ExprType.YCombinator: break;
+                default: return false;
             }
         }
         return true;
@@ -490,10 +475,8 @@ public class Parser
                 bool foundDotOrAssign = false;
                 while (t >= 0) {
                     var tok = result[t];
-                    if (tok.Type == TokenType.Dot || tok.Type == TokenType.Equals) {
-                        foundDotOrAssign = true;
+                    if (tok.Type == TokenType.Dot || tok.Type == TokenType.Equals) 
                         break;
-                    }
                     if (tok.Type == TokenType.Lambda) {
                         if (!foundDotOrAssign) {
                             isLambdaBodyDot = true;
@@ -524,13 +507,9 @@ public class Parser
             {
                 foreach (var opSymbol in _infixOperators.Keys)
                 {
-                    if (remainingInput.StartsWith(opSymbol))
-                    {
-                        if (bestMatch == null || opSymbol.Length > bestMatch.Length)
-                        {
+                    if (remainingInput.StartsWith(opSymbol) &&
+                        (bestMatch is null || opSymbol.Length > bestMatch.Length))
                             bestMatch = opSymbol;
-                        }
-                    }
                 }
             }
 
@@ -572,9 +551,7 @@ public class Parser
             }
 
             if (nextToken is null && !char.IsWhiteSpace(ch))
-            {
                 currentTerm.Append(ch);
-            }
             else
             {
                 if (currentTerm.Length > 0)
@@ -961,21 +938,12 @@ public class Parser
             // Also track nested let expressions properly
             for (var k = i; k <= end; k++) {
                 var token = tokens[k];
-                if (token.Type is TokenType.LParen or TokenType.LBracket) {
-                    nesting++;
-                } 
-                else if (token.Type is TokenType.RParen or TokenType.RBracket) {
-                    nesting--;
-                } 
-                else if (nesting == 0 && token.Type == TokenType.Let) {
-                    letNesting++;
-                }
+                if (token.Type is TokenType.LParen or TokenType.LBracket) nesting++;
+                else if (token.Type is TokenType.RParen or TokenType.RBracket) nesting--;
+                else if (nesting == 0 && token.Type == TokenType.Let) letNesting++;
                 else if (nesting == 0 && token.Type == TokenType.In) {
-                    if (letNesting > 0) {
-                        letNesting--;
-                    } else {
-                        break; // This 'in' belongs to our let - stop scanning
-                    }
+                    if (letNesting > 0) letNesting--;
+                    else break; // This 'in' belongs to our let - stop scanning
                 }
                 else if (nesting == 0 && letNesting == 0 && token.Type == TokenType.Arrow) {
                     hasArrowInThisExpression = true;
@@ -988,20 +956,13 @@ public class Parser
             letNesting = 0;
             for (var j = i; j <= end; j++) {
                 var token = tokens[j];
-                
-                if (token.Type is TokenType.LParen or TokenType.LBracket) {
-                    nesting++;
-                } 
-                else if (token.Type is TokenType.RParen or TokenType.RBracket) {
-                    nesting--;
-                } 
-                else if (nesting == 0 && token.Type == TokenType.Let) {
-                    letNesting++;
-                }
+
+                if (token.Type is TokenType.LParen or TokenType.LBracket) nesting++;
+                else if (token.Type is TokenType.RParen or TokenType.RBracket) nesting--;
+                else if (nesting == 0 && token.Type == TokenType.Let) letNesting++;
                 else if (nesting == 0 && token.Type == TokenType.In) {
-                    if (letNesting > 0) {
-                        letNesting--;
-                    } else {
+                    if (letNesting > 0) letNesting--;
+                    else {
                         // This 'in' belongs to our current let - stop here
                         valueEnd = j - 1;
                         break;
@@ -1025,17 +986,14 @@ public class Parser
             i = valueEnd + 1;
 
             // Accept comma, 'in', or next variable name (Term) as valid next tokens
-            while (i <= end && tokens[i].Type == TokenType.Comma) {
+            while (i <= end && tokens[i].Type == TokenType.Comma)
                 i++;
-            }
             if (i <= end && tokens[i].Type == TokenType.In) {
                 i++;
                 break;
             }
             // If next token is Term, assume it's the next variable assignment (no comma required)
-            if (i <= end && tokens[i].Type == TokenType.Term) {
-                continue;
-            }
+            if (i <= end && tokens[i].Type == TokenType.Term) continue;
             // If not at end, and not comma, in, or Term, error
             if (i <= end && tokens[i].Type != TokenType.Comma && tokens[i].Type != TokenType.In && tokens[i].Type != TokenType.Term)
                 throw new ParseException(TreeErrorType.MissingLetIn, tokens.ElementAtOrDefault(i)?.Position ?? letTokenPos);
@@ -1244,7 +1202,7 @@ public class Logger
         string s when s.StartsWith("->") => GREEN,        // Results/Assignments
         string s when s.StartsWith("Step") => YELLOW,     // Evaluation steps
         string s when s.StartsWith("Time:") => BLUE,      // Timing info
-        string s when s.StartsWith("Result:") => MAGENTA, // Final result details
+        string s when s.StartsWith("Name:") => BLUE,      // Final result details
         string s when s.StartsWith("Eval:") => MAGENTA,   // Evaluation expression
         string s when s.Contains("Loading") => CYAN,      // Loading files
         string s when s.Contains("<<") => GRAY,           // Reading file lines
@@ -1363,12 +1321,14 @@ public class Interpreter
 
             var resultStr = 
                 (number is not null ? $"[Church numeral: {number:#,##0}] " : "") +
-                (names.Count > 0 ? $"[named: {string.Join(", ", names)}]" : "");
+                (names.Count > 0 ? $"[defined: {string.Join(", ", names)}]" : "");
+            if (resultStr.Length > 2)
+                await _logger.LogAsync($"Name: {resultStr}");
 
             var timeInfo = elapsed.TotalSeconds >= 1
                 ? $"{elapsed.TotalSeconds:F2} s"
                 : $"{elapsed.TotalMilliseconds:F1} ms";
-            await _logger.LogAsync($"Time: {timeInfo}, iterations: {_stats.Iterations:#,##0} {resultStr}");
+            await _logger.LogAsync($"Time: {timeInfo}, iterations: {_stats.Iterations:#,##0}");
         }
 
         await _logger.LogAsync(result.str);
@@ -1577,9 +1537,7 @@ public class Interpreter
     }
 
     private bool GetEvalCache(Expr expr, out Expr result)
-    {
-        return GetFromCache(_evaluationCache, expr, out result);
-    }
+        => GetFromCache(_evaluationCache, expr, out result);
 
     // Consolidated cache access pattern
     private bool GetFromCache<TKey, TValue>(Dictionary<TKey, TValue> cache, TKey key, out TValue result) 
@@ -2041,9 +1999,7 @@ public class Interpreter
 
                 var funcToApply = function;
                 if (funcToApply!.Type == ExprType.Thunk)
-                {
                     funcToApply = Force(funcToApply);
-                }
 
                 if (funcToApply.Type == ExprType.Abs)
                 {
