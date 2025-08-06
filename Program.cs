@@ -1600,17 +1600,15 @@ public class Parser
         return BuildExpressionTree(processedTokens, 0, processedTokens.Count - 1);
     }
     
-    public string ListMacros()
+    public List<string> ShowMacros()
     {
         if (_macros.Count == 0)
-            return "No macros defined";
+            return [];
             
-        var result = new System.Text.StringBuilder("Defined macros:\n");
+        var result = new List<string>();
         foreach (var (name, macro) in _macros.OrderBy(p => p.Key))
-        {
-            result.AppendLine($"  {macro}");
-        }
-        return result.ToString().TrimEnd();
+            result.Add($"  {macro}");
+        return result;
     }
 }
 
@@ -2132,7 +2130,7 @@ public class Interpreter
             ":infix" => HandleInfixCommand(arg),
             ":native" => HandleNativeArithmetic(arg),
             ":pretty" => HandlePrettyPrint(arg),
-            ":macros" => _parser.ListMacros(),
+            ":macros" => ShowMacros(),
             ":macro" => HandleMacroDefinition(arg),
             _ => $"Unknown command: {command}"
         };
@@ -2322,19 +2320,33 @@ public class Interpreter
             _logger.Log($"  {key} = {FormatWithNumerals(value)}");
 
         var infixDefs = ShowInfixOperators();
+        var macroDefs = ShowMacros();
         _logger.Log(infixDefs);
+        _logger.Log(macroDefs);
         return $"# Displayed {_context.Count} definitions.";
+    }
+    
+    private string ShowMacros()
+    {
+        var macros = _parser.ShowMacros();
+        if (macros.Count == 0)
+            return "No macros defined";
+        
+        _logger.Log("");
+        foreach (var macro in macros)
+            _logger.Log($"{macro}");
+        return $"# Displayed {_parser._macros.Count} macros.";
     }
 
     public string ShowInfixOperators()
     {
         if (_parser._infixOperators.Count == 0)
             return "No infix operators defined";
-        
+
         var operators = _parser._infixOperators.Values
             .OrderByDescending(op => op.Precedence)
             .ThenBy(op => op.Symbol);
-        
+
         _logger.Log("Defined infix operators:\n");
         foreach (var op in operators)
             _logger.Log($"  infix {op.Symbol} (precedence: {op.Precedence}, associativity: {op.Associativity.ToString().ToLower()})");
@@ -2947,7 +2959,7 @@ public class Interpreter
     }
 
     // Returns the integer value of a Church numeral (λf.λx.f^n(x)), or null if not valid.
-    private static int? ExtractChurchNumeralValue(Expr expr)
+    public static int? ExtractChurchNumeralValue(Expr expr)
     {
         // Force evaluation if it's a thunk
         if (expr.Type == ExprType.Thunk)
