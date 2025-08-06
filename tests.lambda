@@ -503,8 +503,8 @@ let h = \_ y . y in h 0 9    # expect 9
 
 # Conditional assignment macro
 :macro (ifelse $cond $then $else) => (if $cond $then $else)
-(ifelse true (succ (succ (mult (succ (succ zero)) (mult 5 10)))) (mult 2 (succ (succ (mult (succ (succ zero)) (mult 5 10))))))                                  # expect 102
-(ifelse false (succ (succ (mult (succ (succ zero)) (mult 5 10)))) (mult 2 (succ (succ (mult (succ (succ zero)) (mult 5 10))))))                                 # expect 204
+(ifelse true 100 200)                                  # expect 100
+(ifelse false 100 200)                                 # expect 200
 
 # Function composition macro
 :macro (compose2 $f $g $x) => ($f ($g $x))
@@ -571,7 +571,7 @@ let h = \_ y . y in h 0 9    # expect 9
 (process 5)                                             # expect 17 (inc (square (dec 5)) = inc (square 4) = inc 16)
 
 # Macro with conditional logic
-:macro (sign $x) => (if (iszero $x) zero (succ zero))
+:macro (sign $x) => (if (iszero $x) 0 1)
 (sign 0)                                                # expect 0
 (sign 5)                                                # expect 1
 
@@ -579,13 +579,13 @@ let h = \_ y . y in h 0 9    # expect 9
 (letbind f (λx.plus x 1) (f 10))                       # expect 11
 
 # Testing macro variable scoping
-:macro (scope_test $x $y) => (letbind $x $y (plus $x (succ zero)))
+:macro (scope_test $x $y) => (letbind $x $y (plus $x 1))
 (scope_test a 15)                                       # expect 16
 
 # Multiple macro definitions with same structure
-:macro (add_one $x) => (plus $x (succ zero))
-:macro (add_two $x) => (plus $x (succ (succ zero)))
-:macro (add_three $x) => (plus $x (succ (succ (succ zero))))
+:macro (add_one $x) => (plus $x 1)
+:macro (add_two $x) => (plus $x 2)  
+:macro (add_three $x) => (plus $x 3)
 (add_one 10)                                            # expect 11
 (add_two 10)                                            # expect 12
 (add_three 10)                                          # expect 13
@@ -598,8 +598,8 @@ let h = \_ y . y in h 0 9    # expect 9
 (add_one (square (add_two 3)))                         # expect 26 (add_one (square 5) = add_one 25)
 
 # Testing macro expansion order
-:macro (outer $x) => (inner (plus $x (succ zero)))
-:macro (inner $y) => (mult $y (succ (succ zero)))
+:macro (outer $x) => (inner (plus $x 1))
+:macro (inner $y) => (mult $y 2)
 (outer 4)                                               # expect 10 (inner (plus 4 1) = inner 5 = mult 5 2)
 
 # Macro with complex lambda body
@@ -608,12 +608,14 @@ let h = \_ y . y in h 0 9    # expect 9
 (apply_twice (λx.mult x 2) 3)                          # expect 12
 
 # Edge case: macro with no parameters
-:macro (forty_two) => (mult 6 7)
+:macro (forty_two) => 42
 (forty_two)                                             # expect 42
 
 # Testing macro name collision avoidance
-:macro (test_macro $x) => (plus $x (mult 10 10))
-(test_macro 5)                                          # expect 105# Macro with Church numeral operations
+:macro (test_macro $x) => (plus $x 100)
+(test_macro 5)                                          # expect 105
+
+# Macro with Church numeral operations
 :macro (church_add $m $n) => (plus $m $n)
 :macro (church_mult $m $n) => (mult $m $n)
 (church_add 3 4)                                        # expect 7

@@ -1423,8 +1423,10 @@ public class Parser
             ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_VAR_") =>
                 // Handle special macro variable placeholders
                 ExtractAndSubstituteMacroVariable(transformation.VarName, bindings) ?? transformation,
-            // Don't substitute regular variables - only macro variables should be substituted
-            // This fixes the bug where literal numbers like "10" in macro definitions were being treated as variables
+            ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_INT_") =>
+                // Handle special macro integer placeholders - convert to Church numeral now
+                ExtractAndConvertMacroInteger(transformation.VarName),
+            ExprType.Var when transformation.VarName != null && bindings.TryGetValue(transformation.VarName, out var value) => value,
             ExprType.Abs => SubstituteInLambda(transformation, bindings),
             ExprType.App => Expr.App(
                 SubstituteMacroVariables(transformation.AppLeft!, bindings),
@@ -1461,6 +1463,22 @@ public class Parser
             }
         }
         return null;
+    }
+    
+    private Expr ExtractAndConvertMacroInteger(string macroIntName)
+    {
+        // Extract integer value from "__MACRO_INT_123" format and convert to Church numeral
+        const string prefix = "__MACRO_INT_";
+        if (macroIntName.StartsWith(prefix))
+        {
+            var intStr = macroIntName.Substring(prefix.Length);
+            if (int.TryParse(intStr, out var intValue))
+            {
+                return CreateChurchNumeral(intValue);
+            }
+        }
+        // Fallback - shouldn't happen but return identity if parsing fails
+        return Expr.Var(macroIntName);
     }
     
     public string DefineMacro(string name, IList<MacroPattern> pattern, Expr transformation)
@@ -1534,8 +1552,9 @@ public class Parser
     
     private Expr ParseMacroTransformation(List<Token> tokens, int startIndex, int endIndex)
     {
-        // Simple approach: convert tokens then parse
-        // Special handling for lambda expressions with macro variables
+        // Create a special macro transformation expression that preserves integer literals
+        // We need to build the expression tree manually to avoid converting integers to Church numerals
+        // during macro definition parsing - they should only be converted during macro expansion
         var processedTokens = new List<Token>();
         
         for (int i = startIndex; i <= endIndex; i++)
@@ -1566,6 +1585,12 @@ public class Parser
                 processedTokens.Add(new Token(TokenType.Term, tokens[i + 1].Position, $"__MACRO_VAR_{varName}"));
                 i++; // Skip the Term token
             }
+            else if (tokens[i].Type == TokenType.Integer)
+            {
+                // Keep integer literals as terms in macro transformations to delay Church numeral conversion
+                // They will be converted when the macro is expanded and the expression is built normally
+                processedTokens.Add(new Token(TokenType.Term, tokens[i].Position, $"__MACRO_INT_{tokens[i].Value}"));
+            }
             else
             {
                 processedTokens.Add(tokens[i]);
@@ -1581,7 +1606,7 @@ public class Parser
             return "No macros defined";
             
         var result = new System.Text.StringBuilder("Defined macros:\n");
-        foreach (var (name, macro) in _macros)
+        foreach (var (name, macro) in _macros.OrderBy(p => p.Key))
         {
             result.AppendLine($"  {macro}");
         }
@@ -2427,8 +2452,8 @@ public class Interpreter
           Examples:
             :macro (when $cond $body) => (if $cond $body unit)
             :macro (unless $cond $body) => (if $cond unit $body)
-            :macro (compose $f $g) => (\x. $f ($g x))
-            :macro (flip $f) => (\x y. $f y x)
+            :macro (compose $f $g) => (\\x. $f ($g x))
+            :macro (flip $f) => (\\x y. $f y x)
 
         -- Interactive Features --
           - Line continuation: Use '\' at end of line to continue input

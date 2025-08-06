@@ -519,3 +519,237 @@ findY      = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (head l) (f p (tail 
 
 ackermann  = \p.(p (\a.\q.(a (q a 1))) succ)                                # ackermann function
 
+# =============================================================================
+# MACRO SYSTEM - USEFUL MACROS FOR LAMBDA CALCULUS PROGRAMMING
+# =============================================================================
+
+# Let binding macro - cleaner syntax for lambda application
+:macro (letbind $var $val $expr) => ((λ$var.$expr) $val)
+
+# Conditional macros
+:macro (when $cond $expr) => (if $cond $expr I)
+:macro (unless $cond $expr) => (if $cond I $expr)
+
+# Math operation macros
+:macro (square $x) => (mult $x $x)
+:macro (cube $x) => (mult $x (mult $x $x))
+:macro (inc $x) => (succ $x)
+:macro (dec $x) => (pred $x)
+
+# Boolean operation macros  
+:macro (nand $a $b) => (not (and $a $b))
+:macro (nor $a $b) => (not (or $a $b))
+
+# List operation macros
+:macro (empty? $list) => (isnil $list)
+:macro (first $list) => (head $list)
+:macro (rest $list) => (tail $list)
+
+# Function composition and application macros
+:macro (compose $f $g $x) => ($f ($g $x))
+:macro (apply_twice $f $x) => ($f ($f $x))
+:macro (apply_n $f $n $x) => (times $n $f $x)
+
+# Comparison and range macros
+:macro (between $x $low $high) => (and (geq $x $low) (leq $x $high))
+:macro (min2 $a $b) => (if (leq $a $b) $a $b)
+:macro (max2 $a $b) => (if (geq $a $b) $a $b)
+
+# =============================================================================
+# ADDITIONAL NUMERIC CONSTANTS AND OPERATIONS
+# =============================================================================
+
+# Useful numeric predicates
+isone    = λn.eq n 1
+istwo    = λn.eq n 2
+ispositive = λn.not (iszero n)
+
+# Additional math operations
+triple   = λn.plus n (plus n n)
+quadruple = λn.plus (double n) (double n)
+negate   = λn.zero                                # Church numerals can't be negative, so return zero
+factorial10 = fact 10                            # Pre-computed factorial for efficiency
+
+# =============================================================================
+# ENHANCED LIST OPERATIONS
+# =============================================================================
+
+# List construction helpers
+singleton = λx.cons x nil
+doubleton = λx y.cons x (cons y nil)
+tripleton = λx y z.cons x (cons y (cons z nil))
+
+# List predicates
+issingle = λl.and (not (isnil l)) (isnil (tail l))
+isdouble = λl.and (not (isnil l)) (and (not (isnil (tail l))) (isnil (tail (tail l))))
+
+# Advanced list operations
+second   = λl.head (tail l)                      # Get second element
+third    = λl.head (tail (tail l))               # Get third element
+butlast  = λl.reverse (tail (reverse l))         # All but last element
+
+# List searching and manipulation
+contains = elem                                   # Alias for elem
+indexOf  = elemIndex                             # Alias for elemIndex
+removeFirst = λx l.filter (λy.not (eq x y)) l    # Remove first occurrence (simplified)
+count    = λx l.length (filter (eq x) l)         # Count occurrences
+
+# =============================================================================
+# STRING/CHARACTER SIMULATION (using Church numerals as ASCII codes)
+# =============================================================================
+
+# ASCII constants
+space    = 32
+newline  = 10
+tab      = 9
+null     = 0
+
+# Character predicates (simplified)
+isspace  = λc.or (eq c space) (or (eq c tab) (eq c newline))
+isdigit  = λc.between c 48 57                    # ASCII '0' to '9'
+islower  = λc.between c 97 122                   # ASCII 'a' to 'z'  
+isupper  = λc.between c 65 90                    # ASCII 'A' to 'Z'
+isalpha  = λc.or (islower c) (isupper c)
+isalnum  = λc.or (isalpha c) (isdigit c)
+
+# Character conversions
+tolower  = λc.if (isupper c) (plus c 32) c       # Convert to lowercase
+toupper  = λc.if (islower c) (minus c 32) c      # Convert to uppercase
+
+# String operations (treating lists of numbers as strings)
+strlen   = length                                 # String length
+strcat   = append                                 # String concatenation
+strrev   = reverse                                # String reverse
+
+# =============================================================================
+# ADVANCED FUNCTIONAL PROGRAMMING UTILITIES
+# =============================================================================
+
+# Function combinators
+twice    = λf x.f (f x)                          # Apply function twice     
+thrice   = λf x.f (f (f x))                      # Apply function three times
+untilcomb = Y (λrec pred f x.if (pred x) x (rec pred f (f x)))  # Apply until predicate is true# Conditional application
+ifThen   = λp f x.if p (f x) x                   # Apply function if condition is true
+ifElse   = λp f g x.if p (f x) (g x)             # Apply 1 of 2 functions based on condition
+
+# Function composition utilities
+pipe     = λx f.f x                              # Pipeline application (reverse of apply)
+pipeline = foldl pipe                            # Apply sequence of functions
+thread   = pipeline                              # Alias for pipeline
+
+# =============================================================================
+# ADVANCED DATA STRUCTURES
+# =============================================================================
+
+# Stack operations (using lists)
+push     = cons
+pop      = tail
+top      = head
+isemptystack = isnil
+stacksize = length
+
+# Queue operations (inefficient but functional)
+enqueue  = λx q.append q (singleton x)
+dequeue  = tail
+front    = head
+isemptyqueue = isnil
+queuesize = length
+
+# Set operations (using lists, not optimized)
+makeset  = nub                                   # Create set from list
+insert   = λx s.if (elem x s) s (cons x s)      # Insert into set
+remove   = λx s.filter (λy.not (eq x y)) s      # Remove from set
+member   = elem                                  # Check membership
+subset   = isSubset                              # Check if subset
+setequal = λs1 s2.and (subset s1 s2) (subset s2 s1)  # Check set equality
+setsize  = length                                # Set cardinality
+
+# =============================================================================
+# ADDITIONAL MATHEMATICAL FUNCTIONS
+# =============================================================================
+
+# More comparison operations
+isequal  = eq
+notequal = neq
+isgreater = gt
+isless   = lt
+isgeq    = geq
+isleq    = leq
+
+# Sign function
+signum   = λn.if (iszero n) zero 1             # 0 if zero, 1 otherwise (Church numerals are non-negative)
+
+# Distance and bounds
+distance = λa b.if (gt a b) (minus a b) (minus b a)  # Absolute difference
+inrange  = between                                # Alias for between
+bounded  = clamp                                  # Alias for clamp
+
+# Powers of specific numbers
+pow2     = λn.exp 2 n                            # Powers of 2
+pow10    = λn.exp 10 n                           # Powers of 10
+square2  = λn.mult n n                           # Square (alias)
+
+# =============================================================================
+# DEBUGGING AND UTILITY MACROS
+# =============================================================================
+
+# Identity and constant macros
+:macro (identity $x) => $x
+:macro (constant $x $y) => $x
+:macro (ignore $x) => I
+
+# Testing and assertion macros
+:macro (assert $condition $value) => (if $condition $value error)
+:macro (test $expr $expected) => (eq $expr $expected)
+
+# =============================================================================
+# ADDITIONAL COMBINATORS AND HIGHER-ORDER FUNCTIONS
+# =============================================================================
+
+# More combinators
+pheasant = λabcd.a (b c) (b d)                   # P combinator
+queer    = λabc.b (a c)                          # Q combinator  
+robin    = λabc.b c a                            # R combinator
+
+# Function transformers
+negate_pred = λp x.not (p x)                     # Negate a predicate
+always   = λx y.true                             # Always returns true
+never    = λx y.false                            # Always returns false
+
+# Conditional functions
+guard    = λp f x.if (p x) (f x) undefined       # Apply function only if predicate holds
+safe     = λf x.f x                              # Safe application (could be extended with error handling)
+
+# =============================================================================
+# ENHANCED ERROR HANDLING AND DEBUGGING
+# =============================================================================
+
+# Better error types
+divByZero = Y (λx.x)                             # Division by zero error
+indexError = Y (λx.x)                            # Index out of bounds error
+typeError = Y (λx.x)                             # Type mismatch error
+
+# Safe operations
+safehead = λl.if (isnil l) nothing (just (head l))
+safetail = λl.if (isnil l) nothing (just (tail l))
+safenth  = λn l.if (gt n (pred (length l))) nothing (just (nth n l))
+safediv  = λa b.if (iszero b) nothing (just (div a b))
+
+# =============================================================================
+# PERFORMANCE AND OPTIMIZATION HELPERS
+# =============================================================================
+
+# Memoization helpers (limited without mutation)
+memo1    = λf.f                                  # Identity memoization
+memo2    = λf.f                                  # Identity memoization
+memo3    = λf.f                                  # Identity memoization
+
+# Lazy evaluation helpers
+delay    = λx.λf.f x                             # Delay evaluation
+force    = λthunk.thunk I                        # Force evaluation
+lazy     = delay                                 # Alias for delay
+
+# Optimization flags
+optimize = true                                   # Optimization flag
+debug_mode = false                                # Debug mode flag
+
