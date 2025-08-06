@@ -2410,7 +2410,6 @@ public class Interpreter
     }
 
     private static string ShowHelp() =>
-
         """
         ================= Lambda Calculus Interpreter Help =================
 
@@ -2464,16 +2463,16 @@ public class Interpreter
           Examples:
             :macro (when $cond $body) => (if $cond $body unit)
             :macro (unless $cond $body) => (if $cond unit $body)
-            :macro (compose $f $g) => (\\x. $f ($g x))
-            :macro (flip $f) => (\\x y. $f y x)
+            :macro (compose $f $g) => (\x. $f ($g x))
+            :macro (flip $f) => (\x y. $f y x)
 
         -- Interactive Features --
-          - Line continuation: Use '\' at end of line to continue input
-          - Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
-          - Command line arguments: Treated as files to load at startup
-          - Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
-          - Macro variables: Use $variable in patterns to capture expressions
-          - Internally, each '_' is renamed to a unique variable (_placeholder1, _placeholder2, ...)
+          • Line continuation: Use '\' at end of line to continue input
+          • Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
+          • Command line arguments: Treated as files to load at startup
+          • Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
+          • Macro variables: Use $variable in patterns to capture expressions
+          • Internally, each '_' is renamed to a unique variable (_placeholder1, _placeholder2, ...)
         """;
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
