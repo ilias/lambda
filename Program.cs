@@ -398,7 +398,10 @@ public record ListPattern(IList<MacroPattern> Patterns) : MacroPattern(MacroPatt
 
 public record MacroDefinition(string Name, IList<MacroPattern> Pattern, Expr Transformation)
 {
-    public override string ToString() => $":macro ({Name} {string.Join(" ", Pattern.Select(FormatPattern))}) => {Transformation}";
+    public override string ToString() =>
+        $":macro ({Name} {string.Join(" ", Pattern.Select(FormatPattern))}) => {Transformation}"
+        .Replace("__MACRO_VAR_", "$")
+        .Replace("__MACRO_INT_", "");
     
     private static string FormatPattern(MacroPattern pattern) => pattern switch
     {

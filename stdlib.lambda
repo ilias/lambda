@@ -1,304 +1,142 @@
 # =============================================================================
 # stdlib.lambda - Standard Library for Lambda Interpreter
+#
+# This library provides a comprehensive set of functions and utilities for
+# programming in the untyped lambda calculus. It includes everything from
+# basic boolean logic and Church numerals to advanced data structures,
+# functional programming utilities, and a macro system.
 # =============================================================================
 
-# =============================================================================
-# BOOLEAN OPERATIONS
-# =============================================================================
-
-id       = λx.x 
-true     = λx y.x 
-false    = λx y.y 
-and      = λp q.p q false 
-not      = λp.p false true 
-or       = λp q.p true q 
-xor      = λp q.p (not q) q 
-if       = λp a b.p a b 
-eqBool   = λx y.x y (not y)
 
 # =============================================================================
-# CHURCH NUMERALS
+# SECTION 1: CORE LANGUAGE CONSTRUCTS
+#
+# This section defines the fundamental building blocks of the language,
+# including core identity, boolean logic, and conditional expressions.
 # =============================================================================
 
-zero     = λf x.x
-succ     = λn f x.f (n f x)
-pred     = λn f x.n (λg h.h (g f)) (λu.x) (λu.u) 
-plus     = λm n f x.m f (n f x)
-mult     = λm n f.m (n f)    
-iszero   = λn.n (λx.false) true
-exp      = Y (λf. λb n. if (iszero n) 1 (mult b (f b (pred n))))
-minus    = λm n.n pred m
-
-# =============================================================================
-# DIVISION AND MODULO (more efficient iterative implementation)
-# =============================================================================
-
-# Iterative division helper. Returns a pair (quotient, remainder).
-# It works by repeatedly subtracting n from m.
-DIV_ITER = Y(λf. λq m n. \
-    if (lt m n) \
-        (pair q m)\
-        (f (succ q) (minus m n) n)\
-)
-
-div = λm n. first (DIV_ITER 0 m n)
-mod = λm n. second (DIV_ITER 0 m n)
-
-# =============================================================================
-# COMPARISON OPERATIONS
-# =============================================================================
-
-leq      = λm n.iszero (minus m n)
-eq       = λm n.and (leq m n) (leq n m)
-gt       = λm n.not (leq m n)
-geq      = λm n.not (lt m n)
-lt       = λm n.and (leq m n) (not (eq m n))
-neq      = λm n.not (eq m n)                  # Not equal
-
-# =============================================================================
-# ADDITIONAL NUMERIC OPERATIONS
-# =============================================================================
-
-abs      = λn.n                               # Absolute value (Church numerals are non-negative)
-max      = λm n.if (geq m n) m n              # Maximum of two numbers
-min      = λm n.if (leq m n) m n              # Minimum of two numbers
-even     = λn.eq (mod n 2) zero               # Check if number is even
-odd      = λn.not (even n)                    # Check if number is odd
-square   = λn.mult n n                        # Square a number
-double   = λn.plus n n                        # Double a number
-half     = λn.div n 2                         # Half a number (integer division)
-pow      = exp                                # Power (alias for exp)
-
-# =============================================================================
-# NUMERIC RANGES AND SEQUENCES
-# =============================================================================
-range = λn. Y (λf k. if (eq k n) nil (cons k (f (succ k)))) 0  # Generate [0, 1, ..., n-1]
-countdown = λn. Y (λf k. if (iszero k) (cons 0 nil) (cons k (f (pred k)))) n  # Generate [n, n-1, ..., 0]
-
-# =============================================================================
-# COMBINATORS
-# =============================================================================
-
+# -----------------------------------------------------------------------------
+# 1.1. Core Identity and Combinators
+# -----------------------------------------------------------------------------
+id       = λx.x
 K        = λx y.x
 I        = λx.x
 S        = λx y z.x z (y z)
 B        = λx y z.x (y z)
 C        = λx y z.x z y
-# Y        = λf.(λx.f (x x)) (λx.f (x x)) # defined natively by the interpreter
+# Y        = λf.(λx.f (x x)) (λx.f (x x)) # The Y combinator is defined natively by the interpreter for recursion.
 
-# =============================================================================
-# ADDITIONAL COMBINATORS AND UTILITIES
-# =============================================================================
+# -----------------------------------------------------------------------------
+# 1.2. Boolean Logic and Conditionals
+# -----------------------------------------------------------------------------
+true     = λx y.x
+false    = λx y.y
+if       = λp a b.p a b
+not      = λp.p false true
+and      = λp q.p q false
+or       = λp q.p true q
+xor      = λp q.p (not q) q
+eqBool   = λx y.x y (not y)
 
-const    = K                                # Constant function (alias for K)
-compose  = B                                # Function composition (alias for B, use . as infix)
-flip     = C                                # Flip arguments (alias for C)
-apply    = λf x.f x                         # Function application
-curry    = λf x y.f (pair x y)              # Curry a function
-uncurry  = λf p.f (first p) (second p)      # Uncurry a function
-on       = λop f x y.op (f x) (f y)         # Apply function to both args before operation
-# fix      = Y                                # Fixed point combinator (alias for Y)
-
-# =============================================================================
-# CONDITIONAL UTILITIES
-# =============================================================================
-
+# Conditional application utilities
 when     = λp f x.if p (f x) x              # Apply function conditionally
 unless   = λp f x.if p x (f x)              # Apply function unless condition
-cond     = λp t e.if p t e                  # Alias for if for readability
+# cond     = λp t e.if p t e                  # Alias for if, commented out for redundancy
+
 
 # =============================================================================
-# PAIR OPERATIONS
+# SECTION 2: NUMERIC COMPUTATION
+#
+# This section covers all aspects of numeric computation using Church numerals.
+# It includes basic arithmetic, comparisons, advanced functions like GCD and
+# prime checking, and iterative helpers for performance.
 # =============================================================================
 
-pair     = λx y f.f x y
-first    = λp.p (λx y.x)
-second   = λp.p (λx y.y)
-swap     = λp.λf.p (λx y.f y x)
+# -----------------------------------------------------------------------------
+# 2.1. Church Numerals and Basic Arithmetic
+# -----------------------------------------------------------------------------
+zero     = λf x.x
+succ     = λn f x.f (n f x)
+pred     = λn f x.n (λg h.h (g f)) (λu.x) (λu.u)
+plus     = λm n f x.m f (n f x)
+minus    = λm n.n pred m
+mult     = λm n f.m (n f)
+exp      = Y (λf. λb n. if (iszero n) 1 (mult b (f b (pred n))))
+iszero   = λn.n (λx.false) true
 
-# =============================================================================
-# BASIC LIST OPERATIONS
-# =============================================================================
+# -----------------------------------------------------------------------------
+# 2.2. Division and Modulo
+# -----------------------------------------------------------------------------
+# Iterative division helper. Returns a pair (quotient, remainder).
+DIV_ITER = Y(λf. λq m n. \
+    if (lt m n) \
+        (pair q m)\
+        (f (succ q) (minus m n) n)\
+)
+div = λm n. first (DIV_ITER 0 m n)
+mod = λm n. second (DIV_ITER 0 m n)
 
-nil      = λf z.z                              # Empty list
-isnil    = λl.l (λx xs.false) true             # Check if list is empty
-cons     = λx xs f z.f x (xs f z)              # Create a list node with head x and tail xs
-head     = λl.l (λx xs.x) nil                  # Extract the first element
-tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil nil)) # Extract the rest of the list
+# -----------------------------------------------------------------------------
+# 2.3. Comparison Operations
+# -----------------------------------------------------------------------------
+leq      = λm n.iszero (minus m n)
+eq       = λm n.and (leq m n) (leq n m)
+lt       = λm n.and (leq m n) (not (eq m n))
+gt       = λm n.not (leq m n)
+geq      = λm n.not (lt m n)
+neq      = λm n.not (eq m n)
 
-# =============================================================================
-# HIGHER-ORDER LIST OPERATIONS (iterative implementations)
-# =============================================================================
+# -----------------------------------------------------------------------------
+# 2.4. Additional Numeric Operations and Predicates
+# -----------------------------------------------------------------------------
+square   = λn.mult n n
+double   = λn.plus n n
+half     = λn.div n 2
+even     = λn.eq (mod n 2) zero
+odd      = λn.not (even n)
+abs      = λn.n                               # Church numerals are non-negative
+max      = λm n.if (geq m n) m n
+min      = λm n.if (leq m n) m n
+# pow      = exp                              # Alias for exp
+isone    = λn.eq n 1
+istwo    = λn.eq n 2
+ispositive = λn.not (iszero n)
+triple   = λn.plus n (plus n n)
+quadruple = λn.plus (double n) (double n)
 
-append   = λl1 l2.l1 cons l2
-map      = λf l.l (λx rest.cons (f x) rest) nil
-filter   = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
-foldr    = λf z l.l f z
-foldl    = λf z l.foldr (λx g acc.g (f acc x)) (λy.y) l z
-length   = λl.foldr (λx acc.succ acc) zero l
-reverse  = λl.foldl (λacc x.cons x acc) nil l
-
-# =============================================================================
-# ADDITIONAL LIST OPERATIONS
-# =============================================================================
-
-isempty  = λl.l (λx xs.false) true        # Check if list is empty
-last     = λl.head (reverse l)            # Get last element of list
-init     = λl.reverse (tail (reverse l))  # Get all but last element
-take     = λn l.n (λf prev.if (isempty prev) nil \
-                              (cons (head prev) (f (tail prev)))) \
-                  (λx.nil) l
-drop     = λn l.n tail l                  # Drop first n elements
-nth      = λn l.head (drop n l)           # Get nth element (0-indexed)
-any      = λp l.foldr (λx acc.or (p x) acc) false l     # True if any element satisfies predicate
-all      = λp l.foldr (λx acc.and (p x) acc) true l     # True if all elements satisfy predicate
-sum      = λl.foldr plus zero l           # Sum all elements
-product  = λl.foldr mult 1 l              # Product of all elements
-maximum  = λl.foldr (λx acc.if (gt x acc) x acc) zero l    # Maximum element
-minimum  = λl.tail l (foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)) (head l)  # Minimum element
-concat   = λll.foldr append nil ll        # Concatenate list of lists
-
-# =============================================================================
-# ITERATIVE COMPUTATIONAL HELPERS
-# =============================================================================
-
+# -----------------------------------------------------------------------------
+# 2.5. Advanced Numeric Algorithms
+# -----------------------------------------------------------------------------
+# Iterative Factorial
 FACT_ITER_HELPER = λn.n (λp.pair (succ (first p)) \
                                   (mult (succ (first p)) (second p))) \
                          (pair 0 1)
 fact             = λn.second (FACT_ITER_HELPER n)
 
+# Iterative Fibonacci
 FIB_ITER_HELPER  = λn.n (λp.pair (second p) \
                                   (plus (first p) (second p))) \
                          (pair 0 1)
 fib              = λn.first (FIB_ITER_HELPER n)
 
-factRec = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
-
-fibRec = Y (\f.\n. if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
-
-sumUptoRec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n)))) # Recursive sum of numbers up to n
-
-# =============================================================================
-# ADDITIONAL COMPUTATIONAL FUNCTIONS
-# =============================================================================
-
-# A proper WHILE loop combinator
-WHILE = Y (λloop. λcond body state. if (cond state) (loop cond body (body state)) state)
-
-# GCD using the Euclidean algorithm with the WHILE combinator
-GCD_STEP = λp. if (gt (first p) (second p)) \
-                 (pair (minus (first p) (second p)) (second p)) \
-                 (pair (first p) (minus (second p) (first p)))
-
-gcd1 = λm n. if (or (iszero m) (iszero n)) (if (iszero m) n m) \
-    (first (WHILE (λp. neq (first p) (second p)) GCD_STEP (pair m n)))
-
-
-# Robust GCD and LCM definitions
-gcd = Y (λg a b. if (iszero b) a (g b (mod a b)))  # Euclidean algorithm
+# GCD and LCM using Euclidean algorithm
+gcd = Y (λg a b. if (iszero b) a (g b (mod a b)))
 lcm = λa b. if (or (iszero a) (iszero b)) 0 (div (mult a b) (gcd a b))
 
-factorial        = fact                                       # Alias for fact
-fibonacci        = fib                                        # Alias for fib
-
-# =============================================================================
-# ITERATION UTILITIES
-# =============================================================================
-
-iterate          = λf n x.n f x                              # Apply function n times to x
-repeat           = λn x.n (const x) x                        # Create list with n copies of x
-replicate        = repeat                                    # Alias for repeat
-times            = λn f.n f I                                # Apply function n times (composition)
-
-# =============================================================================
-# LIST GENERATION
-# =============================================================================
-
-iota             = range                                      # Alias for range
-enumFromTo       = λstart end.map (plus start) \
-                                   (range (succ (minus end start)))  # [start..end]
-enumFrom         = λstart n.map (plus start) (range n)        # n numbers starting from start
-
-# =============================================================================
-# ADVANCED LIST UTILITIES (safe, non-recursive implementations)
-# =============================================================================
-
-# Safe zip using foldr instead of recursion
-zip              = λl1 l2.reverse (foldl (λacc p.if (isempty (second p)) acc \
-                                                     (cons (pair (head (first p)) (head (second p))) acc)) \
-                                          nil \
-                                          (foldl (λacc x.cons (pair (drop (length acc) l1) \
-                                                                    (drop (length acc) l2)) acc) \
-                                                 nil (range (min (length l1) (length l2)))))
-
-# Safe zipWith using map and zip
-zipWith          = λf l1 l2.map (λp.f (first p) (second p)) (zip l1 l2)
-
-# Simplified transpose - just take first elements, no recursion
-transpose        = λll.if (or (isempty ll) (any isempty ll)) nil \
-                          (cons (map head ll) nil)  # Only do first row to avoid recursion
-
-# Safe intercalate using foldr
-intercalate      = λsep l.if (isempty l) nil \
-                             (if (isempty (tail l)) (head l) \
-                                 (foldr (λx acc.if (isempty acc) x (append x (cons sep acc))) \
-                                        nil l))
-
-# Safe intersperse using foldr  
-intersperse      = λx l.if (isempty l) nil \
-                           (if (isempty (tail l)) l \
-                               (foldr (λy acc.if (isempty acc) (cons y nil) \
-                                                               (cons y (cons x acc))) \
-                                      nil l))
-
-# Safe nub using foldl - remove duplicates iteratively
-nub              = λl.foldl (λacc x.if (elem x acc) acc (cons x acc)) nil l
-
-unique           = nub                                     # Alias for nub
-elem             = λx l.any (eq x) l                       # Check if element is in list
-notElem          = λx l.not (elem x l)                     # Check if element is not in list
-
-# Safe find using foldr instead of recursion
-find             = λp l.foldr (λx acc.if (and (p x) (isempty acc)) x acc) nil l
-
-partition        = λp l.pair (filter p l) (filter (λx.not (p x)) l)
-splitAt          = λn l.pair (take n l) (drop n l)
-
-# Safe break using foldr - find break point iteratively
-break            = λp l.foldl (λacc x.if (p x) acc \
-                                       (pair (cons x (first acc)) (second acc))) \
-                              (pair nil l) l
-
-words            = λl.filter (λw.not (isempty w)) (break is-space l)  # Simplified split on whitespace
-lines            = λl.filter (λw.not (isempty w)) (break (eq 10) l)   # Simplified split on newlines
-unwords          = λl.intercalate (cons 32 nil) l          # Join with spaces
-unlines          = λl.intercalate (cons 10 nil) l          # Join with newlines
-
-# =============================================================================
-# ADVANCED NUMERIC FUNCTIONS
-# =============================================================================
-
-# Iterative square root using Newton's method with proper convergence
-# Newton's method: x_{n+1} = (x_n + n/x_n) / 2
+# Square Root using Newton's method
 SQRT_NEWTON_STEP = λn x. half (plus x (div n x))
-
-# Check if we've converged (difference is small enough)
-SQRT_CONVERGED = λn x. leq (abs (minus (mult x x) n)) 1
-
-# Iterative sqrt with convergence check and maximum iterations
-SQRT_ITER = Y (λf n x iterations. \
+SQRT_CONVERGED   = λn x. leq (abs (minus (mult x x) n)) 1
+SQRT_ITER        = Y (λf n x iterations. \
     if (or (SQRT_CONVERGED n x) (iszero iterations)) \
         x \
         (f n (SQRT_NEWTON_STEP n x) (pred iterations)) \
 )
-
-# Square root function with better initial guess and iteration limit
 sqrt = λn. \
     if (iszero n) zero \
     (if (eq n 1) 1 \
-        (SQRT_ITER n (half (plus n 1)) 20))  # Better initial guess, 20 iterations max
+        (SQRT_ITER n (half (plus n 1)) 20))  # Initial guess: (n+1)/2, 20 iterations
 
-# Simple prime check using trial division up to sqrt(n)
+# Prime number check via trial division
 isPrime = Y (λf n. \
     let iter = Y (λiter i. \
         if (gt (mult i i) n) true \
@@ -308,163 +146,380 @@ isPrime = Y (λf n. \
     if (lt n 2) false (iter 2) \
 )
 
-primes           = λn.filter isPrime (enumFromTo 2 n)       # Generate primes up to n
+# Ackermann function
+ackermann  = \p.(p (\a.\q.(a (q a 1))) succ)
+
+# -----------------------------------------------------------------------------
+# 2.6. Recursive Function Examples (using Y combinator)
+#
+# These are alternative, often less efficient, implementations provided for
+# educational purposes to demonstrate recursion with the Y combinator.
+# -----------------------------------------------------------------------------
+factRec    = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
+fibRec     = Y (\f.\n. if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
+sumUptoRec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n))))
+
 
 # =============================================================================
-# SET OPERATIONS ON LISTS (treating lists as sets)
+# SECTION 3: DATA STRUCTURES
+#
+# This section defines common data structures like pairs, lists, and trees,
+# along with a comprehensive suite of operations for each.
 # =============================================================================
 
-union            = λl1 l2.append l1 (filter (λx.notElem x l1) l2)
-intersect        = λl1 l2.filter (λx.elem x l2) l1
-difference       = λl1 l2.filter (λx.notElem x l2) l1
-isSubset         = λl1 l2.all (λx.elem x l2) l1
-isSuperset       = λl1 l2.isSubset l2 l1
+# -----------------------------------------------------------------------------
+# 3.1. Pairs
+# -----------------------------------------------------------------------------
+pair     = λx y f.f x y
+first    = λp.p (λx y.x)
+second   = λp.p (λx y.y)
+swap     = λp.λf.p (λx y.f y x)
+
+# -----------------------------------------------------------------------------
+# 3.2. Lists - Core Operations
+# -----------------------------------------------------------------------------
+nil      = λf z.z
+cons     = λx xs f z.f x (xs f z)
+isnil    = λl.l (λx xs.false) true
+head     = λl.l (λx xs.x) nil
+tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil nil))
+# isempty  = isnil # Alias for isnil
+
+# -----------------------------------------------------------------------------
+# 3.3. Lists - Higher-Order Functions
+# -----------------------------------------------------------------------------
+map      = λf l.l (λx rest.cons (f x) rest) nil
+filter   = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
+foldl    = λf z l.foldr (λx g acc.g (f acc x)) (λy.y) l z
+foldr    = λf z l.l f z
+
+# -----------------------------------------------------------------------------
+# 3.4. Lists - Generation and Manipulation
+# -----------------------------------------------------------------------------
+append   = λl1 l2.l1 cons l2
+reverse  = λl.foldl (λacc x.cons x acc) nil l
+length   = λl.foldr (λx acc.succ acc) zero l
+take     = λn l.n (λf prev.if (isnil prev) nil (cons (head prev) (f (tail prev)))) (λx.nil) l
+drop     = λn l.n tail l
+concat   = λll.foldr append nil ll
+range    = λn. Y (λf k. if (eq k n) nil (cons k (f (succ k)))) 0
+countdown = λn. Y (λf k. if (iszero k) (cons 0 nil) (cons k (f (pred k)))) n
+enumFromTo = λstart end.map (plus start) (range (succ (minus end start)))
+enumFrom   = λstart n.map (plus start) (range n)
+primes     = λn.filter isPrime (enumFromTo 2 n)
+repeat     = λn x.n (const x) x
+# replicate  = repeat # Alias for repeat
+# iota       = range # Alias for range
+
+# -----------------------------------------------------------------------------
+# 3.5. Lists - Element Access and Querying
+# -----------------------------------------------------------------------------
+nth      = λn l.head (drop n l)
+last     = λl.head (reverse l)
+init     = λl.reverse (tail (reverse l))
+elem     = λx l.any (eq x) l
+notElem  = λx l.not (elem x l)
+any      = λp l.foldr (λx acc.or (p x) acc) false l
+all      = λp l.foldr (λx acc.and (p x) acc) true l
+find     = λp l.foldr (λx acc.if (and (p x) (isnil acc)) x acc) nil l
+sum      = λl.foldr plus zero l
+product  = λl.foldr mult 1 l
+maximum  = λl.foldr (λx acc.if (gt x acc) x acc) zero l
+minimum  = λl.tail l (foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)) (head l)
+
+# -----------------------------------------------------------------------------
+# 3.6. Lists - Advanced Utilities
+# -----------------------------------------------------------------------------
+zip     = λl1 l2.reverse (foldl (λacc p.if (isnil (second p)) acc \
+                                             (cons (pair (head (first p)) (head (second p))) acc)) \
+                                  nil \
+                                  (foldl (λacc x.cons (pair (drop (length acc) l1) \
+                                                            (drop (length acc) l2)) acc) \
+                                         nil (range (min (length l1) (length l2)))))
+zipWith = λf l1 l2.map (λp.f (first p) (second p)) (zip l1 l2)
+unzip   = λl.pair (map first l) (map second l)
+nub     = λl.foldl (λacc x.if (elem x acc) acc (cons x acc)) nil l
+# unique  = nub # Alias for nub
+partition = λp l.pair (filter p l) (filter (λx.not (p x)) l)
+splitAt = λn l.pair (take n l) (drop n l)
+
+# -----------------------------------------------------------------------------
+# 3.7. Set Operations on Lists
+# -----------------------------------------------------------------------------
+union      = λl1 l2.append l1 (filter (λx.notElem x l1) l2)
+intersect  = λl1 l2.filter (λx.elem x l2) l1
+difference = λl1 l2.filter (λx.notElem x l2) l1
+isSubset   = λl1 l2.all (λx.elem x l2) l1
+isSuperset = λl1 l2.isSubset l2 l1
+
+# -----------------------------------------------------------------------------
+# 3.8. Tree Data Structures (Simplified)
+#
+# A basic implementation of binary trees. Operations are kept simple to
+# avoid deep recursion and stack overflow in the interpreter.
+# -----------------------------------------------------------------------------
+leaf      = λv.pair v (pair nil nil)
+node      = λv l r.pair v (pair l r)
+treeValue = first
+treeLeft  = λt.first (second t)
+treeRight = λt.second (second t)
+isLeaf    = λt.and (isnil (treeLeft t)) (isnil (treeRight t))
+# Simplified traversals to avoid recursion
+inOrder   = λt.if (isnil t) nil (cons (treeValue t) nil)
+preOrder  = λt.if (isnil t) nil (cons (treeValue t) nil)
+postOrder = λt.if (isnil t) nil (cons (treeValue t) nil)
+
 
 # =============================================================================
-# TREE DATA STRUCTURES (using pairs and lists - safe implementations)
+# SECTION 4: FUNCTIONAL PROGRAMMING UTILITIES
+#
+# This section provides higher-order functions, combinators, and utilities
+# that are common in functional programming.
 # =============================================================================
 
-# Binary tree: nil | (pair value (pair left right))
-leaf             = λv.pair v (pair nil nil)                  # Create a leaf node
-node             = λv l r.pair v (pair l r)                  # Create an internal node
-treeValue        = first                                     # Get value of tree node
-treeLeft         = λt.first (second t)                       # Get left subtree
-treeRight        = λt.second (second t)                      # Get right subtree
-isLeaf           = λt.and (isempty (treeLeft t)) (isempty (treeRight t))
+# -----------------------------------------------------------------------------
+# 4.1. Function Composition and Application
+# -----------------------------------------------------------------------------
+apply    = λf x.f x
+compose  = B
+flip     = C
+on       = λop f x y.op (f x) (f y)
+iterate  = λf n x.n f x
+times    = λn f.n f I
 
-# Safe tree size - limited depth to prevent infinite recursion
-treeSize         = λt.if (isempty t) zero 1  # Simplified: just count if not empty
+# -----------------------------------------------------------------------------
+# 4.2. Currying and Partial Application
+# -----------------------------------------------------------------------------
+curry    = λf x y.f (pair x y)
+uncurry  = λf p.f (first p) (second p)
+partial  = λf x.λy.f x y
+partial2 = λf x y.λz.f x y z
 
-# Safe tree depth - limited depth  
-treeDepth        = λt.if (isempty t) zero 1  # Simplified: constant depth
+# -----------------------------------------------------------------------------
+# 4.3. Additional Combinators
+# -----------------------------------------------------------------------------
+const    = K
+omega    = λx.x x
+mockingbird = omega
+thrush   = λx f.f x
+cardinal = flip
+bluebird = compose
+kestrel  = const
+warbler  = λf x.f x x
+starling = S
 
-# Safe tree traversals - only visit immediate children to avoid recursion
-inOrder          = λt.if (isempty t) nil \
-                         (cons (treeValue t) nil)  # Simplified: just return value
+# -----------------------------------------------------------------------------
+# 4.4. Looping Constructs
+# -----------------------------------------------------------------------------
+# A general-purpose WHILE loop combinator
+WHILE = Y (λloop. λcond body state. if (cond state) (loop cond body (body state)) state)
 
-preOrder         = λt.if (isempty t) nil \
-                         (cons (treeValue t) nil)  # Simplified: just return value
+# Example of using WHILE for GCD (less efficient than the recursive version)
+GCD_STEP = λp. if (gt (first p) (second p)) \
+                 (pair (minus (first p) (second p)) (second p)) \
+                 (pair (first p) (minus (second p) (first p)))
+gcd1 = λm n. if (or (iszero m) (iszero n)) (if (iszero m) n m) \
+    (first (WHILE (λp. neq (first p) (second p)) GCD_STEP (pair m n)))
 
-postOrder        = λt.if (isempty t) nil \
-                         (cons (treeValue t) nil)  # Simplified: just return value
 
 # =============================================================================
-# OPTIONAL/MAYBE TYPE (using pairs)
+# SECTION 5: ALGEBRAIC DATA TYPES
+#
+# This section defines common algebraic data types like Maybe (Optional) and
+# Either, which are useful for handling computations that can fail or have
+# alternative results.
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# 5.1. Maybe (Optional) Type
+#
+# Represents a value that may or may not be present.
 # nothing = nil, just x = pair true x
-nothing          = nil
-just             = λx.pair true x
-isNothing        = isempty
-isJust           = λm.not (isNothing m)
-fromJust         = second
-maybe            = λdef f m.if (isNothing m) def (f (fromJust m))
-
-# =============================================================================
-# EITHER TYPE (using pairs)
-# =============================================================================
-
-# left x = pair false x, right x = pair true x
-left             = λx.pair false x
-right            = λx.pair true x
-isLeft           = λe.not (first e)
-isRight          = first
-fromLeft         = second
-fromRight        = second
-either           = λf g e.if (isLeft e) (f (fromLeft e)) (g (fromRight e))
-
-# =============================================================================
-# STATE MONAD HELPERS (using pairs for state)
-# =============================================================================
-
-returnState      = λx s.pair x s
-bindState        = λm f s.f (first (m s)) (second (m s))  # Simplified without let
-getState         = λs.pair s s
-putState         = λs.λ_.pair nil s
-runState         = λm s.m s
-
-# =============================================================================
-# IO SIMULATION (using lists for demonstration)
-# =============================================================================
-
-putChar          = λc.cons c
-getChar          = head
-putStr           = append
-getLine          = λl.filter (neq 10) l              # Take until newline (simplified)
-
-# =============================================================================
-# DEBUGGING AND UTILITY FUNCTIONS
-# =============================================================================
-
-trace            = λmsg x.x                                 # Identity function for tracing (no-op in pure lambda)
-debug            = trace                                    # Alias for trace  
-undefined        = Y I                                      # Infinite loop (represents undefined value)
-error            = undefined                                # Alias for undefined
-
-# =============================================================================
-# PERFORMANCE TESTING HELPERS
-# =============================================================================
-
-benchmark        = λn f x.times n (λ_.f x) x                # Run function n times
-timeIt           = benchmark                                # Alias for benchmark
-
-# =============================================================================
-# ADVANCED COMBINATORS
-# =============================================================================
-
-omega            = λx.x x                                   # Self-application
-#omega2           = omega omega                              # Infinite loop
-mockingbird      = λf.f f                                   # M combinator (same as omega)
-thrush           = λx f.f x                                 # T combinator (reverse application)
-cardinal         = flip                                     # Cardinal (same as flip/C)
-bluebird         = compose                                  # Bluebird (same as compose/B)
-kestrel          = const                                    # Kestrel (same as const/K)
-warbler          = λf x.f x x                               # W combinator
-starling         = S                                        # Starling (same as S)
-
-# =============================================================================
-# FUNCTION UTILITIES
-# =============================================================================
-
-memoize          = λf.f                                     # Identity (true memoization requires mutation)
-curry3           = λf x y z.f (pair x (pair y z))           # Curry a 3-argument function
-uncurry3         = λf t.f (first t) (first (second t)) \
-                          (second (second t))               # Uncurry a 3-argument function
-partial          = λf x.λy.f x y                            # Partial application
-partial2         = λf x y.λz.f x y z                        # Partial application of first 2 args
-
-# =============================================================================
-# ADDITIONAL LIST UTILITIES (safe, non-recursive implementations)
-# =============================================================================
-
-scanl    = λf z l.reverse (foldl (λacc x.cons (f (head acc) x) acc) (cons z nil) l)
-scanr    = λf z l.foldr (λx acc.cons (f x (head acc)) acc) (cons z nil) l
-
-findIndex = λp l.foldl (λacc x.if (and (isempty acc) (p x)) (cons (length acc) nil) acc) nil l
-elemIndex = λx l.findIndex (eq x) l
-
-unzip    = λl.pair (map first l) (map second l)
-
+# -----------------------------------------------------------------------------
+nothing   = nil
+just      = λx.pair true x
+isNothing = isnil
+isJust    = λm.not (isNothing m)
+fromJust  = second
+maybe     = λdef f m.if (isNothing m) def (f (fromJust m))
 fromMaybe = λdef m.if (isNothing m) def (fromJust m)
-maybeMap  = λf m.if (isNothing m) nothing (just (f (fromJust m)))
 
-clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
+# -----------------------------------------------------------------------------
+# 5.2. Either Type
+#
+# Represents a value that can be one of two types, typically for error handling.
+# left x = pair false x, right x = pair true x
+# -----------------------------------------------------------------------------
+left      = λx.pair false x
+right     = λx.pair true x
+isLeft    = λe.not (first e)
+isRight   = first
+fromLeft  = second
+fromRight = second
+either    = λf g e.if (isLeft e) (f (fromLeft e)) (g (fromRight e))
+
+# -----------------------------------------------------------------------------
+# 5.3. Safe Operations using Maybe
+# -----------------------------------------------------------------------------
+safehead = λl.if (isnil l) nothing (just (head l))
+safetail = λl.if (isnil l) nothing (just (tail l))
+safenth  = λn l.if (gt n (pred (length l))) nothing (just (nth n l))
+safediv  = λa b.if (iszero b) nothing (just (div a b))
+safeMinimum = λl.if (isnil l) nothing (just (minimum l))
+safeMaximum = λl.if (isnil l) nothing (just (maximum l))
+
 
 # =============================================================================
-# IMPROVED EXISTING FUNCTIONS
+# SECTION 6: STATE AND I/O
+#
+# This section provides utilities for managing state and simulating I/O in a
+# purely functional way.
 # =============================================================================
 
-# minimum and maximum: handle empty lists gracefully
-safeMinimum = λl.if (isempty l) nothing (just (foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)))
-safeMaximum = λl.if (isempty l) nothing (just (foldr (λx acc.if (gt x acc) x acc) (head l) (tail l)))
+# -----------------------------------------------------------------------------
+# 6.1. State Monad Helpers
+# -----------------------------------------------------------------------------
+returnState = λx s.pair x s
+bindState   = λm f s.f (first (m s)) (second (m s))
+getState    = λs.pair s s
+putState    = λs.λ_.pair nil s
+runState    = λm s.m s
 
-# init: handle single-element and empty lists
-safeInit = λl.if (isempty l) nil (reverse (tail (reverse l)))
+# -----------------------------------------------------------------------------
+# 6.2. I/O Simulation
+#
+# These functions simulate I/O by treating lists of characters (numbers) as
+# input/output streams.
+# -----------------------------------------------------------------------------
+putChar = λc.cons c
+getChar = head
+putStr  = append
+getLine = λl.filter (neq 10) l # Simplified: take until newline
+
 
 # =============================================================================
-# INFIX OPERATORS
+# SECTION 7: STRING AND CHARACTER SIMULATION
+#
+# This section provides utilities for working with "strings" and "characters,"
+# which are represented as lists of numbers (ASCII codes).
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# 7.1. ASCII Constants and Predicates
+# -----------------------------------------------------------------------------
+space    = 32
+newline  = 10
+tab      = 9
+# null     = 0 # Redundant with zero
+isspace  = λc.or (eq c space) (or (eq c tab) (eq c newline))
+isdigit  = λc.and (geq c 48) (leq c 57)
+islower  = λc.and (geq c 97) (leq c 122)
+isupper  = λc.and (geq c 65) (leq c 90)
+isalpha  = λc.or (islower c) (isupper c)
+isalnum  = λc.or (isalpha c) (isdigit c)
+
+# -----------------------------------------------------------------------------
+# 7.2. Character and String Operations
+# -----------------------------------------------------------------------------
+tolower  = λc.if (isupper c) (plus c 32) c
+toupper  = λc.if (islower c) (minus c 32) c
+# strlen   = length # Alias for length
+# strcat   = append # Alias for append
+# strrev   = reverse # Alias for reverse
+words    = λl.filter (λw.not (isnil w)) (break isspace l)
+lines    = λl.filter (λw.not (isnil w)) (break (eq newline) l)
+unwords  = intercalate (cons space nil)
+unlines  = intercalate (cons newline nil)
+break    = λp l.foldl (λacc x.if (p x) acc (pair (cons x (first acc)) (second acc))) (pair nil l) l
+intercalate = λsep l.if (isnil l) nil (if (isnil (tail l)) (head l) (foldr (λx acc.if (isnil acc) x (append x (cons sep acc))) nil l))
+
+
+# =============================================================================
+# SECTION 8: DEBUGGING, ERRORS, AND PERFORMANCE
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 8.1. Debugging and Error Handling
+# -----------------------------------------------------------------------------
+trace     = λmsg x.x
+# debug     = trace # Alias for trace
+undefined = Y I
+error     = undefined
+# Error types for safe operations
+divByZero  = undefined
+indexError = undefined
+typeError  = undefined
+
+# -----------------------------------------------------------------------------
+# 8.2. Performance and Optimization
+# -----------------------------------------------------------------------------
+benchmark = λn f x.times n (λ_.f x) x
+# timeIt    = benchmark # Alias for benchmark
+# Memoization is a no-op without mutation, included for concept
+memoize   = λf.f
+# Lazy evaluation helpers
+delay     = λx.λf.f x
+force     = λthunk.thunk I
+
+
+# =============================================================================
+# SECTION 9: MACRO SYSTEM
+#
+# This section defines a set of macros to provide syntactic sugar and simplify
+# common programming patterns in the lambda calculus.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 9.1. Core and Conditional Macros
+# -----------------------------------------------------------------------------
+:macro (letbind $var $val $expr) => ((λ$var.$expr) $val)
+:macro (when $cond $expr) => (if $cond $expr I)
+:macro (unless $cond $expr) => (if $cond I $expr)
+
+# -----------------------------------------------------------------------------
+# 9.2. Math and Comparison Macros
+# -----------------------------------------------------------------------------
+:macro (square $x) => (mult $x $x)
+:macro (cube $x) => (mult $x (mult $x $x))
+:macro (inc $x) => (succ $x)
+:macro (dec $x) => (pred $x)
+:macro (between $x $low $high) => (and (geq $x $low) (leq $x $high))
+:macro (min2 $a $b) => (if (leq $a $b) $a $b)
+:macro (max2 $a $b) => (if (geq $a $b) $a $b)
+
+# -----------------------------------------------------------------------------
+# 9.3. Boolean and List Macros
+# -----------------------------------------------------------------------------
+:macro (nand $a $b) => (not (and $a $b))
+:macro (nor $a $b) => (not (or $a $b))
+:macro (empty? $list) => (isnil $list)
+:macro (first $list) => (head $list)
+:macro (rest $list) => (tail $list)
+
+# -----------------------------------------------------------------------------
+# 9.4. Function Application Macros
+# -----------------------------------------------------------------------------
+:macro (compose $f $g $x) => ($f ($g $x))
+:macro (apply_twice $f $x) => ($f ($f $x))
+:macro (apply_n $f $n $x) => (times $n $f $x)
+
+# -----------------------------------------------------------------------------
+# 9.5. Debugging and Assertion Macros
+# -----------------------------------------------------------------------------
+:macro (assert $condition $value) => (if $condition $value error)
+:macro (test $expr $expected) => (eq $expr $expected)
+
+
+# =============================================================================
+# SECTION 10: INFIX OPERATORS
+#
+# This section defines infix operators for common arithmetic and logical
+# operations to allow for more conventional mathematical notation.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 10.1. Arithmetic Infix Operators
+# -----------------------------------------------------------------------------
 + = plus
 - = minus
 * = mult
@@ -472,12 +527,15 @@ safeInit = λl.if (isempty l) nil (reverse (tail (reverse l)))
 ^ = exp
 % = mod
 :infix + 6 left
-:infix - 6 left 
+:infix - 6 left
 :infix * 7 left
 :infix / 7 left
 :infix % 7 left
 :infix ^ 8 right
 
+# -----------------------------------------------------------------------------
+# 10.2. Logical and Comparison Infix Operators
+# -----------------------------------------------------------------------------
 && = and
 || = or
 == = eq
@@ -495,261 +553,59 @@ safeInit = λl.if (isempty l) nil (reverse (tail (reverse l)))
 :infix >  5 left
 :infix >= 5 left
 
-# =============================================================================
-# RECURSIVE FUNCTIONS USING Y COMBINATOR
-# =============================================================================
-
-fibY       = Y (\f. \n. if (n == 0) 1 ((f (n - 1)) + (f (n - 2))))          # Fibonacci using Y combinator
-factY      = Y (\f. \n. if (n == 0) 1 (n * (f (n - 1))))                    # Factorial using Y combinator
-sumUptoY   = Y (\f. \n. if (n == 0) 0 (n + (f (n - 1))))                    # Sum of numbers up to n
-expY       = Y (\f. \b n. if (n == 0) 1 (b * (f b (n - 1))))                # Exponentiation
-rangeY     = \n. Y (\f k. if (k == n) nil (cons k (f (k + 1)))) 0           # Generate [0, 1, ..., n-1]
-countdownY = \n. Y (\f k. if (k == 0) (cons 0 nil) (cons k (f (k - 1)))) n  # Generate [n, n-1, ..., 0]
-gcdY       = Y (\f. \a b. if (b == 0) a (f b (a % b)))                      # GCD using Y combinator
-lcmY       = Y (\f. \a b. if (a == 0 || b == 0) 0 ((a * b) / (gcdY a b)))   # LCM using Y combinator
-mapY       = Y (\f. \g l. if (isnil l) nil (cons (g (head l)) (f g (tail l)))) # Map function using Y combinator
-filterY    = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (cons (head l) (f p (tail l))) (f p (tail l)))) # Filter function using Y combinator
-lengthY    = Y (\f. \l. if (isnil l) 0 (1 + (f (tail l))))                  # Length of list using Y combinator
-reverseY   = \l. Y (\f l acc. if (isnil l) acc (f (tail l) (cons (head l) acc))) l nil # Reverse list using Y combinator
-sumY       = Y (\f. \l. if (isnil l) 0 ((head l) + (f (tail l))))           # Sum of list using Y combinator
-productY   = Y (\f. \l. if (isnil l) 1 ((head l) * (f (tail l))))           # Product of list using Y combinator
-anyY       = Y (\f. \p l. if (isnil l) false (or (p (head l)) (f p (tail l)))) # Any element satisfies predicate using Y combinator
-allY       = Y (\f. \p l. if (isnil l) true (and (p (head l)) (f p (tail l)))) # All elements satisfy predicate using Y combinator
-findY      = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (head l) (f p (tail l)))) # Find element satisfying predicate using Y combinator
-
-ackermann  = \p.(p (\a.\q.(a (q a 1))) succ)                                # ackermann function
 
 # =============================================================================
-# MACRO SYSTEM - USEFUL MACROS FOR LAMBDA CALCULUS PROGRAMMING
+# SECTION 11: DEPRECATED AND ALIASED FUNCTIONS
+#
+# This section contains functions that are duplicates, aliases, or less
+# efficient versions of other functions in the library. They are commented out
+# to reduce clutter but are kept for historical or educational reference.
 # =============================================================================
 
-# Let binding macro - cleaner syntax for lambda application
-:macro (letbind $var $val $expr) => ((λ$var.$expr) $val)
+# --- Aliases ---
+# factorial = fact
+# fibonacci = fib
+# contains = elem
+# indexOf  = elemIndex
+# clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
+# bounded  = clamp
+# inrange  = between
+# pow2     = λn.exp 2 n
+# pow10    = λn.exp 10 n
 
-# Conditional macros
-:macro (when $cond $expr) => (if $cond $expr I)
-:macro (unless $cond $expr) => (if $cond I $expr)
+# --- Redundant or Less-Used ---
+# second   = λl.head (tail l)
+# third    = λl.head (tail (tail l))
+# butlast  = λl.reverse (tail (reverse l))
+# removeFirst = λx l.filter (λy.not (eq x y)) l
+# count    = λx l.length (filter (eq x) l)
+# singleton = λx.cons x nil
+# doubleton = λx y.cons x (cons y nil)
+# tripleton = λx y z.cons x (cons y (cons z nil))
+# issingle = λl.and (not (isnil l)) (isnil (tail l))
+# isdouble = λl.and (not (isnil l)) (and (not (isnil (tail l))) (isnil (tail (tail l))))
+# scanl    = λf z l.reverse (foldl (λacc x.cons (f (head acc) x) acc) (cons z nil) l)
+# scanr    = λf z l.foldr (λx acc.cons (f x (head acc)) acc) (cons z nil) l
+# findIndex = λp l.foldl (λacc x.if (and (isnil acc) (p x)) (cons (length acc) nil) acc) nil l
+# elemIndex = λx l.findIndex (eq x) l
+# safeInit = λl.if (isnil l) nil (reverse (tail (reverse l)))
 
-# Math operation macros
-:macro (square $x) => (mult $x $x)
-:macro (cube $x) => (mult $x (mult $x $x))
-:macro (inc $x) => (succ $x)
-:macro (dec $x) => (pred $x)
-
-# Boolean operation macros  
-:macro (nand $a $b) => (not (and $a $b))
-:macro (nor $a $b) => (not (or $a $b))
-
-# List operation macros
-:macro (empty? $list) => (isnil $list)
-:macro (first $list) => (head $list)
-:macro (rest $list) => (tail $list)
-
-# Function composition and application macros
-:macro (compose $f $g $x) => ($f ($g $x))
-:macro (apply_twice $f $x) => ($f ($f $x))
-:macro (apply_n $f $n $x) => (times $n $f $x)
-
-# Comparison and range macros
-:macro (between $x $low $high) => (and (geq $x $low) (leq $x $high))
-:macro (min2 $a $b) => (if (leq $a $b) $a $b)
-:macro (max2 $a $b) => (if (geq $a $b) $a $b)
-
-# =============================================================================
-# ADDITIONAL NUMERIC CONSTANTS AND OPERATIONS
-# =============================================================================
-
-# Useful numeric predicates
-isone    = λn.eq n 1
-istwo    = λn.eq n 2
-ispositive = λn.not (iszero n)
-
-# Additional math operations
-triple   = λn.plus n (plus n n)
-quadruple = λn.plus (double n) (double n)
-negate   = λn.zero                                # Church numerals can't be negative, so return zero
-factorial10 = fact 10                            # Pre-computed factorial for efficiency
-
-# =============================================================================
-# ENHANCED LIST OPERATIONS
-# =============================================================================
-
-# List construction helpers
-singleton = λx.cons x nil
-doubleton = λx y.cons x (cons y nil)
-tripleton = λx y z.cons x (cons y (cons z nil))
-
-# List predicates
-issingle = λl.and (not (isnil l)) (isnil (tail l))
-isdouble = λl.and (not (isnil l)) (and (not (isnil (tail l))) (isnil (tail (tail l))))
-
-# Advanced list operations
-second   = λl.head (tail l)                      # Get second element
-third    = λl.head (tail (tail l))               # Get third element
-butlast  = λl.reverse (tail (reverse l))         # All but last element
-
-# List searching and manipulation
-contains = elem                                   # Alias for elem
-indexOf  = elemIndex                             # Alias for elemIndex
-removeFirst = λx l.filter (λy.not (eq x y)) l    # Remove first occurrence (simplified)
-count    = λx l.length (filter (eq x) l)         # Count occurrences
-
-# =============================================================================
-# STRING/CHARACTER SIMULATION (using Church numerals as ASCII codes)
-# =============================================================================
-
-# ASCII constants
-space    = 32
-newline  = 10
-tab      = 9
-null     = 0
-
-# Character predicates (simplified)
-isspace  = λc.or (eq c space) (or (eq c tab) (eq c newline))
-isdigit  = λc.between c 48 57                    # ASCII '0' to '9'
-islower  = λc.between c 97 122                   # ASCII 'a' to 'z'  
-isupper  = λc.between c 65 90                    # ASCII 'A' to 'Z'
-isalpha  = λc.or (islower c) (isupper c)
-isalnum  = λc.or (isalpha c) (isdigit c)
-
-# Character conversions
-tolower  = λc.if (isupper c) (plus c 32) c       # Convert to lowercase
-toupper  = λc.if (islower c) (minus c 32) c      # Convert to uppercase
-
-# String operations (treating lists of numbers as strings)
-strlen   = length                                 # String length
-strcat   = append                                 # String concatenation
-strrev   = reverse                                # String reverse
-
-# =============================================================================
-# ADVANCED FUNCTIONAL PROGRAMMING UTILITIES
-# =============================================================================
-
-# Function combinators
-twice    = λf x.f (f x)                          # Apply function twice     
-thrice   = λf x.f (f (f x))                      # Apply function three times
-untilcomb = Y (λrec pred f x.if (pred x) x (rec pred f (f x)))  # Apply until predicate is true# Conditional application
-ifThen   = λp f x.if p (f x) x                   # Apply function if condition is true
-ifElse   = λp f g x.if p (f x) (g x)             # Apply 1 of 2 functions based on condition
-
-# Function composition utilities
-pipe     = λx f.f x                              # Pipeline application (reverse of apply)
-pipeline = foldl pipe                            # Apply sequence of functions
-thread   = pipeline                              # Alias for pipeline
-
-# =============================================================================
-# ADVANCED DATA STRUCTURES
-# =============================================================================
-
-# Stack operations (using lists)
-push     = cons
-pop      = tail
-top      = head
-isemptystack = isnil
-stacksize = length
-
-# Queue operations (inefficient but functional)
-enqueue  = λx q.append q (singleton x)
-dequeue  = tail
-front    = head
-isemptyqueue = isnil
-queuesize = length
-
-# Set operations (using lists, not optimized)
-makeset  = nub                                   # Create set from list
-insert   = λx s.if (elem x s) s (cons x s)      # Insert into set
-remove   = λx s.filter (λy.not (eq x y)) s      # Remove from set
-member   = elem                                  # Check membership
-subset   = isSubset                              # Check if subset
-setequal = λs1 s2.and (subset s1 s2) (subset s2 s1)  # Check set equality
-setsize  = length                                # Set cardinality
-
-# =============================================================================
-# ADDITIONAL MATHEMATICAL FUNCTIONS
-# =============================================================================
-
-# More comparison operations
-isequal  = eq
-notequal = neq
-isgreater = gt
-isless   = lt
-isgeq    = geq
-isleq    = leq
-
-# Sign function
-signum   = λn.if (iszero n) zero 1             # 0 if zero, 1 otherwise (Church numerals are non-negative)
-
-# Distance and bounds
-distance = λa b.if (gt a b) (minus a b) (minus b a)  # Absolute difference
-inrange  = between                                # Alias for between
-bounded  = clamp                                  # Alias for clamp
-
-# Powers of specific numbers
-pow2     = λn.exp 2 n                            # Powers of 2
-pow10    = λn.exp 10 n                           # Powers of 10
-square2  = λn.mult n n                           # Square (alias)
-
-# =============================================================================
-# DEBUGGING AND UTILITY MACROS
-# =============================================================================
-
-# Identity and constant macros
-:macro (identity $x) => $x
-:macro (constant $x $y) => $x
-:macro (ignore $x) => I
-
-# Testing and assertion macros
-:macro (assert $condition $value) => (if $condition $value error)
-:macro (test $expr $expected) => (eq $expr $expected)
-
-# =============================================================================
-# ADDITIONAL COMBINATORS AND HIGHER-ORDER FUNCTIONS
-# =============================================================================
-
-# More combinators
-pheasant = λabcd.a (b c) (b d)                   # P combinator
-queer    = λabc.b (a c)                          # Q combinator  
-robin    = λabc.b c a                            # R combinator
-
-# Function transformers
-negate_pred = λp x.not (p x)                     # Negate a predicate
-always   = λx y.true                             # Always returns true
-never    = λx y.false                            # Always returns false
-
-# Conditional functions
-guard    = λp f x.if (p x) (f x) undefined       # Apply function only if predicate holds
-safe     = λf x.f x                              # Safe application (could be extended with error handling)
-
-# =============================================================================
-# ENHANCED ERROR HANDLING AND DEBUGGING
-# =============================================================================
-
-# Better error types
-divByZero = Y (λx.x)                             # Division by zero error
-indexError = Y (λx.x)                            # Index out of bounds error
-typeError = Y (λx.x)                             # Type mismatch error
-
-# Safe operations
-safehead = λl.if (isnil l) nothing (just (head l))
-safetail = λl.if (isnil l) nothing (just (tail l))
-safenth  = λn l.if (gt n (pred (length l))) nothing (just (nth n l))
-safediv  = λa b.if (iszero b) nothing (just (div a b))
-
-# =============================================================================
-# PERFORMANCE AND OPTIMIZATION HELPERS
-# =============================================================================
-
-# Memoization helpers (limited without mutation)
-memo1    = λf.f                                  # Identity memoization
-memo2    = λf.f                                  # Identity memoization
-memo3    = λf.f                                  # Identity memoization
-
-# Lazy evaluation helpers
-delay    = λx.λf.f x                             # Delay evaluation
-force    = λthunk.thunk I                        # Force evaluation
-lazy     = delay                                 # Alias for delay
-
-# Optimization flags
-optimize = true                                   # Optimization flag
-debug_mode = false                                # Debug mode flag
+# --- Recursive examples using Y-combinator and infix operators (less efficient) ---
+fibY       = Y (\f. \n. if (n == 0) 1 ((f (n - 1)) + (f (n - 2))))
+factY      = Y (\f. \n. if (n == 0) 1 (n * (f (n - 1))))
+sumUptoY   = Y (\f. \n. if (n == 0) 0 (n + (f (n - 1))))
+expY       = Y (\f. \b n. if (n == 0) 1 (b * (f b (n - 1))))
+rangeY     = \n. Y (\f k. if (k == n) nil (cons k (f (k + 1)))) 0
+countdownY = \n. Y (\f k. if (k == 0) (cons 0 nil) (cons k (f (k - 1)))) n
+gcdY       = Y (\f. \a b. if (b == 0) a (f b (a % b)))
+lcmY       = Y (\f. \a b. if (a == 0 || b == 0) 0 ((a * b) / (gcdY a b)))
+mapY       = Y (\f. \g l. if (isnil l) nil (cons (g (head l)) (f g (tail l))))
+filterY    = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (cons (head l) (f p (tail l))) (f p (tail l))))
+lengthY    = Y (\f. \l. if (isnil l) 0 (1 + (f (tail l))))
+reverseY   = \l. Y (\f l acc. if (isnil l) acc (f (tail l) (cons (head l) acc))) l nil
+sumY       = Y (\f. \l. if (isnil l) 0 ((head l) + (f (tail l))))
+productY   = Y (\f. \l. if (isnil l) 1 ((head l) * (f (tail l))))
+anyY       = Y (\f. \p l. if (isnil l) false (or (p (head l)) (f p (tail l))))
+allY       = Y (\f. \p l. if (isnil l) true (and (p (head l)) (f p (tail l))))
+findY      = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (head l) (f p (tail l))))
 
