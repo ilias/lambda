@@ -452,11 +452,13 @@ let h = \_ y . y in h 0 9    # expect 9
 (unless false (succ 20))                               # expect 21
 (unless true (succ 20))                                # expect I (identity function)
 
-# syntax for loop macro   - already defined in stdlib
+# syntax for and iff macro   - already defined in stdlib
 for x at [1..10] do (succ x)                           # expect [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 for x at [1..10] do (square x)                         # expect [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
 for x at [1..10] do (div x 2)                          # expect [0, 1, 1, 2, 2, 3, 3, 4, 4, 5]
 for x at [1..10] do (mod x 2)                          # expect [1, 0, 1, 0, 1, 0, 1, 0, 1, 0]
+iff false then 42 else 9                               # expect 9
+iff true  then 42 else 9                               # expect 42
 
 # Swap macro for pairs
 :macro (swappair $p) => (pair (second $p) (first $p))

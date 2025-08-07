@@ -2025,33 +2025,204 @@ public class Interpreter
     private async Task InputLoopAsync(Func<string?, Task> handleInput, string promptPrimary = "lambda> ", string promptCont = "......> ")
     {
         var currentInput = new System.Text.StringBuilder();
+        var lineCount = 0;
+        
         while (true)
         {
             if (currentInput.Length == 0)
+            {
                 Console.WriteLine();
-            Console.Write(Logger.Prompt(currentInput.Length == 0 ? promptPrimary : promptCont));
+                lineCount = 0;
+            }
+            
+            // Enhanced prompt showing depth and line number for multi-line input
+            var prompt = currentInput.Length == 0 
+                ? promptPrimary 
+                : $"{promptCont}[{lineCount + 1}] ";
+                
+            // Add smart indentation for multi-line input
+            var indentation = GetSmartIndentation(currentInput.ToString());
+            if (currentInput.Length > 0 && indentation.Length > 0)
+            {
+                prompt += indentation;
+            }
+                
+            Console.Write(Logger.Prompt(prompt));
             var line = Console.ReadLine();
+            
             if (line is null)
             {
+                if (currentInput.Length > 0)
+                {
+                    Console.WriteLine("\nIncomplete input discarded.");
+                    currentInput.Clear();
+                    continue;
+                }
                 Console.WriteLine("\nGoodbye!");
                 break;
             }
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            await _logger.LogAsync($"λ> {line}", false);
             
-            // Use consolidated line processing
+            // Handle special commands during multi-line input
+            if (currentInput.Length > 0)
+            {
+                var trimmedLine = line.Trim();
+                if (trimmedLine == ":cancel" || trimmedLine == ":abort")
+                {
+                    Console.WriteLine("Multi-line input cancelled.");
+                    currentInput.Clear();
+                    lineCount = 0;
+                    continue;
+                }
+                if (trimmedLine == ":show")
+                {
+                    Console.WriteLine("Current input:");
+                    var formattedInput = FormatMultiLineInput(currentInput.ToString());
+                    Console.WriteLine(formattedInput);
+                    continue;
+                }
+                if (string.IsNullOrWhiteSpace(line) && trimmedLine == "")
+                {
+                    // Empty line in multi-line mode - try to complete current input
+                    var input = currentInput.ToString().Trim();
+                    if (!string.IsNullOrEmpty(input))
+                    {
+                        currentInput.Clear();
+                        lineCount = 0;
+                        await handleInput(input);
+                        if (input.Trim() == ":exit" || input.Trim() == ":quit")
+                            break;
+                        continue;
+                    }
+                }
+            }
+            
+            if (string.IsNullOrWhiteSpace(line) && currentInput.Length == 0) 
+                continue;
+                
+            await _logger.LogAsync($"λ> {line}", false);
+            lineCount++;
+            
+            // Use enhanced line processing with intelligent completion detection
             if (line.EndsWith('\\'))
             {
                 currentInput.Append(line[..^1]);
+                currentInput.Append(' '); // Add space for readability
                 continue;
             }
-            currentInput.Append(line);
-            var input = currentInput.ToString();
+            
+            // Add current line to input buffer
+            if (currentInput.Length > 0)
+                currentInput.Append(' '); // Add space between lines
+            currentInput.Append(line.Trim()); // Trim to handle indentation properly
+            
+            var fullInput = currentInput.ToString();
+            
+            // Check if input is complete
+            if (!IsInputComplete(fullInput))
+            {
+                continue; // Continue reading more lines
+            }
+            
+            // Input is complete, process it
             currentInput.Clear();
-            await handleInput(input);
-            if (input.Trim() == ":exit" || input.Trim() == ":quit")
+            lineCount = 0;
+            await handleInput(fullInput);
+            if (fullInput.Trim() == ":exit" || fullInput.Trim() == ":quit")
                 break;
         }
+    }
+    
+    // Generate smart indentation based on current input context
+    private string GetSmartIndentation(string currentInput)
+    {
+        if (string.IsNullOrWhiteSpace(currentInput))
+            return "";
+            
+        try
+        {
+            var tokens = _parser.Tokenize(currentInput);
+            var parenDepth = 0;
+            var bracketDepth = 0;
+            var inLambda = false;
+            var inLet = false;
+            
+            foreach (var token in tokens)
+            {
+                switch (token.Type)
+                {
+                    case TokenType.LParen:
+                        parenDepth++;
+                        break;
+                    case TokenType.RParen:
+                        parenDepth--;
+                        break;
+                    case TokenType.LBracket:
+                        bracketDepth++;
+                        break;
+                    case TokenType.RBracket:
+                        bracketDepth--;
+                        break;
+                    case TokenType.Lambda:
+                        inLambda = true;
+                        break;
+                    case TokenType.Let:
+                        inLet = true;
+                        break;
+                    case TokenType.Dot when inLambda:
+                        return "  "; // Indent lambda body
+                    case TokenType.In when inLet:
+                        return "  "; // Indent let body
+                }
+            }
+            
+            // Base indentation for nested parentheses/brackets
+            var totalDepth = Math.Max(0, parenDepth + bracketDepth);
+            return new string(' ', totalDepth * 2);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+    
+    // Format multi-line input for display with proper indentation
+    private string FormatMultiLineInput(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return input;
+            
+        var lines = new List<string>();
+        var currentLine = new System.Text.StringBuilder();
+        var depth = 0;
+        
+        foreach (char c in input)
+        {
+            switch (c)
+            {
+                case '(':
+                case '[':
+                    currentLine.Append(c);
+                    depth++;
+                    break;
+                case ')':
+                case ']':
+                    depth--;
+                    currentLine.Append(c);
+                    break;
+                case ' ' when currentLine.Length > 60: // Break long lines
+                    lines.Add(new string(' ', depth * 2) + currentLine.ToString());
+                    currentLine.Clear();
+                    break;
+                default:
+                    currentLine.Append(c);
+                    break;
+            }
+        }
+        
+        if (currentLine.Length > 0)
+            lines.Add(new string(' ', depth * 2) + currentLine.ToString());
+            
+        return string.Join('\n', lines);
     }
     public async Task RunInteractiveLoopAsync()
         => await InputLoopAsync(async input => await ProcessAndDisplayInputAsync(input!));
@@ -2071,7 +2242,7 @@ public class Interpreter
         }
     }
 
-    // Consolidated line processing logic shared between interactive and file loading
+    // Enhanced multi-line input support with intelligent completion detection
     private async Task ProcessLineWithContinuation(string line, System.Text.StringBuilder currentInput, Func<string, Task> processInput, bool isFromFile = false, int lineNumber = 0)
     {
         if (isFromFile)
@@ -2082,16 +2253,217 @@ public class Interpreter
         if (isFromFile && (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#')))
             return;
         
+        // Handle explicit continuation with backslash
         if (trimmed.EndsWith('\\'))
         {
             currentInput.Append(trimmed[..^1]);
+            if (!isFromFile) currentInput.Append(' '); // Add space for readability in interactive mode
             return;
         }
         
+        // Add current line to input buffer
+        if (currentInput.Length > 0)
+            currentInput.Append(' '); // Add space between lines
         currentInput.Append(trimmed);
+        
         var input = currentInput.ToString();
+        
+        // Check if input is complete (for interactive mode only)
+        if (!isFromFile && !IsInputComplete(input))
+        {
+            return; // Continue reading more lines
+        }
+        
+        // Input is complete, process it
         currentInput.Clear();
         await processInput(input);
+    }
+    
+    // Intelligent detection of incomplete expressions
+    private bool IsInputComplete(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return true;
+            
+        try
+        {
+            // Try to tokenize the input
+            var tokens = _parser.Tokenize(input);
+            if (tokens.Count == 0)
+                return true;
+                
+            // Check for balanced parentheses and brackets
+            if (!AreDelimitersBalanced(tokens))
+                return false;
+                
+            // Check for incomplete let expressions
+            if (HasIncompleteLetExpression(tokens))
+                return false;
+                
+            // Check for incomplete lambda expressions
+            if (HasIncompleteLambdaExpression(tokens))
+                return false;
+                
+            // Check for incomplete macro definitions
+            if (HasIncompleteMacroDefinition(tokens))
+                return false;
+                
+            // Try to parse - if it fails with certain errors, it's incomplete
+            try
+            {
+                _parser.Parse(input);
+                return true;
+            }
+            catch (ParseException ex)
+            {
+                // These errors suggest incomplete input
+                return ex.ErrorType switch
+                {
+                    TreeErrorType.UnclosedParen => false,
+                    TreeErrorType.MissingLambdaBody => false,
+                    TreeErrorType.MissingLetValue => false,
+                    TreeErrorType.MissingLetBody => false,
+                    TreeErrorType.MissingLetIn => false,
+                    TreeErrorType.EmptyExprList when tokens.Count > 0 => false,
+                    _ => true // Other errors suggest malformed input, not incomplete
+                };
+            }
+        }
+        catch
+        {
+            // If tokenization fails, assume complete but malformed
+            return true;
+        }
+    }
+    
+    private bool AreDelimitersBalanced(List<Token> tokens)
+    {
+        var parenDepth = 0;
+        var bracketDepth = 0;
+        
+        foreach (var token in tokens)
+        {
+            switch (token.Type)
+            {
+                case TokenType.LParen:
+                    parenDepth++;
+                    break;
+                case TokenType.RParen:
+                    parenDepth--;
+                    if (parenDepth < 0) return false; // More closing than opening
+                    break;
+                case TokenType.LBracket:
+                    bracketDepth++;
+                    break;
+                case TokenType.RBracket:
+                    bracketDepth--;
+                    if (bracketDepth < 0) return false; // More closing than opening
+                    break;
+            }
+        }
+        
+        return parenDepth == 0 && bracketDepth == 0;
+    }
+    
+    private bool HasIncompleteLetExpression(List<Token> tokens)
+    {
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Type == TokenType.Let)
+            {
+                // Look for 'in' keyword at the same nesting level
+                var hasIn = false;
+                var depth = 0;
+                
+                for (int j = i + 1; j < tokens.Count; j++)
+                {
+                    switch (tokens[j].Type)
+                    {
+                        case TokenType.LParen or TokenType.LBracket:
+                            depth++;
+                            break;
+                        case TokenType.RParen or TokenType.RBracket:
+                            depth--;
+                            break;
+                        case TokenType.In when depth == 0:
+                            hasIn = true;
+                            break;
+                    }
+                }
+                
+                if (!hasIn) return true; // Let without 'in' is incomplete
+            }
+        }
+        
+        return false;
+    }
+    
+    private bool HasIncompleteLambdaExpression(List<Token> tokens)
+    {
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Type == TokenType.Lambda)
+            {
+                // Look for dot separator
+                var hasDot = false;
+                var depth = 0;
+                
+                for (int j = i + 1; j < tokens.Count; j++)
+                {
+                    switch (tokens[j].Type)
+                    {
+                        case TokenType.LParen or TokenType.LBracket:
+                            depth++;
+                            break;
+                        case TokenType.RParen or TokenType.RBracket:
+                            depth--;
+                            break;
+                        case TokenType.Dot when depth == 0:
+                            hasDot = true;
+                            goto checkNext;
+                    }
+                }
+                
+                checkNext:
+                if (!hasDot) return true; // Lambda without dot is incomplete
+            }
+        }
+        
+        return false;
+    }
+    
+    private bool HasIncompleteMacroDefinition(List<Token> tokens)
+    {
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Type == TokenType.Macro)
+            {
+                // Look for '=>' at the same nesting level
+                var hasArrow = false;
+                var depth = 0;
+                
+                for (int j = i + 1; j < tokens.Count; j++)
+                {
+                    switch (tokens[j].Type)
+                    {
+                        case TokenType.LParen or TokenType.LBracket:
+                            depth++;
+                            break;
+                        case TokenType.RParen or TokenType.RBracket:
+                            depth--;
+                            break;
+                        case TokenType.FatArrow when depth == 0:
+                            hasArrow = true;
+                            goto checkNext;
+                    }
+                }
+                
+                checkNext:
+                if (!hasArrow) return true; // Macro without '=>' is incomplete
+            }
+        }
+        
+        return false;
     }
 
     public async Task<string> LoadFileAsync(string path)
@@ -2135,6 +2507,7 @@ public class Interpreter
             ":pretty" => HandlePrettyPrint(arg),
             ":macros" => ShowMacros(),
             ":macro" => HandleMacroDefinition(arg),
+            ":multiline" => ShowMultiLineHelp(),
             _ => $"Unknown command: {command}"
         };
     }
@@ -2344,15 +2717,15 @@ public class Interpreter
     public string ShowInfixOperators()
     {
         if (_parser._infixOperators.Count == 0)
-            return "No infix operators defined";
+            return "# No infix operators defined";
 
         var operators = _parser._infixOperators.Values
             .OrderByDescending(op => op.Precedence)
             .ThenBy(op => op.Symbol);
 
-        _logger.Log("Defined infix operators:\n");
+        _logger.Log("\n");
         foreach (var op in operators)
-            _logger.Log($"  infix {op.Symbol} (precedence: {op.Precedence}, associativity: {op.Associativity.ToString().ToLower()})");
+            _logger.Log($"  :infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()}");
         return $"# Displayed {_parser._infixOperators.Count} infix operators.";
     }
 
@@ -2452,6 +2825,7 @@ public class Interpreter
           :macro (pattern) => transformation  Define a macro (e.g., :macro (when $cond $body) => (if $cond $body unit))
           :macros                List all defined macros
           :memo                  Clear all memoization/caches
+          :multiline             Show detailed multi-line input help and examples
           :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
           :native show           Show all supported native arithmetic functions/operators
           :pretty on|off         Toggle pretty printing (default: on) - numerals and lists
@@ -2465,17 +2839,89 @@ public class Interpreter
                                  Define a macro with pattern matching
           Examples:
             :macro (when $cond $body) => (if $cond $body unit)
-            :macro (unless $cond $body) => (if $cond unit $body)
             :macro (compose $f $g) => (\x. $f ($g x))
             :macro (flip $f) => (\x y. $f y x)
+            :macro (for $var at $list do $body) => (map (\$var.$body) $list)
+            :macro (iff $p then $then else $else) => if $p $then $else
 
         -- Interactive Features --
-          • Line continuation: Use '\' at end of line to continue input
+          • Multi-line input: 
+            - Expressions automatically continue if parentheses/brackets are unmatched
+            - Lambda expressions continue until body is complete (λx. <body>)
+            - Let expressions continue until 'in' clause is complete
+            - Macro definitions continue until '=>' and body are complete
+            - Use '\' at end of line for explicit continuation
+            - Type ':cancel' or ':abort' to discard current multi-line input
+            - Type ':show' to display current multi-line input buffer
+            - Press Enter on empty line to attempt completion of current input
           • Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
           • Command line arguments: Treated as files to load at startup
           • Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
           • Macro variables: Use $variable in patterns to capture expressions
           • Internally, each '_' is renamed to a unique variable (_placeholder1, _placeholder2, ...)
+        """;
+
+    private static string ShowMultiLineHelp() =>
+        """
+        ===== Multi-Line Input System =====
+        
+        The interpreter supports intelligent multi-line input with automatic completion detection:
+        
+        -- Automatic Continuation --
+        Input automatically continues when:
+        • Parentheses are unmatched: (expr1 (expr2 
+        • Brackets are unmatched: [list element1
+        • Lambda expressions are incomplete: λx.
+        • Let expressions lack 'in': let x = 5
+        • Macro definitions lack '=>': :macro (when $cond $body)
+        
+        -- Manual Continuation --
+        • Use '\' at end of line for explicit continuation
+        • The interpreter shows enhanced prompts:
+          lambda> first line
+          ......> [2] second line (with auto-indentation)
+          ......> [3] third line
+        
+        -- Multi-Line Commands --
+        While in multi-line mode, you can use:
+        • :cancel or :abort  - Discard current input and start over
+        • :show             - Display formatted current input buffer
+        • Empty line        - Attempt to complete and execute current input
+        
+        -- Examples --
+        
+        1. Lambda function (auto-detects incomplete lambda):
+           lambda> λx y.
+           ......> [2]   x + y
+           
+        2. Let expression (auto-detects missing 'in'):
+           lambda> let factorial = Y (λf n.
+           ......> [2]     if (iszero n) 1 (mult n (f (pred n))))
+           ......> [3]   in factorial 5
+           
+        3. Complex nested expression (auto-detects unmatched parentheses):
+           lambda> map (λx.
+           ......> [2]     mult x x) [1, 2, 3]
+           
+        4. Explicit continuation with backslash:
+           lambda> let long_name = very_long_expression \
+           ......> [2] that_continues_here in long_name
+           
+        5. Macro definition (auto-detects missing '=>'):
+           lambda> :macro (when $condition $body)
+           ......> [2] => if $condition $body I
+        
+        -- Smart Indentation --
+        The interpreter provides automatic indentation based on:
+        • Nesting depth (parentheses/brackets)
+        • Lambda body indentation after '.'
+        • Let body indentation after 'in'
+        
+        -- Tips --
+        • Use ':show' to see your current input with formatting
+        • Press Enter on empty line to force completion
+        • Type ':cancel' if you get stuck in multi-line mode
+        • The system is forgiving - it tries to detect completion intelligently
         """;
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
