@@ -1,0 +1,672 @@
+# Lambda Calculus Interpreter
+
+A high-performance lambda calculus interpreter written in C# featuring lazy evaluation, comprehensive standard library, infix operators, macros, and native arithmetic optimizations.
+
+## Table of Contents
+
+- [Features](#features)
+- [Getting Started](#getting-started)
+- [Core Language](#core-language)
+- [Interactive Commands](#interactive-commands)
+- [Standard Library](#standard-library)
+- [Examples](#examples)
+- [Performance Features](#performance-features)
+- [Building and Running](#building-and-running)
+
+## Features
+
+### Core Language Features
+
+- **Pure Lambda Calculus**: Supports variables, lambda abstractions, and function application
+- **Church Numerals**: Built-in support for integers using Church encoding
+- **Lazy Evaluation**: Efficient lazy evaluation with thunk caching (can be toggled to eager)
+- **Y Combinator**: Built-in support for recursion via the Y combinator
+- **Multi-line Input**: Intelligent multi-line expression support with auto-completion detection
+
+### Advanced Features
+
+- **Infix Operators**: Define custom infix operators with precedence and associativity
+- **Macro System**: Pattern-based macro system for syntactic sugar
+- **Native Arithmetic**: Optional native arithmetic optimizations for Church numerals
+- **Pretty Printing**: Automatic formatting of Church numerals and lists
+- **Comprehensive Standard Library**: Over 200 predefined functions and utilities
+
+### Performance Optimizations
+
+- **Memoization**: Multiple caching layers for substitution, evaluation, and free variables
+- **Expression Interning**: Memory-efficient expression representation
+- **Stack-based Evaluation**: CEK (Control, Environment, Kontinuation) machine for efficient evaluation
+- **Thunk Forcing**: Lazy evaluation with intelligent thunk management
+
+## Getting Started
+
+### Running the Interpreter
+
+```bash
+# Start interactive mode
+./lambda-cek
+
+# Load files at startup
+./lambda-cek file1.lambda file2.lambda
+
+# The standard library is automatically loaded from stdlib.lambda
+```
+
+### Basic Syntax
+
+```lambda
+# Variables and application
+x                        # Variable
+f x                      # Function application
+
+# Lambda abstractions
+λx.x                     # Identity function
+\x.x                     # Alternative syntax
+x -> x                   # Arrow function syntax (same as λx.x)
+
+# Multi-parameter functions
+λx y.x                   # Same as λx.λy.x
+x, y -> x + y            # Multi-parameter arrow function → λx.λy.x + y
+
+# Church numerals
+0, 1, 2, 42              # Integer literals → λf.λx.x, λf.λx.f x, λf.λx.f (f x), etc.
+
+# Let expressions (syntactic sugar for function application)
+let id = x -> x in id 42                    # → (λid.id 42) (λx.x)
+let add = x, y -> x + y in add 3 4          # → (λadd.add 3 4) (λx.λy.x + y)
+
+# Multiple let bindings
+let x = 3, y = 4 in x * y                   # → (λx.λy.x * y) 3 4
+
+# Recursive definitions (uses Y combinator)
+let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factorial 5
+# → (λfactorial.factorial 5) (Y (λfactorial.λn.if (iszero n) 1 (mult n (factorial (pred n)))))
+
+# Lists (syntactic sugar for cons/nil structures)
+[1, 2, 3]               # → cons 1 (cons 2 (cons 3 nil))
+[]                      # → nil
+[1 .. 5]                # → cons 1 (cons 2 (cons 3 (cons 4 (cons 5 nil))))
+[10 .. 5]               # → cons 10 (cons 9 (cons 8 (cons 7 (cons 6 (cons 5 nil)))))
+
+# Comments
+# This is a comment
+```
+
+## Interactive Commands
+
+The interpreter provides numerous commands for managing your session:
+
+### Environment Management
+
+```shell
+:clear                   # Clear environment and caches
+:env                     # Show current definitions
+:load <file>             # Load definitions from file
+:save <file>             # Save current environment to file
+```
+
+### Evaluation Control
+
+```shell
+:lazy on|off             # Toggle lazy/eager evaluation
+:step on|off             # Toggle step-by-step evaluation
+:depth [n]               # Set/show recursion depth limit (10-10000)
+:native on|off           # Toggle native arithmetic optimizations
+:pretty on|off           # Toggle pretty printing
+```
+
+### Debugging and Performance
+
+```shell
+:stats                   # Show detailed performance statistics
+:memo                    # Clear all caches
+:log <file|off>          # Enable/disable logging to file
+```
+
+### Language Extensions
+
+```shell
+:infix <op> <prec> <assoc>  # Define infix operator
+:macro (pattern) => body    # Define macro
+:macros                     # List all macros
+```
+
+### Help and Information
+
+```shell
+:help                    # Show comprehensive help
+:multiline               # Show multi-line input help
+:native show             # Show all native arithmetic functions
+```
+
+## Core Language
+
+### Lambda Abstractions
+
+```lambda
+# Basic lambda
+id = λx.x
+id = \x.x                # Alternative syntax (backslash)
+id = x -> x              # Arrow function syntax → λx.x
+
+# Multi-parameter functions
+add = λx y.x + y                    # Standard lambda calculus
+add = x, y -> x + y                 # Arrow syntax → λx.λy.x + y
+
+# Higher-order functions
+twice = f -> x -> f (f x)           # → λf.λx.f (f x)
+compose = f -> g -> x -> f (g x)    # → λf.λg.λx.f (g x)
+```
+
+### Church Numerals
+
+Church numerals represent natural numbers as functions:
+
+```lambda
+# Church numeral n = λf.λx.f^n(x)
+0                        # λf.λx.x
+1                        # λf.λx.f x
+2                        # λf.λx.f (f x)
+
+# Arithmetic operations
+plus 2 3                 # 5
+mult 4 5                 # 20
+exp 2 3                  # 8 (2^3)
+pred 5                   # 4 (predecessor)
+```
+
+### Lists
+
+Lists are implemented as right-folded structures:
+
+```lambda
+# List construction
+[1, 2, 3]               # cons 1 (cons 2 (cons 3 nil))
+[]                      # nil (empty list)
+[1 .. 5]                # [1, 2, 3, 4, 5]
+[10 .. 5]               # [10, 9, 8, 7, 6, 5] (descending)
+
+# List operations
+head [1, 2, 3]          # 1
+tail [1, 2, 3]          # [2, 3]
+length [1, 2, 3]        # 3
+append [1, 2] [3, 4]    # [1, 2, 3, 4]
+```
+
+### Pattern Matching with Let
+
+```lambda
+# Simple let binding (syntactic sugar for function application)
+let x = 5 in x + 1                                 # → (λx.x + 1) 5
+
+# Multiple bindings (desugared to nested lambdas)
+let x = 3, y = 4 in x * y                          # → (λx.λy.x * y) 3 4
+
+# Recursive definitions (uses Y combinator internally)
+let rec fib = n -> if (iszero n) 1 (fib (pred n) + fib (pred (pred n))) in fib 10
+# → (λfib.fib 10) (Y (λfib.λn.if (iszero n) 1 (fib (pred n) + fib (pred (pred n)))))
+```
+
+## Standard Library
+
+The standard library (`stdlib.lambda`) provides over 200 functions organized into categories:
+
+### 1. Core Combinators
+
+```lambda
+# Basic combinators
+I = λx.x                 # Identity
+K = λx y.x               # Constant
+S = λx y z.x z (y z)     # S combinator
+B = λx y z.x (y z)       # Composition
+C = λx y z.x z y         # Flip
+
+# Y combinator is built-in for recursion
+fact = Y (λf n.if (iszero n) 1 (mult n (f (pred n))))
+```
+
+### 2. Boolean Logic
+
+```lambda
+# Boolean values and operations
+true, false             # Church booleans
+not, and, or, xor       # Logical operations
+if                      # Conditional (λp a b.p a b)
+
+# Examples
+and true false          # false
+or true false           # true
+if (gt 5 3) "yes" "no"  # "yes"
+```
+
+### 3. Arithmetic Operations
+
+#### Basic Arithmetic
+
+```lambda
+# Church numeral arithmetic
+plus 3 4                # 7
+minus 10 3              # 7
+mult 6 7                # 42
+div 15 3                # 5
+mod 17 5                # 2
+exp 2 8                 # 256
+
+# Additional operations
+succ 5                  # 6 (successor)
+pred 5                  # 4 (predecessor)
+iszero 0                # true
+double 7                # 14
+square 8                # 64
+```
+
+#### Comparisons
+
+```lambda
+eq 5 5                  # true
+neq 3 7                 # true
+lt 3 8                  # true
+leq 5 5                 # true
+gt 8 3                  # true
+geq 5 5                 # true
+max 8 12                # 12
+min 5 9                 # 5
+```
+
+#### Advanced Math
+
+```lambda
+# Mathematical functions
+fact 6                  # 720 (factorial)
+fib 10                  # 89 (Fibonacci)
+gcd 48 18               # 6 (greatest common divisor)
+lcm 12 8                # 24 (least common multiple)
+sqrt 25                 # 5 (integer square root)
+isPrime 17              # true
+
+# Number predicates
+even 8                  # true
+odd 7                   # true
+ispositive 5            # true
+```
+
+### 4. List Operations
+
+#### Basic List Functions
+
+```lambda
+# List construction and access
+cons 1 [2, 3]          # [1, 2, 3]
+head [1, 2, 3]         # 1
+tail [1, 2, 3]         # [2, 3]
+isnil []               # true
+length [1, 2, 3, 4]    # 4
+
+# List manipulation
+append [1, 2] [3, 4]   # [1, 2, 3, 4]
+reverse [1, 2, 3]      # [3, 2, 1]
+take 3 [1, 2, 3, 4, 5] # [1, 2, 3]
+drop 2 [1, 2, 3, 4, 5] # [3, 4, 5]
+```
+
+#### Higher-Order List Functions
+
+```lambda
+# Map, filter, fold
+map (mult 2) [1, 2, 3, 4]           # [2, 4, 6, 8]
+filter even [1, 2, 3, 4, 5, 6]      # [2, 4, 6]
+foldl plus 0 [1, 2, 3, 4]           # 10
+foldr mult 1 [2, 3, 4]              # 24
+
+# List generation
+range 5                             # [0, 1, 2, 3, 4]
+enumFromTo 3 7                      # [3, 4, 5, 6, 7]
+repeat 3 42                         # [42, 42, 42]
+primes 20                           # [2, 3, 5, 7, 11, 13, 17, 19]
+```
+
+#### List Utilities
+
+```lambda
+# Element access and searching
+nth 2 [10, 20, 30, 40]             # 30
+elem 3 [1, 2, 3, 4]                # true
+find (gt 10) [5, 15, 3, 20]        # 15
+any even [1, 3, 6, 7]              # true
+all (lt 10) [1, 5, 8, 9]           # true
+
+# Aggregation
+sum [1, 2, 3, 4]                   # 10
+product [2, 3, 4]                  # 24
+maximum [3, 7, 2, 9, 1]            # 9
+minimum [3, 7, 2, 9, 1]            # 2
+```
+
+#### Advanced List Operations
+
+```lambda
+# Zipping and unzipping
+zip [1, 2, 3] [4, 5, 6]            # [(1,4), (2,5), (3,6)]
+zipWith plus [1, 2, 3] [4, 5, 6]   # [5, 7, 9]
+unzip [(1,4), (2,5), (3,6)]        # ([1,2,3], [4,5,6])
+
+# Set operations
+union [1, 2, 3] [3, 4, 5]          # [1, 2, 3, 4, 5]
+intersect [1, 2, 3] [2, 3, 4]      # [2, 3]
+difference [1, 2, 3, 4] [2, 4]     # [1, 3]
+nub [1, 2, 2, 3, 1, 4]             # [1, 2, 3, 4] (remove duplicates)
+```
+
+### 5. Data Structures
+
+#### Pairs
+
+```lambda
+# Pair construction and access
+p = pair 10 20
+first p                            # 10
+second p                           # 20
+swap p                             # pair 20 10
+```
+
+#### Maybe Type (Optional)
+
+```lambda
+# Maybe represents optional values
+just 42                           # Some value
+nothing                           # No value
+
+# Safe operations
+safehead [1, 2, 3]                # just 1
+safehead []                       # nothing
+safediv 10 2                      # just 5
+safediv 10 0                      # nothing
+
+# Maybe operations
+fromMaybe 0 (just 42)             # 42
+fromMaybe 0 nothing               # 0
+maybe 0 (mult 2) (just 21)        # 42
+```
+
+#### Either Type (Error Handling)
+
+```lambda
+# Either represents success/failure
+right 42                          # Success value
+left "error"                      # Error value
+
+# Either operations
+either (λe.0) (λv.v) (right 42)   # 42
+either (λe.0) (λv.v) (left "err") # 0
+```
+
+### 6. Functional Programming Utilities
+
+```lambda
+# Function composition and application
+compose (mult 2) (plus 3) 5        # 16 ((5+3)*2)
+apply (mult 3) 7                   # 21
+flip minus 10 3                    # -7 (3-10)
+
+# Currying and partial application
+curry (λp.plus (first p) (second p)) 3 4  # 7
+partial plus 5 7                   # 12
+
+# Iteration and repetition
+iterate (mult 2) 3 16              # 128 (16*2*2*2)
+times 4 succ 0                     # 4
+```
+
+### 7. String and Character Operations
+
+```lambda
+# ASCII character utilities
+space, newline, tab               # ASCII constants
+isdigit 65                        # false ('A')
+isalpha 65                        # true ('A')
+tolower 65                        # 97 ('a')
+toupper 97                        # 65 ('A')
+
+# String operations (on lists of numbers)
+words [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]  # Split on spaces
+lines [72, 101, 108, 108, 111, 10, 87, 111, 114, 108, 100]  # Split on newlines
+```
+
+## Infix Operators
+
+Define custom infix operators with precedence and associativity:
+
+```lambda
+# Define operators
+:infix + 6 left                    # Addition
+:infix * 7 left                    # Multiplication (higher precedence)
+:infix ^ 8 right                   # Exponentiation (right associative)
+
+# Use infix notation (desugared to function application)
+3 + 4 * 5                          # → plus 3 (mult 4 5) = 23
+2 ^ 3 ^ 2                          # → exp 2 (exp 3 2) = 512 (right associative)
+
+# Custom operators
+:infix <> 5 left
+<> = λx y.not (eq x y)
+3 <> 4                             # → <> 3 4 → (λx y.not (eq x y)) 3 4 → true
+```
+
+## Macro System
+
+Define reusable patterns with the macro system:
+
+```lambda
+# Basic macros (pattern matching and substitution)
+:macro (when $cond $body) => (if $cond $body I)
+:macro (unless $cond $body) => (if $cond I $body)
+:macro (square $x) => (mult $x $x)
+
+# Using macros (expanded at parse time)
+when (gt 5 3) (plus 1 2)           # → if (gt 5 3) (plus 1 2) I → 3
+unless (iszero 0) 42               # → if (iszero 0) I 42 → I (identity)
+square 7                           # → mult 7 7 → 49
+
+# Advanced macros
+:macro (for $var at $list do $body) => (map (λ$var.$body) $list)
+for x at [1, 2, 3] do (mult x x)   # → map (λx.mult x x) [1, 2, 3] → [1, 4, 9]
+```
+
+## Examples
+
+### Fibonacci Sequence
+
+```lambda
+# Recursive Fibonacci
+fibRec = Y (λf n.if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
+
+# Iterative Fibonacci (more efficient)
+fib 10                             # 89
+
+# Fibonacci sequence
+map fib (range 10)                   # [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]
+mapY (n -> [n, (fibY n)]) (range 10) # [[0, 1], [1, 2], [2, 3], [3, 5], [4, 8], [5, 13], [6, 21], [7, 34], [8, 55], [9, 89]]
+```
+
+### Prime Numbers
+
+```lambda
+# Check if number is prime
+isPrime 17                         # true
+isPrime 15                         # false
+
+# Generate primes up to n
+primes 30                          # [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+
+# Prime factorization (simplified)
+factors = λn.filter (λd.eq (mod n d) 0) (enumFromTo 2 n)
+factors 12                         # [2, 3, 4, 6, 12]
+```
+
+### List Processing
+
+```lambda
+# Process a list of numbers
+numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+# Get even squares
+evenSquares = map square (filter even numbers)
+# Result: [4, 16, 36, 64, 100]
+
+# Sum of squares
+sumOfSquares = sum (map square numbers)
+# Result: 385
+
+# Complex processing pipeline
+result = sum (map square (filter odd (take 5 numbers)))
+# Result: 35 (1² + 3² + 5² = 1 + 9 + 25)
+```
+
+### Church Encoding Examples
+
+```lambda
+# Church booleans in action
+selectValue = λcond.if cond "success" "failure"
+selectValue true                   # "success"
+selectValue false                  # "failure"
+
+# Church numerals as iterators
+applyNTimes = λn f x.n f x
+applyNTimes 3 succ 5              # 8 (apply successor 3 times to 5)
+applyNTimes 4 (mult 2) 1          # 16 (multiply by 2, 4 times)
+```
+
+### Higher-Order Functions
+
+```lambda
+# Function composition chain
+pipeline = compose (mult 3) (compose (plus 2) square)
+pipeline 4                         # 54 ((4²+2)*3 = (16+2)*3 = 54)
+
+# Partial application
+add5 = partial plus 5
+map add5 [1, 2, 3, 4]              # [6, 7, 8, 9]
+
+# Function combinators
+twice = λf x.f (f x)
+twice succ 3                       # 5
+twice (mult 2) 3                   # 12
+```
+
+## Performance Features
+
+### Native Arithmetic
+
+When enabled (`:native on`), the interpreter uses optimized native operations for Church numerals:
+
+```lambda
+# These operations are accelerated when native arithmetic is enabled:
+plus, minus, mult, div, mod        # Basic arithmetic
+succ, pred, iszero                 # Successor/predecessor
+lt, leq, eq, geq, gt, neq          # Comparisons
+max, min, sqrt, random             # Additional functions
+```
+
+### Caching and Memoization
+
+The interpreter includes multiple caching layers:
+
+- **Substitution cache**: Speeds up variable substitution
+- **Evaluation cache**: Memoizes expression evaluation
+- **Free variable cache**: Caches free variable analysis
+- **Expression interning**: Reduces memory usage
+
+### Statistics and Monitoring
+
+Use `:stats` to view detailed performance information:
+
+```shell
+:stats
+# Shows cache hit rates, evaluation counts, memory usage, etc.
+```
+
+## Multi-line Input
+
+The interpreter supports intelligent multi-line input:
+
+```lambda
+# Automatic continuation for incomplete expressions
+lambda> let factorial = Y (λf n.
+......> [2]     if (iszero n) 1 
+......> [3]         (mult n (f (pred n))))
+......> [4] in factorial 5
+
+# Manual continuation with backslash
+lambda> let result = very_long_expression \
+......> [2] that_continues_here in result
+
+# Multi-line commands while editing
+:cancel                            # Discard current input
+:show                              # Display current buffer
+:abort                             # Same as :cancel
+```
+
+## Building and Running
+
+### Prerequisites
+
+- .NET 8.0 or later
+- C# compiler
+
+### Building
+
+```bash
+# Build the project
+dotnet build
+
+# Run in development mode
+dotnet run
+
+# Build release version
+dotnet build -c Release
+```
+
+### Running
+
+```bash
+# Start interactive mode
+./lambda-cek
+
+# Load specific files
+./lambda-cek stdlib.lambda tests.lambda
+
+# Run with native arithmetic enabled by default
+./lambda-cek
+:native on
+```
+
+The interpreter automatically loads `stdlib.lambda` if it exists in the current directory, providing access to the full standard library.
+
+## File Format
+
+Lambda files (`.lambda` extension) support:
+
+- Lambda expressions and definitions
+- Comments (lines starting with `#` or text after `#`)
+- Multi-line expressions
+- Macro definitions
+- Infix operator definitions
+
+Example file structure:
+
+```lambda
+# My lambda file
+# Define some utilities
+id = λx.x
+compose = λf g x.f (g x)
+
+# Define infix operators
+:infix ∘ 9 right
+∘ = compose
+
+# Use the definitions
+twice = f -> f ∘ f
+result = twice succ 5  # 7
+```
+
+This interpreter provides a complete environment for exploring lambda calculus, functional programming concepts, and advanced language features while maintaining high performance through lazy evaluation and intelligent caching.
