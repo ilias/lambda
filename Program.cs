@@ -2677,8 +2677,154 @@ public class Interpreter
 
     private async Task<string> SaveFileAsync(string path)
     {
-        await File.WriteAllLinesAsync(path, _context.Select(kv => $"{kv.Key} = {kv.Value}"));
-        return $"Saved to {path}";
+        if (string.IsNullOrWhiteSpace(path))
+            return "Error: Please specify a filename. Usage: :save <filename>";
+
+        try
+        {
+            var lines = new List<string>();
+            
+            // Add file header with timestamp and stats
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            var definitionCount = _context.Count;
+            var infixCount = _parser._infixOperators.Count;
+            var macroCount = _parser._macros.Count;
+            
+            lines.Add($"# ============================================================================");
+            lines.Add($"# Lambda Calculus Environment Export");
+            lines.Add($"# Generated: {timestamp}");
+            lines.Add($"# Definitions: {definitionCount}, Infix Operators: {infixCount}, Macros: {macroCount}");
+            lines.Add($"# ============================================================================");
+            lines.Add("");
+                        
+            // Save variable definitions/assignments
+            if (_context.Count > 0)
+            {
+                lines.Add("# =============================================================================");
+                lines.Add("# VARIABLE DEFINITIONS");
+                lines.Add("# =============================================================================");
+                lines.Add("");
+                
+                // Group definitions by type for better organization
+                var simpleVars = new List<(string, Expr)>();
+                var functionVars = new List<(string, Expr)>();
+                var complexVars = new List<(string, Expr)>();
+                
+                foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
+                {
+                    // Categorize by expression type for better file organization
+                    if (value.Type == ExprType.Abs)
+                        functionVars.Add((key, value));
+                    else if (value.Type == ExprType.Var || 
+                            (value.Type == ExprType.App && IsSimpleApplication(value)))
+                        simpleVars.Add((key, value));
+                    else
+                        complexVars.Add((key, value));
+                }
+                
+                // Write simple variables first
+                if (simpleVars.Count > 0)
+                {
+                    lines.Add("# Simple definitions and constants");
+                    foreach (var (key, value) in simpleVars)
+                    {
+                        lines.Add($"{key} = {FormatWithNumerals(value)}");
+                    }
+                    lines.Add("");
+                }
+                
+                // Write function definitions
+                if (functionVars.Count > 0)
+                {
+                    lines.Add("# Function definitions");
+                    foreach (var (key, value) in functionVars)
+                    {
+                        lines.Add($"{key} = {FormatWithNumerals(value)}");
+                    }
+                    lines.Add("");
+                }
+                
+                // Write complex expressions
+                if (complexVars.Count > 0)
+                {
+                    lines.Add("# Complex expressions");
+                    foreach (var (key, value) in complexVars)
+                    {
+                        lines.Add($"{key} = {FormatWithNumerals(value)}");
+                    }
+                }
+            }
+            
+            // Save infix operators first (they need to be defined before use)
+            if (_parser._infixOperators.Count > 0)
+            {
+                lines.Add("# =============================================================================");
+                lines.Add("# INFIX OPERATORS");
+                lines.Add("# =============================================================================");
+                lines.Add("");
+                
+                var operators = _parser._infixOperators.Values
+                    .OrderByDescending(op => op.Precedence)
+                    .ThenBy(op => op.Symbol);
+                
+                foreach (var op in operators)
+                {
+                    lines.Add($":infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()}");
+                }
+                lines.Add("");
+            }
+            
+            // Save macro definitions (they should be defined before variable assignments that might use them)
+            if (_parser._macros.Count > 0)
+            {
+                lines.Add("# =============================================================================");
+                lines.Add("# MACRO DEFINITIONS");
+                lines.Add("# =============================================================================");
+                lines.Add("");
+                
+                foreach (var (name, macro) in _parser._macros.OrderBy(p => p.Key))
+                {
+                    // Use the macro's ToString method which formats it properly
+                    lines.Add(macro.ToString());
+                }
+                lines.Add("");
+            }
+
+            // Add footer with loading instructions
+            lines.Add("");
+            lines.Add("# =============================================================================");
+            lines.Add("# END OF EXPORT");
+            lines.Add("# =============================================================================");
+            lines.Add("# To load this environment, use: :load " + Path.GetFileName(path));
+            lines.Add("# Note: This will add to your current environment. Use :clear first for a clean state.");
+            
+            await File.WriteAllLinesAsync(path, lines);
+            
+            return $"Environment saved to '{path}' ({definitionCount} definitions, {infixCount} infix operators, {macroCount} macros)";
+        }
+        catch (Exception ex)
+        {
+            return $"Error saving to '{path}': {ex.Message}";
+        }
+    }
+    
+    // Helper method to determine if an application is "simple" for categorization
+    private bool IsSimpleApplication(Expr expr)
+    {
+        if (expr.Type != ExprType.App) return false;
+        
+        // Consider it simple if it's a direct application of known functions to constants/variables
+        var depth = 0;
+        var current = expr;
+        
+        while (current != null && current.Type == ExprType.App && depth < 3)
+        {
+            current = current.AppLeft;
+            depth++;
+        }
+        
+        // Simple if the final left-most element is a variable and depth is reasonable
+        return current?.Type == ExprType.Var && depth <= 2;
     }
 
     private string ClearEnvironment()
