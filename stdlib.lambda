@@ -190,7 +190,7 @@ tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil ni
 # -----------------------------------------------------------------------------
 map      = λf l.l (λx rest.cons (f x) rest) nil
 filter   = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
-foldl    = λf z l.foldr (λx g acc.g (f acc x)) (λy.y) l z
+foldl    = λf z l.l (λx acc.f acc x) z
 foldr    = λf z l.l f z
 
 # -----------------------------------------------------------------------------
@@ -207,9 +207,10 @@ countdown = λn. Y (λf k. if (iszero k) (cons 0 nil) (cons k (f (pred k)))) n
 enumFromTo = λstart end.map (plus start) (range (succ (minus end start)))
 enumFrom   = λstart n.map (plus start) (range n)
 primes     = λn.filter isPrime (enumFromTo 2 n)
-repeat     = λn x.n (const x) x
-# replicate  = repeat # Alias for repeat
-# iota       = range # Alias for range
+repeat     = λn x.n (λacc.cons x acc) nil
+iota       = range # Alias for range
+replicate  = λn x.n (λacc.cons x acc) nil
+iota       = range # Alias for range
 
 # -----------------------------------------------------------------------------
 # 3.5. Lists - Element Access and Querying
@@ -222,24 +223,22 @@ notElem  = λx l.not (elem x l)
 any      = λp l.foldr (λx acc.or (p x) acc) false l
 all      = λp l.foldr (λx acc.and (p x) acc) true l
 find     = λp l.foldr (λx acc.if (and (p x) (isnil acc)) x acc) nil l
+find     = λp l.foldl (λacc x.if (and (isnil acc) (p x)) x acc) nil l
 sum      = λl.foldr plus zero l
 product  = λl.foldr mult 1 l
 maximum  = λl.foldr (λx acc.if (gt x acc) x acc) zero l
-minimum  = λl.tail l (foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)) (head l)
+minimum  = λl.foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)
 
 # -----------------------------------------------------------------------------
 # 3.6. Lists - Advanced Utilities
 # -----------------------------------------------------------------------------
-zip     = λl1 l2.reverse (foldl (λacc p.if (isnil (second p)) acc \
-                                             (cons (pair (head (first p)) (head (second p))) acc)) \
-                                  nil \
-                                  (foldl (λacc x.cons (pair (drop (length acc) l1) \
-                                                            (drop (length acc) l2)) acc) \
-                                         nil (range (min (length l1) (length l2)))))
-zipWith = λf l1 l2.map (λp.f (first p) (second p)) (zip l1 l2)
+zip     = Y (λzip l1 l2.if (or (isnil l1) (isnil l2)) nil (cons (pair (head l1) (head l2)) (zip (tail l1) (tail l2))))
+zipWith = Y (λzipWith f l1 l2.if (or (isnil l1) (isnil l2)) nil (cons (f (head l1) (head l2)) (zipWith f (tail l1) (tail l2))))
+scanl    = λf z l.reverse (foldl (λacc x.cons (f (head acc) x) acc) (cons z nil) l)
+scanr    = λf z l.foldr (λx acc.cons (f x (head acc)) acc) (cons z nil) l
 unzip   = λl.pair (map first l) (map second l)
 nub     = λl.foldl (λacc x.if (elem x acc) acc (cons x acc)) nil l
-# unique  = nub # Alias for nub
+unique = nub
 partition = λp l.pair (filter p l) (filter (λx.not (p x)) l)
 splitAt = λn l.pair (take n l) (drop n l)
 
@@ -265,9 +264,12 @@ treeLeft  = λt.first (second t)
 treeRight = λt.second (second t)
 isLeaf    = λt.and (isnil (treeLeft t)) (isnil (treeRight t))
 # Simplified traversals to avoid recursion
-inOrder   = λt.if (isnil t) nil (cons (treeValue t) nil)
-preOrder  = λt.if (isnil t) nil (cons (treeValue t) nil)
-postOrder = λt.if (isnil t) nil (cons (treeValue t) nil)
+inOrder   = Y (λf t.if (isnil t) nil (append (f (treeLeft t)) (cons (treeValue t) (f (treeRight t)))))
+preOrder  = Y (λf t.if (isnil t) nil (cons (treeValue t) (append (f (treeLeft t)) (f (treeRight t)))))
+postOrder = Y (λf t.if (isnil t) nil (append (f (treeLeft t)) (append (f (treeRight t)) (cons (treeValue t) nil))))
+
+treeSize  = λt.if (isnil t) 0 (succ (plus (treeSize (treeLeft t)) (treeSize (treeRight t))))
+treeDepth = λt.if (isnil t) 0 (succ (max (treeDepth (treeLeft t)) (treeDepth (treeRight t))))
 
 
 # =============================================================================
@@ -293,6 +295,7 @@ times    = λn f.n f I
 curry    = λf x y.f (pair x y)
 uncurry  = λf p.f (first p) (second p)
 partial  = λf x.λy.f x y
+partial2 = λf x y.λz.f x y z
 partial2 = λf x y.λz.f x y z
 
 # -----------------------------------------------------------------------------
@@ -367,6 +370,8 @@ safenth  = λn l.if (gt n (pred (length l))) nothing (just (nth n l))
 safediv  = λa b.if (iszero b) nothing (just (div a b))
 safeMinimum = λl.if (isnil l) nothing (just (minimum l))
 safeMaximum = λl.if (isnil l) nothing (just (maximum l))
+safeInit = λl.if (isnil l) nil (reverse (tail (reverse l)))
+maybeMap = λf m.if (isNothing m) nothing (just (f (fromJust m)))
 
 
 # =============================================================================
