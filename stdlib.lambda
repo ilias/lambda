@@ -480,6 +480,7 @@ force     = λthunk.thunk I
 :macro (letbind $var $val $expr) => ((λ$var.$expr) $val)
 :macro (when $cond $expr) => (if $cond $expr I)
 :macro (unless $cond $expr) => (if $cond I $expr)
+:macro (for $var at $list do $body) => (map (λ$var.$body) $list)
 
 # -----------------------------------------------------------------------------
 # 9.2. Math and Comparison Macros
