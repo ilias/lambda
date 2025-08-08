@@ -120,10 +120,10 @@ const42 100                          # → 42
 
 # Multiple underscores become unique variables
 first = (x, _, _) -> x               # Extract first of three arguments
-first 1 2 3                         # → 1
+first 1 2 3                          # → 1
 
-second = (_, y, _) -> y              # Extract second of three arguments  
-second 1 2 3                        # → 2
+second = (_, y, _) -> y              # Extract second of three arguments
+second 1 2 3                         # → 2
 
 # Underscores in function bodies refer to parameters
 swapArgs = (_, _) -> _ _             # Each _ refers to a unique parameter position
@@ -554,7 +554,7 @@ processNumber = mult 3 . succ . mult 2
 processNumber 4                     # → mult 3 (succ (mult 2 4)) = 27
 
 # Function composition in higher-order functions
-map (mult 2 . succ) [1, 2, 3]      # → [4, 6, 8]
+map (mult 2 . succ) [1, 2, 3]       # → [4, 6, 8]
 ```
 
 #### Pipeline vs Composition
