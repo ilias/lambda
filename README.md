@@ -88,6 +88,11 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 [1 .. 5]                # → cons 1 (cons 2 (cons 3 (cons 4 (cons 5 nil))))
 [10 .. 5]               # → cons 10 (cons 9 (cons 8 (cons 7 (cons 6 (cons 5 nil)))))
 
+# Built-in operators
+5 |> succ |> mult 2     # Pipeline operator: left-to-right data flow → 12
+(mult 2) . succ         # Composition operator: right-to-left function building
+3 + 4 * 5               # Infix arithmetic (when operators are defined) → 23
+
 # Comments
 # This is a comment
 ```
@@ -450,6 +455,70 @@ Define custom infix operators with precedence and associativity:
 :infix <> 5 left
 <> = λx y.not (eq x y)
 3 <> 4                             # → <> 3 4 → (λx y.not (eq x y)) 3 4 → true
+```
+
+### Built-in Special Operators
+
+The interpreter includes two powerful built-in operators that provide essential functional programming patterns:
+
+#### Pipeline Operator (`|>`)
+
+The pipeline operator enables left-to-right function composition and data transformation:
+
+```lambda
+# Pipeline operator: a |> f |> g desugars to g (f a)
+5 |> succ |> mult 2                # → mult 2 (succ 5) = 12
+
+# Compare with nested function calls
+mult 2 (succ 5)                    # Same result, but less readable
+
+# Chaining list operations
+[1, 2, 3, 4, 5] |> map (mult 2) |> filter (λx.gt x 5)
+# → filter (λx.gt x 5) (map (mult 2) [1, 2, 3, 4, 5])
+# → [6, 8, 10]
+
+# Data processing pipelines
+42 |> pred |> pred |> mult 3       # → mult 3 (pred (pred 42)) = 120
+```
+
+#### Function Composition Operator (`.`)
+
+The composition operator enables right-to-left function composition:
+
+```lambda
+# Composition operator: f . g desugars to f (g x) when applied to x
+double = mult 2
+increment = succ
+doubleInc = double . increment      # → λx.double (increment x)
+
+doubleInc 5                         # → double (increment 5) = 12
+
+# Multiple composition (right-associative)
+f . g . h                           # → f (g (h x)) when applied to x
+
+# Creating complex transformations
+processNumber = mult 3 . succ . mult 2
+processNumber 4                     # → mult 3 (succ (mult 2 4)) = 27
+
+# Function composition in higher-order functions
+map (mult 2 . succ) [1, 2, 3]      # → [4, 6, 8]
+```
+
+#### Pipeline vs Composition
+
+```lambda
+# Pipeline: left-to-right data flow (good for data processing)
+data |> transform1 |> transform2 |> transform3
+
+# Composition: right-to-left function building (good for creating reusable functions)
+complexFunction = transform3 . transform2 . transform1
+
+# Equivalent results:
+5 |> succ |> mult 2                # Pipeline
+(mult 2 . succ) 5                  # Composition
+
+# Pipeline emphasizes the data flow
+# Composition emphasizes function building
 ```
 
 ## Macro System
