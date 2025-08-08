@@ -64,6 +64,12 @@ f x                      # Function application
 \x.x                     # Alternative syntax
 x -> x                   # Arrow function syntax (same as λx.x)
 
+# Placeholder variables (underscore for ignored parameters)
+_ -> 42                  # Constant function, parameter ignored → λ_1.42
+(x, _, _ -> x) 42 9 8    # Extract first of three arguments → 42
+_ + _ -> mult _ _         # Multiple underscores become unique variables
+map (_ -> 0) [1, 2, 3]   # Zero out all elements → [0, 0, 0]
+
 # Multi-parameter functions
 λx y.x                   # Same as λx.λy.x
 x, y -> x + y            # Multi-parameter arrow function → λx.λy.x + y
@@ -96,6 +102,49 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 # Comments
 # This is a comment
 ```
+
+### Advanced Syntax Features
+
+#### Underscore Placeholder Variables
+
+The underscore (`_`) serves as a placeholder for ignored or unused parameters in lambda expressions:
+
+```lambda
+# Single underscore for ignored parameters
+const42 = _ -> 42                    # Always returns 42, ignores input
+const42 100                          # → 42
+
+# Multiple underscores become unique variables
+first = (x, _, _) -> x               # Extract first of three arguments
+first 1 2 3                         # → 1
+
+second = (_, y, _) -> y              # Extract second of three arguments  
+second 1 2 3                        # → 2
+
+# Underscores in function bodies refer to parameters
+swapArgs = (_, _) -> _ _             # Each _ refers to a unique parameter position
+# Equivalent to: (x, y) -> y x
+
+# Practical examples with higher-order functions
+map (_ -> 0) [1, 2, 3, 4]           # Zero out all elements → [0, 0, 0, 0]
+filter (_ -> true) [1, 2, 3]        # Keep all elements → [1, 2, 3]
+foldl (_ acc -> acc) 0 [1, 2, 3]    # Ignore values, keep accumulator → 0
+
+# Complex expressions with mixed parameters
+transform = (x, _, z) -> x + z       # Use first and third, ignore second
+transform 10 999 5                   # → 15
+
+# Underscore with operators
+addBoth = _ + _ -> mult _ _           # Each _ is a unique parameter
+# Equivalent to: (x, y) -> mult (x + y) (x + y)
+```
+
+**Key Features:**
+
+- Each `_` in a lambda parameter list becomes a unique, auto-generated variable
+- Underscores in the function body refer back to these auto-generated parameters
+- Useful for partial application patterns and when some parameters are irrelevant
+- Improves code readability by explicitly showing which parameters are ignored
 
 ## Interactive Commands
 
@@ -620,6 +669,297 @@ map add5 [1, 2, 3, 4]              # [6, 7, 8, 9]
 twice = λf x.f (f x)
 twice succ 3                       # 5
 twice (mult 2) 3                   # 12
+```
+
+## Advanced Usage
+
+This section demonstrates sophisticated applications combining multiple features of the interpreter for real-world functional programming patterns.
+
+### Complex Function Composition and Pipelines
+
+```lambda
+# Building sophisticated data processing pipelines
+processNumbers = 
+    filter (_ > 5) . 
+    map (square . succ) . 
+    takeWhile (_ < 100)
+
+processNumbers [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+# → [36, 49, 64, 81, 100] (filter > 5, then (x+1)², while < 100)
+
+# Alternative with pipeline operator for readability
+[1, 2, 3, 4, 5, 6, 7, 8, 9, 10] 
+    |> takeWhile (_ < 100)
+    |> map (square . succ)
+    |> filter (_ > 5)
+
+# Combining macros with pipelines
+:macro (between $x $low $high) => (and (geq $x $low) (leq $x $high))
+:macro (clamp $min $max $x) => (if (lt $x $min) $min (if (gt $x $max) $max $x))
+
+processData = 
+    map (clamp 0 100) .
+    filter (between _ 10 90) .
+    map (_ |> mult 2 |> succ)
+
+processData [-5, 15, 25, 105, 75]  # → [31, 51, 151] after clamping, filtering, transforming
+```
+
+### Advanced Macro Patterns
+
+```lambda
+# Creating domain-specific languages with macros
+:macro (when $cond $then) => (if $cond $then I)
+:macro (unless $cond $then) => (if $cond I $then)
+:macro (cond $clauses) => (foldl (\acc clause. if (first clause) (second clause) acc) nil $clauses)
+
+# State machine using macros
+:macro (state $name $transitions) => (
+    λcurrent input. case current of $transitions
+)
+
+# Pattern matching simulation
+:macro (match $expr with $patterns) => (
+    let value = $expr in $patterns value
+)
+
+# Usage example
+validateAge = match _ with [
+    (between _ 0 12)   -> "child",
+    (between _ 13 19)  -> "teen", 
+    (between _ 20 64)  -> "adult",
+    (_ >= 65)          -> "senior"
+]
+
+validateAge 25  # → "adult"
+```
+
+### Functional Data Structures
+
+```lambda
+# Immutable stack implementation
+:macro (makeStack) => nil
+:macro (push $stack $item) => (cons $item $stack)
+:macro (pop $stack) => (if (isnil $stack) (pair nil nil) (pair (head $stack) (tail $stack)))
+:macro (peek $stack) => (if (isnil $stack) nil (head $stack))
+
+# Usage
+myStack = makeStack |> push 1 |> push 2 |> push 3
+peek myStack        # → 3
+top, rest = pop myStack  # → top = 3, rest = [2, 1]
+
+# Functional binary tree
+:macro (leaf $value) => (pair $value nil)
+:macro (node $value $left $right) => (pair $value (pair $left $right))
+:macro (treeValue $tree) => (first $tree)
+:macro (treeChildren $tree) => (second $tree)
+
+# Tree traversal with higher-order functions
+inorder = Y (λf tree. 
+    if (isnil (treeChildren tree))
+        [treeValue tree]
+        (let children = treeChildren tree in
+         append (f (first children)) 
+                (cons (treeValue tree) (f (second children)))))
+
+# Create and traverse tree
+binaryTree = node 4 (node 2 (leaf 1) (leaf 3)) (node 6 (leaf 5) (leaf 7))
+inorder binaryTree  # → [1, 2, 3, 4, 5, 6, 7]
+```
+
+### Advanced Recursion Patterns
+
+```lambda
+# Mutual recursion using Y combinator
+evenOdd = Y (λf. pair 
+    (λn. if (iszero n) true (second f (pred n)))
+    (λn. if (iszero n) false (first f (pred n))))
+
+isEven = first evenOdd
+isOdd = second evenOdd
+
+isEven 42  # → true
+isOdd 17   # → true
+
+# Continuation-passing style (CPS)
+factorialCPS = Y (λf n k. 
+    if (iszero n) 
+        (k 1) 
+        (f (pred n) (λresult. k (mult n result))))
+
+factorialCPS 5 id  # → 120 (using identity as final continuation)
+
+# Tail-recursive optimization patterns
+sumListTR = Y (λf list acc.
+    if (isnil list) 
+        acc 
+        (f (tail list) (plus acc (head list))))
+
+sumList = λlist. sumListTR list 0
+sumList [1, 2, 3, 4, 5]  # → 15
+```
+
+### Error Handling and Safe Operations
+
+```lambda
+# Monadic error handling patterns
+:macro (bind $maybe $func) => (
+    if (isNothing $maybe) 
+        nothing 
+        ($func (fromJust $maybe))
+)
+
+:macro (safe $operation) => (
+    λ...args. try ($operation ...args) catch nothing
+)
+
+# Chaining safe operations
+safeDivision = λa b. if (iszero b) nothing (just (div a b))
+safeLog = λx. if (leq x 0) nothing (just (log x))
+
+computeSafely = λx y.
+    bind (safeDivision x y) (λresult.
+    bind (safeLog result) (λlogResult.
+    just (mult logResult 2)))
+
+computeSafely 100 5  # → just 6.64... (log(20) * 2)
+computeSafely 100 0  # → nothing (division by zero)
+
+# Either monad for detailed error reporting
+:macro (left $error) => (pair false $error)
+:macro (right $value) => (pair true $value)
+:macro (bindEither $either $func) => (
+    if (first $either)
+        ($func (second $either))
+        $either
+)
+
+parseNumber = λstr. 
+    if (isdigit (head str)) 
+        (right (parseDigits str))
+        (left "Not a number")
+
+validatePositive = λn.
+    if (gt n 0) 
+        (right n) 
+        (left "Must be positive")
+
+processInput = λstr.
+    bindEither (parseNumber str) (λnum.
+    bindEither (validatePositive num) (λvalidNum.
+    right (mult validNum 2)))
+```
+
+### Performance Optimization Techniques
+
+```lambda
+# Memoization pattern for expensive recursive functions
+createMemoizedFib = 
+    let cache = ref emptyMap in
+    Y (λf n.
+        let cached = lookup n cache in
+        if (isJust cached)
+            (fromJust cached)
+            (let result = if (lt n 2) n (plus (f (pred n)) (f (pred (pred n)))) in
+             let _ = insert n result cache in
+             result))
+
+memoFib = createMemoizedFib
+memoFib 40  # Much faster than naive recursive version
+
+# Lazy evaluation for infinite data structures
+:macro (delay $expr) => (λ_. $expr)
+:macro (force $thunk) => ($thunk I)
+
+# Infinite list of natural numbers
+naturals = Y (λf n. cons n (delay (f (succ n)))) 0
+take 10 (force naturals)  # → [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# Stream processing
+fibonacci_stream = Y (λf a b. cons a (delay (f b (plus a b)))) 0 1
+take 15 fibonacci_stream  # → [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]
+
+# Parallel-style computation simulation
+:macro (parallel $computations) => (map force (map delay $computations))
+
+heavyComputation1 = _ -> (factorial 100)
+heavyComputation2 = _ -> (fibonacci 30)
+heavyComputation3 = _ -> (sum (range 10000))
+
+results = parallel [heavyComputation1, heavyComputation2, heavyComputation3]
+```
+
+### Domain-Specific Language Creation
+
+```lambda
+# Creating a simple query language
+:macro (from $collection) => $collection
+:macro (where $predicate) => (filter $predicate)
+:macro (select $transform) => (map $transform)
+:macro (orderBy $keyFunc) => (sortBy $keyFunc)
+:macro (groupBy $keyFunc) => (groupWith (eq . $keyFunc))
+
+# Usage: SQL-like queries in lambda calculus
+people = [
+    (record "name" "Alice" "age" 30 "dept" "Engineering"),
+    (record "name" "Bob" "age" 25 "dept" "Sales"),
+    (record "name" "Carol" "age" 35 "dept" "Engineering")
+]
+
+query = from people
+    |> where (λp. gt (get "age" p) 25)
+    |> select (λp. get "name" p)
+    |> orderBy id
+
+query  # → ["Alice", "Carol"]
+
+# Building a simple arithmetic DSL
+:macro (num $n) => $n
+:macro (add $a $b) => (plus $a $b)
+:macro (mul $a $b) => (mult $a $b)
+:macro (var $name) => (λenv. lookup $name env)
+
+# Expression evaluator
+eval = λexpr env. expr env
+
+# Usage
+formula = add (mul (var "x") (num 2)) (var "y")
+environment = fromList [("x", 5), ("y", 3)]
+eval formula environment  # → 13 (5*2 + 3)
+```
+
+### Integration Patterns
+
+```lambda
+# Combining all features for a complete application
+:macro (app $config $routes) => (λrequest. dispatch $routes request)
+:macro (route $pattern $handler) => (pair $pattern $handler)
+
+# Web server simulation using lambda calculus
+webApp = app 
+    (config "port" 8080 "host" "localhost")
+    [
+        route "/api/users" (λreq.
+            req |> getPath |> parseUserId |> 
+            maybe (error404) (λid. 
+                users |> find (eq id . getId) |>
+                maybe (error404) (toJson))),
+        
+        route "/api/health" (λ_. ok "Server is healthy"),
+        
+        route _ (λ_. error404)
+    ]
+
+# Request processing pipeline
+processRequest = λreq.
+    req |> validateHeaders |>
+    bind auth |>
+    bind (webApp) |>
+    either errorResponse successResponse
+
+# This demonstrates how lambda calculus can express
+# complex application logic with proper error handling,
+# data transformation, and modular design patterns
 ```
 
 ## Performance Features
