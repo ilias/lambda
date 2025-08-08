@@ -7,9 +7,13 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Features](#features)
 - [Getting Started](#getting-started)
 - [Core Language](#core-language)
+- [Advanced Syntax Features](#advanced-syntax-features)
 - [Interactive Commands](#interactive-commands)
 - [Standard Library](#standard-library)
+- [Infix Operators](#infix-operators)
+- [Macro System](#macro-system)
 - [Examples](#examples)
+- [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
 - [Building and Running](#building-and-running)
 
