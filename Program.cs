@@ -2498,7 +2498,7 @@ public class Interpreter
             ":clear" => ClearEnvironment(),
             ":stats" => ShowStats(),
             ":help" => ShowHelp(),
-            ":env" => ShowEnv(),
+            ":env" => await ShowEnv(),
             ":memo" => MemoClear(),
             ":exit" or ":quit" => "bye",
             ":depth" => HandleRecursionDepth(arg),
@@ -2675,6 +2675,7 @@ public class Interpreter
         return "All caches cleared.";
     }
 
+    // Save the current environment to a file or to console if path is "console"
     private async Task<string> SaveFileAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -2683,20 +2684,20 @@ public class Interpreter
         try
         {
             var lines = new List<string>();
-            
+
             // Add file header with timestamp and stats
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             var definitionCount = _context.Count;
             var infixCount = _parser._infixOperators.Count;
             var macroCount = _parser._macros.Count;
-            
+
             lines.Add($"# ============================================================================");
             lines.Add($"# Lambda Calculus Environment Export");
             lines.Add($"# Generated: {timestamp}");
             lines.Add($"# Definitions: {definitionCount}, Infix Operators: {infixCount}, Macros: {macroCount}");
             lines.Add($"# ============================================================================");
             lines.Add("");
-                        
+
             // Save variable definitions/assignments
             if (_context.Count > 0)
             {
@@ -2704,18 +2705,18 @@ public class Interpreter
                 lines.Add("# VARIABLE DEFINITIONS");
                 lines.Add("# =============================================================================");
                 lines.Add("");
-                
+
                 // Group definitions by type for better organization
                 var simpleVars = new List<(string, Expr)>();
                 var functionVars = new List<(string, Expr)>();
                 var complexVars = new List<(string, Expr)>();
-                
+
                 foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
                 {
                     // Categorize by expression type for better file organization
                     if (value.Type == ExprType.Abs)
                         functionVars.Add((key, value));
-                    else if (value.Type == ExprType.Var || 
+                    else if (value.Type == ExprType.Var ||
                             (value.Type == ExprType.App && IsSimpleApplication(value)))
                         simpleVars.Add((key, value));
                     else
@@ -2727,34 +2728,29 @@ public class Interpreter
                 {
                     lines.Add("# Simple definitions and constants");
                     foreach (var (key, value) in simpleVars)
-                    {
                         lines.Add($"{key} = {FormatWithNumerals(value)}");
-                    }
                     lines.Add("");
                 }
-                
+
                 // Write function definitions
                 if (functionVars.Count > 0)
                 {
                     lines.Add("# Function definitions");
                     foreach (var (key, value) in functionVars)
-                    {
                         lines.Add($"{key} = {FormatWithNumerals(value)}");
-                    }
                     lines.Add("");
                 }
-                
+
                 // Write complex expressions
                 if (complexVars.Count > 0)
                 {
                     lines.Add("# Complex expressions");
                     foreach (var (key, value) in complexVars)
-                    {
                         lines.Add($"{key} = {FormatWithNumerals(value)}");
-                    }
+                    lines.Add("");
                 }
             }
-            
+
             // Save infix operators first (they need to be defined before use)
             if (_parser._infixOperators.Count > 0)
             {
@@ -2762,18 +2758,16 @@ public class Interpreter
                 lines.Add("# INFIX OPERATORS");
                 lines.Add("# =============================================================================");
                 lines.Add("");
-                
+
                 var operators = _parser._infixOperators.Values
                     .OrderByDescending(op => op.Precedence)
                     .ThenBy(op => op.Symbol);
-                
+
                 foreach (var op in operators)
-                {
                     lines.Add($":infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()}");
-                }
                 lines.Add("");
             }
-            
+
             // Save macro definitions (they should be defined before variable assignments that might use them)
             if (_parser._macros.Count > 0)
             {
@@ -2781,7 +2775,7 @@ public class Interpreter
                 lines.Add("# MACRO DEFINITIONS");
                 lines.Add("# =============================================================================");
                 lines.Add("");
-                
+
                 foreach (var (name, macro) in _parser._macros.OrderBy(p => p.Key))
                 {
                     // Use the macro's ToString method which formats it properly
@@ -2797,9 +2791,16 @@ public class Interpreter
             lines.Add("# =============================================================================");
             lines.Add("# To load this environment, use: :load " + Path.GetFileName(path));
             lines.Add("# Note: This will add to your current environment. Use :clear first for a clean state.");
-            
+
+            if (path == "console")
+            {
+                // Write the lines to the console instead of a file
+                foreach (var line in lines)
+                    _logger.Log(line);
+                return $"Environment displayed in console ({definitionCount} definitions, {infixCount} infix operators, {macroCount} macros)";
+            }
             await File.WriteAllLinesAsync(path, lines);
-            
+
             return $"Environment saved to '{path}' ({definitionCount} definitions, {infixCount} infix operators, {macroCount} macros)";
         }
         catch (Exception ex)
@@ -2835,18 +2836,7 @@ public class Interpreter
         return "Environment cleared.";
     }
 
-    private string ShowEnv()
-    {
-        _logger.Log("# Current environment:");
-        foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
-            _logger.Log($"  {key} = {FormatWithNumerals(value)}");
-
-        var infixDefs = ShowInfixOperators();
-        var macroDefs = ShowMacros();
-        _logger.Log(infixDefs);
-        _logger.Log(macroDefs);
-        return $"# Displayed {_context.Count} definitions.";
-    }
+    private async Task<string> ShowEnv() => await SaveFileAsync("console");
     
     private string ShowMacros()
     {
