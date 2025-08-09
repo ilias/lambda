@@ -60,6 +60,9 @@ public record Expr(
         // List pretty-printing: [a, b, c] (only if formatNumerals is enabled)
         if (prettyPrint)
         {
+            // 0. Church booleans
+            if (TryExtractBoolean(this, out var boolVal))
+                return boolVal ? "true" : "false";
             // 1. cons/nil lists
             if (Expr.TryExtractListElements(this, out var elements))
             {
@@ -178,6 +181,29 @@ public record Expr(
         return $"{leftStr} {rightStr}";
     }
     public virtual bool Equals(Expr? other) => StructuralEquals(other);
+    // Detect Church booleans: true = λa.λb.a, false = λa.λb.b
+    public static bool TryExtractBoolean(Expr expr, out bool value)
+    {
+        value = false;
+        if (expr.Type != ExprType.Abs || expr.AbsBody is null) return false;
+        var a = expr.AbsVarName;
+        var body = expr.AbsBody;
+        if (body.Type != ExprType.Abs || body.AbsBody is null) return false;
+        var b = body.AbsVarName;
+        var inner = body.AbsBody;
+        if (inner.Type != ExprType.Var || inner.VarName is null) return false;
+        if (inner.VarName == a)
+        {
+            value = true; // λa.λb.a
+            return true;
+        }
+        if (inner.VarName == b)
+        {
+            value = false; // λa.λb.b
+            return true;
+        }
+        return false;
+    }
     public bool StructuralEquals(Expr? other)
     {
         if (ReferenceEquals(this, other)) return true;

@@ -20,6 +20,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Parser Errors & Diagnostics](#parser-errors--diagnostics)
 - [Unary Minus / Negative Literals](#unary-minus--negative-literals)
 - [Either monad for detailed error reporting](#either-monad-for-detailed-error-reporting)
+- [Pretty Printing](#pretty-printing)
 
 ## Features
 
@@ -1184,3 +1185,76 @@ result = twice succ 5  # 7
 ```
 
 This interpreter provides a complete environment for exploring lambda calculus, functional programming concepts, and advanced language features while maintaining high performance through lazy evaluation and intelligent caching.
+
+## Pretty Printing
+
+The interpreter includes an optional pretty-print layer (enabled by default) that rewrites common Church encodings into familiar surface forms for readability.
+
+### What It Formats
+
+1. Church numerals  
+    Structure: `λf.λx.f^n x` rendered as the decimal integer `n`. Example: `λf.λx.f (f (f x))` → `3`.
+2. Church booleans  
+    `λa.λb.a` → `true`, `λa.λb.b` → `false` (variable names may differ; the structure determines the value).  
+3. cons / nil lists  
+    Nested applications of `cons` ending in `nil` render as `[a, b, c]`.  
+    Example: `cons 1 (cons 2 (cons 3 nil))` → `[1, 2, 3]`.
+4. Church-encoded lists  
+    `λf.λz.f a1 (f a2 (... (f an z)))` also renders as `[a1, a2, ..., an]`.
+5. Thunks  
+    Unforced: `<thunk: ...>`  
+    Forced: `<forced: renderedValue>`
+6. Cycles / repeated references  
+    Already-visited nodes during printing show as `<cycle>` to avoid infinite output.
+
+### Booleans vs Conditionals
+
+Only the canonical Church boolean forms print as `true` / `false`. Any other two-argument selector (e.g. `λx.λy.y x`) keeps its raw lambda form.
+
+### Truncation
+
+Very large output is truncated at 5000 characters with a `... (output truncated)` suffix to protect the REPL.
+
+### Toggling
+
+Use the command:
+
+```shell
+:pretty off   # Show raw lambda structures
+:pretty on    # Re‑enable formatting
+```
+
+Disabling pretty printing is useful for debugging structural differences or confirming alpha‐conversion results.
+
+### Pretty Printing Examples
+
+| Raw Form                                   | Pretty Printed |
+|--------------------------------------------|----------------|
+| `λf.λx.x`                                  | `0`            |
+| `λf.λx.f (f x)`                            | `2`            |
+| `λa.λb.a`                                  | `true`         |
+| `λp.λq.q`                                  | `false`        |
+| `cons 1 (cons 2 nil)`                      | `[1, 2]`       |
+| `λf.λz.f 4 (f 5 (f 6 z))`                  | `[4, 5, 6]`    |
+| `<thunk: λf.λx.f x>` (unforced)            | `<thunk: 1>`   |
+| `<forced: λf.λx.f (f x)>` (already forced) | `<forced: 2>`  |
+
+### Limitations / Notes
+
+- Church numeral detection currently expects the exact two‑abstraction shape; if you manually construct numerals with additional wrapping lambdas they will not collapse to integers.  
+- Boolean detection is name-agnostic: `λt.λf.f` still prints `false`.  
+- If you redefine `cons` or `nil` to non-standard meanings, list rendering may become misleading.  
+- Extremely deep or cyclic structures may show `<cycle>` early to prevent runaway traversal.  
+- Pretty printing is orthogonal to evaluation; disabling it does not change semantics or performance of normalization/evaluation (aside from minor formatting cost).
+
+### When to Turn It Off
+
+Disable with `:pretty off` when:
+
+- Verifying the *exact* lambda structure (e.g., in macro expansion debugging).  
+- Measuring performance without the formatting overhead (minor but measurable for very large outputs).  
+- Teaching / demonstrations where raw encodings are pedagogically important.
+
+Re‑enable with `:pretty on` once finished.
+
+---
