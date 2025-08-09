@@ -318,9 +318,9 @@ public record Kontinuation(KontinuationType Type, Expr? Expression = null,
 }
 public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar, Semicolon }
 public record Token(TokenType Type, int Position, string? Value = null);
-public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody }
+public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody, UnexpectedSemicolon, UnexpectedLambda, UnexpectedDot }
 public class ParseException(TreeErrorType errorType, int position)
     : Exception($"{errorType} at position {position}")
 {
@@ -470,11 +470,29 @@ public class Parser
         var result = new List<Token>();
         var currentTerm = new System.Text.StringBuilder();
         var pos = 0;
+    int expectingLambdaDot = 0; // count of lambda parameter lists awaiting a body '.'
 
         for (var i = 0; i < input.Length; i++)
         {
             var ch = input[i];
             pos++;
+            // Unary minus / negative integer literal detection
+            if (ch == '-' && i + 1 < input.Length && char.IsDigit(input[i + 1]))
+            {
+                int prevIndex = result.Count - 1;
+                bool isUnary = prevIndex < 0 || result[prevIndex].Type is TokenType.LParen or TokenType.LBracket or TokenType.Comma or TokenType.Semicolon or TokenType.Range or TokenType.FatArrow or TokenType.Arrow or TokenType.Equals;
+                if (isUnary)
+                {
+                    int start = i;
+                    int startPos = pos;
+                    i++; pos++;
+                    while (i < input.Length && char.IsDigit(input[i])) { i++; pos++; }
+                    var num = input[start..i];
+                    result.Add(new Token(TokenType.Integer, startPos, num));
+                    i--; // loop will increment
+                    continue;
+                }
+            }
             if (ch == '#') break; // Comments
 
             // Check for arrow operators first
@@ -510,10 +528,7 @@ public class Parser
                 continue;
             }
 
-            // Improved: treat the first '.' after a lambda (λ or \\) and its parameters as a lambda body separator, not as infix
-            string? bestMatch = null;
-            bool isLambdaBodyDot = false;
-            // Special handling for range operator '..'
+            // Handle range operator '..' early
             if (ch == '.' && i + 1 < input.Length && input[i + 1] == '.') {
                 if (currentTerm.Length > 0) {
                     var termValue = currentTerm.ToString();
@@ -522,35 +537,25 @@ public class Parser
                     currentTerm.Clear();
                 }
                 result.Add(new Token(TokenType.Range, pos, ".."));
-                i++;
-                pos++;
+                i++; pos++;
                 continue;
             }
-            if (ch == '.') {
-                // Look back through the tokens we've already produced
-                int t = result.Count - 1;
-                bool foundDotOrAssign = false;
-                while (t >= 0) {
-                    var tok = result[t];
-                    if (tok.Type == TokenType.Dot || tok.Type == TokenType.Equals) 
-                        break;
-                    if (tok.Type == TokenType.Lambda) {
-                        if (!foundDotOrAssign) {
-                            isLambdaBodyDot = true;
-                        }
-                        break;
-                    }
-                    // Skip over identifiers, integers, etc.
-                    if (tok.Type == TokenType.Term || tok.Type == TokenType.Integer) {
-                        t--;
-                        continue;
-                    }
-                    // For all other tokens, stop
-                    break;
+
+            // Detect lambda token to expect later '.'
+            if (ch is '\\' or 'λ') {
+                if (currentTerm.Length > 0) {
+                    var termValue = currentTerm.ToString();
+                    var tokenType = MyTokenType(termValue);
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
+                    currentTerm.Clear();
                 }
+                result.Add(new Token(TokenType.Lambda, pos));
+                expectingLambdaDot++; // new lambda awaiting its body separator
+                continue;
             }
-            // Always treat the first dot after a lambda and its parameters as TokenType.Dot (lambda body separator)
-            if (ch == '.' && isLambdaBodyDot) {
+
+            // If this '.' closes a pending lambda parameter list, emit Dot token
+            if (ch == '.' && expectingLambdaDot > 0) {
                 if (currentTerm.Length > 0) {
                     var termValue = currentTerm.ToString();
                     var tokenType = MyTokenType(termValue);
@@ -558,9 +563,12 @@ public class Parser
                     currentTerm.Clear();
                 }
                 result.Add(new Token(TokenType.Dot, pos));
+                expectingLambdaDot--; // one lambda satisfied
                 continue;
             }
-            if (!char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch) && !(ch == '.' && isLambdaBodyDot))
+
+            string? bestMatch = null;
+            if (!char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch))
             {
                 foreach (var opSymbol in _infixOperators.Keys)
                 {
@@ -588,15 +596,14 @@ public class Parser
             // Only treat '=' as TokenType.Equals when it is the only character in the token
             Token? nextToken = ch switch
             {
-                '\\' or 'λ' => new Token(TokenType.Lambda, pos),
                 '(' => new Token(TokenType.LParen, pos),
                 ')' => new Token(TokenType.RParen, pos),
                 '[' => new Token(TokenType.LBracket, pos),
                 ']' => new Token(TokenType.RBracket, pos),
                 ',' => new Token(TokenType.Comma, pos),
                 '$' => new Token(TokenType.Dollar, pos),
+                ';' => new Token(TokenType.Semicolon, pos),
                 '=' when currentTerm.Length == 0 && (i + 1 == input.Length || !input[i + 1].Equals('=')) => new Token(TokenType.Equals, pos),
-                '.' => new Token(TokenType.Dot, pos),
                 char c when char.IsDigit(c) && currentTerm.Length == 0 => ParseInteger(input, ref i, ref pos),
                 _ => null
             };
@@ -644,39 +651,74 @@ public class Parser
         }
         return new Token(TokenType.Integer, startPos, input[start..(i + 1)]);
     }
-    public Statement? Parse(string input)
+    // Backward compatible: returns last statement (or null) from possibly multi-statement input
+    public Statement? Parse(string input) => ParseAll(input).LastOrDefault();
+
+    // New: parse zero or more statements separated by top-level ';'
+    public List<Statement> ParseAll(string input)
     {
         var tokens = Tokenize(input);
-        if (tokens.Count == 0) return null;
+        if (tokens.Count == 0) return [];
 
-        // Macro definition: :macro (name pattern...) => transformation
-        if (tokens.Count > 0 && tokens[0].Type == TokenType.Macro)
+        // Split by top-level semicolons (not inside parens/brackets)
+        var segments = new List<(int start, int end)>();
+        int parenDepth = 0, bracketDepth = 0;
+        int segStart = 0;
+        for (int i = 0; i < tokens.Count; i++)
         {
-            var macro = ParseMacroDefinition(tokens);
-            _macros[macro.Name] = macro;
-            return null; // Macro definitions don't produce statements
+            var t = tokens[i];
+            switch (t.Type)
+            {
+                case TokenType.LParen: parenDepth++; break;
+                case TokenType.RParen: parenDepth--; break;
+                case TokenType.LBracket: bracketDepth++; break;
+                case TokenType.RBracket: bracketDepth--; break;
+                case TokenType.Semicolon when parenDepth == 0 && bracketDepth == 0:
+                    if (i - 1 >= segStart)
+                        segments.Add((segStart, i - 1));
+                    segStart = i + 1;
+                    break;
+            }
         }
+        if (segStart < tokens.Count)
+            segments.Add((segStart, tokens.Count - 1));
 
-        // Assignment: name = expr
-        if (tokens.Count > 2 && tokens[0].Type == TokenType.Term && tokens[1].Type == TokenType.Equals)
+        var statements = new List<Statement>();
+        foreach (var (start, end) in segments)
         {
-            var assignmentExpr = BuildExpressionTree(tokens, 2, tokens.Count - 1);
-            var expandedAssignmentExpr = ExpandMacros(assignmentExpr);
-            return Statement.AssignmentStatement(tokens[0].Value!, expandedAssignmentExpr);
-        }
+            if (end < start) continue; // empty
+            var slice = tokens.GetRange(start, end - start + 1);
+            if (slice.Count == 0) continue;
 
-        // Let expression: let ... in ...
-        if (tokens.Count > 0 && tokens[0].Type == TokenType.Let)
-        {
-            var i = 0;
-            var letExpr = ParseLetExpr(tokens, ref i, tokens.Count - 1);
-            return Statement.ExprStatement(letExpr);
+            // Macro definition
+            if (slice[0].Type == TokenType.Macro)
+            {
+                var macro = ParseMacroDefinition(slice);
+                _macros[macro.Name] = macro;
+                continue;
+            }
+            // Assignment
+            if (slice.Count > 2 && slice[0].Type == TokenType.Term && slice[1].Type == TokenType.Equals)
+            {
+                var assignmentExpr = BuildExpressionTree(slice, 2, slice.Count - 1);
+                var expandedAssignmentExpr = ExpandMacros(assignmentExpr);
+                statements.Add(Statement.AssignmentStatement(slice[0].Value!, expandedAssignmentExpr));
+                continue;
+            }
+            // Let expression
+            if (slice[0].Type == TokenType.Let)
+            {
+                var idx = 0;
+                var letExpr = ParseLetExpr(slice, ref idx, slice.Count - 1);
+                statements.Add(Statement.ExprStatement(letExpr));
+                continue;
+            }
+            // Plain expression
+            var expr = BuildExpressionTree(slice, 0, slice.Count - 1);
+            var expandedExpr = ExpandMacros(expr);
+            statements.Add(Statement.ExprStatement(expandedExpr));
         }
-
-        // Expression statement with macro expansion
-        var expr = BuildExpressionTree(tokens, 0, tokens.Count - 1);
-        var expandedExpr = ExpandMacros(expr);
-        return Statement.ExprStatement(expandedExpr);
+        return statements;
     }
     private Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
@@ -698,6 +740,7 @@ public class Parser
                 TokenType.RParen => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
                 TokenType.LBracket => ParseListExpr(tokens, ref i, end),
                 TokenType.RBracket => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
+                TokenType.Semicolon => throw new ParseException(TreeErrorType.UnexpectedSemicolon, token.Position),
                 TokenType.Lambda => ParseLambdaExpr(tokens, ref i, end),
                 TokenType.Let => ParseLetExpr(tokens, ref i, end),
                 TokenType.Y => Expr.YCombinator(),
@@ -960,6 +1003,8 @@ public class Parser
                 }
                 nesting--;
             }
+            else if (tokens[j].Type == TokenType.Semicolon)
+                throw new ParseException(TreeErrorType.UnexpectedSemicolon, tokens[j].Position);
         }
         throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
     }
@@ -1108,36 +1153,26 @@ public class Parser
         while (i <= end && tokens[i].Type == TokenType.Term)
         {
             var v = tokens[i].Value!;
-            if (v == "_")
-            {
-                underscoreCount++;
-                v = $"_placeholder{underscoreCount}";
-            }
+            if (v == "_") { underscoreCount++; v = $"_placeholder{underscoreCount}"; }
             variables.Add(v);
             i++;
         }
-
         if (variables.Count == 0)
             throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[i - 1].Position);
-
-        // Check for dot separator
-        if (i > end || tokens[i].Type != TokenType.Dot)
-        {
-            // Always require a dot after the parameter list for lambda abstractions
-            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
-        }
-
-        i++; // Skip dot
-
         if (i > end)
             throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
-
+        if (tokens[i].Type == TokenType.Lambda)
+            throw new ParseException(TreeErrorType.UnexpectedLambda, tokens[i].Position);
+        if (tokens[i].Type != TokenType.Dot)
+            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
+        i++; // Skip dot
+        if (i > end)
+            throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[i - 1].Position);
+        if (tokens[i].Type == TokenType.Dot || (tokens[i].Type == TokenType.InfixOp && tokens[i].Value == "."))
+            throw new ParseException(TreeErrorType.UnexpectedDot, tokens[i].Position);
         var lambdaBody = BuildExpressionTree(tokens, i, end);
         i = end;
-
-        // Build nested lambdas from right to left (innermost to outermost)
-        return variables.AsEnumerable().Reverse()
-            .Aggregate(lambdaBody, (body, var) => Expr.Abs(var, body));
+        return variables.AsEnumerable().Reverse().Aggregate(lambdaBody, (body, var) => Expr.Abs(var, body));
     }
     private Expr CreateChurchNumeral(int n) => n < 1
         ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x")))
@@ -1150,7 +1185,164 @@ public class Parser
         var elements = new List<Expr>();
         
         i++; // Skip the opening bracket
-        
+        // Detect stepped range: [start , next .. end] with no additional top-level commas
+        if (i <= end)
+        {
+            int scan = i;
+            int nesting = 0;
+            int firstComma = -1;
+            int rangeIndex = -1;
+            bool extraComma = false;
+            while (scan <= end && tokens[scan].Type != TokenType.RBracket)
+            {
+                var tk = tokens[scan];
+                if (tk.Type is TokenType.LParen or TokenType.LBracket) nesting++;
+                else if (tk.Type is TokenType.RParen or TokenType.RBracket) nesting--;
+                else if (nesting == 0)
+                {
+                    if (tk.Type == TokenType.Comma)
+                    {
+                        if (firstComma == -1) firstComma = scan; else { extraComma = true; break; }
+                    }
+                    else if (tk.Type == TokenType.Range)
+                    {
+                        if (rangeIndex == -1) rangeIndex = scan; else { rangeIndex = -2; break; }
+                    }
+                }
+                scan++;
+            }
+            if (!extraComma && firstComma != -1 && rangeIndex > firstComma && rangeIndex != -2)
+            {
+                // Ensure no commas after range token (pure pattern)
+                for (int k = rangeIndex + 1, nest2 = 0; k < scan && tokens[k].Type != TokenType.RBracket; k++)
+                {
+                    var tk2 = tokens[k];
+                    if (tk2.Type is TokenType.LParen or TokenType.LBracket) nest2++;
+                    else if (tk2.Type is TokenType.RParen or TokenType.RBracket) nest2--;
+                    else if (nest2 == 0 && tk2.Type == TokenType.Comma) { extraComma = true; break; }
+                }
+                if (!extraComma)
+                {
+                    int startExprStart = i;
+                    int startExprEnd = firstComma - 1;
+                    int nextExprStart = firstComma + 1;
+                    int nextExprEnd = rangeIndex - 1;
+                    int endExprStart = rangeIndex + 1;
+                    int endExprEnd = scan - 1;
+                    if (startExprStart <= startExprEnd && nextExprStart <= nextExprEnd && endExprStart <= endExprEnd)
+                    {
+                        bool allInts = (startExprStart == startExprEnd && nextExprStart == nextExprEnd && endExprStart == endExprEnd &&
+                            tokens[startExprStart].Type == TokenType.Integer && tokens[nextExprStart].Type == TokenType.Integer && tokens[endExprStart].Type == TokenType.Integer);
+                        if (allInts && int.TryParse(tokens[startExprStart].Value, out int a) && int.TryParse(tokens[nextExprStart].Value, out int b) && int.TryParse(tokens[endExprStart].Value, out int c))
+                        {
+                            int step = b - a;
+                            // Haskell-style semantics: step = b-a; produce sequence a, a+step, ... while within bound
+                            if (step == 0)
+                            {
+                                elements.Add(CreateChurchNumeral(a));
+                            }
+                            else
+                            {
+                                bool forward = step > 0;
+                                if ((forward && a > c) || (!forward && a < c))
+                                {
+                                    // Empty range per semantics – return []
+                                }
+                                else
+                                {
+                                    for (int v = a; forward ? v <= c : v >= c; v += step)
+                                        elements.Add(CreateChurchNumeral(v));
+                                }
+                            }
+                            // build list and return
+                            var resList = Expr.Var("nil");
+                            for (int m = elements.Count - 1; m >= 0; m--)
+                                resList = Expr.App(Expr.App(Expr.Var("cons"), elements[m]), resList);
+                            // advance to closing bracket
+                            while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
+                            if (scan > end || tokens[scan].Type != TokenType.RBracket)
+                                throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+                            i = scan; // closing bracket
+                            return resList;
+                        }
+                        // General case: desugar to (range2 start next end)
+                        var startExpr = BuildExpressionTree(tokens, startExprStart, startExprEnd);
+                        var nextExpr = BuildExpressionTree(tokens, nextExprStart, nextExprEnd);
+                        var endExpr = BuildExpressionTree(tokens, endExprStart, endExprEnd);
+                        var range2Call = Expr.App(Expr.App(Expr.App(Expr.Var("range2"), startExpr), nextExpr), endExpr);
+                        while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
+                        if (scan > end || tokens[scan].Type != TokenType.RBracket)
+                            throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+                        i = scan;
+                        return range2Call;
+                    }
+                }
+            }
+        }
+        // Detect whole-list range form: [ expr .. expr ] where expr may be any expression (no top-level commas)
+        if (i <= end)
+        {
+            int scan = i;
+            int nesting = 0;
+            int rangeIndex = -1;
+            bool topLevelComma = false;
+            while (scan <= end && tokens[scan].Type != TokenType.RBracket)
+            {
+                var tk = tokens[scan];
+                if (tk.Type is TokenType.LParen or TokenType.LBracket) nesting++;
+                else if (tk.Type is TokenType.RParen or TokenType.RBracket) nesting--;
+                else if (nesting == 0)
+                {
+                    if (tk.Type == TokenType.Comma) { topLevelComma = true; break; }
+                    if (tk.Type == TokenType.Range)
+                    {
+                        if (rangeIndex != -1) { rangeIndex = -2; break; } // multiple ranges
+                        rangeIndex = scan;
+                    }
+                }
+                scan++;
+            }
+            // If exactly one range and no commas, treat specially
+            if (!topLevelComma && rangeIndex >= i && rangeIndex != -2)
+            {
+                // Extract start expression tokens
+                int startExprStart = i;
+                int startExprEnd = rangeIndex - 1;
+                int endExprStart = rangeIndex + 1;
+                int endExprEnd = scan - 1; // token before RBracket
+                if (startExprStart <= startExprEnd && endExprStart <= endExprEnd)
+                {
+                    // Fast path: both endpoints are single integer tokens -> expand immediately (retain old behavior)
+                    bool startIsInt = (startExprStart == startExprEnd && tokens[startExprStart].Type == TokenType.Integer);
+                    bool endIsInt = (endExprStart == endExprEnd && tokens[endExprStart].Type == TokenType.Integer);
+                    if (startIsInt && endIsInt && int.TryParse(tokens[startExprStart].Value, out int from) && int.TryParse(tokens[endExprStart].Value, out int to))
+                    {
+                        if (from <= to)
+                            for (int v = from; v <= to; v++) elements.Add(CreateChurchNumeral(v));
+                        else
+                            for (int v = from; v >= to; v--) elements.Add(CreateChurchNumeral(v));
+                        i = scan; // position at RBracket
+                        // Build list from generated elements
+                        var resultLit = Expr.Var("nil");
+                        for (var j2 = elements.Count - 1; j2 >= 0; j2--)
+                            resultLit = Expr.App(Expr.App(Expr.Var("cons"), elements[j2]), resultLit);
+                        return resultLit;
+                    }
+                    // General case: desugar to (range start end)
+                    var startExpr = BuildExpressionTree(tokens, startExprStart, startExprEnd);
+                    var endExpr2 = BuildExpressionTree(tokens, endExprStart, endExprEnd);
+                    // Build: ((range start) end)
+                    var rangeCall = Expr.App(Expr.App(Expr.Var("range"), startExpr), endExpr2);
+                    // Advance i to closing bracket
+                    while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
+                    if (scan > end || tokens[scan].Type != TokenType.RBracket)
+                        throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+                    i = scan; // set to RBracket
+                    return rangeCall;
+                }
+            }
+        }
+
         while (i <= end && tokens[i].Type != TokenType.RBracket)
         {
             var elementStart = i;
@@ -1751,22 +1943,32 @@ public class Interpreter
             if (input.Trim().StartsWith(':'))
                 return (null, await HandleCommandAsync(input));
 
-            var statement = _parser.Parse(input);
-            if (statement == null) return (null, "");
-            if (statement.Type == StatementType.Assignment)
+            var statements = _parser.ParseAll(input);
+            if (statements.Count == 0) return (null, "");
+            var sb = new System.Text.StringBuilder();
+            Expr? lastExpr = null;
+            foreach (var st in statements)
             {
-                var evaluatedExpression = EvaluateCEK(statement.Expression);
-                _context[statement.VarName!] = evaluatedExpression;
-                return (null, $"-> {statement.VarName} = {FormatWithNumerals(evaluatedExpression)}");
+                if (st.Type == StatementType.Assignment)
+                {
+                    var val = EvaluateCEK(st.Expression);
+                    _context[st.VarName!] = val;
+                    sb.AppendLine($"-> {st.VarName} = {FormatWithNumerals(val)}");
+                    lastExpr = null; // assignments don't become final result by themselves
+                }
+                else
+                {
+                    _logger.Log($"Eval: {FormatWithNumerals(st.Expression)}");
+                    if (_showStep) _logger.Log($"Processing: {st}");
+                    var res = EvaluateCEK(st.Expression);
+                    var norm = NormalizeExpression(res);
+                    _stats.TotalIterations += _stats.Iterations;
+                    sb.AppendLine($"-> {FormatWithNumerals(norm)}");
+                    lastExpr = norm; // track last expression result
+                }
             }
-            _logger.Log($"Eval: {FormatWithNumerals(statement.Expression)}");
-            if (_showStep)
-                _logger.Log($"Processing: {statement}");
-            var result = EvaluateCEK(statement.Expression);
-            var normalizedResult = NormalizeExpression(result);
-            _stats.TotalIterations += _stats.Iterations;
-
-            return (normalizedResult, $"-> {FormatWithNumerals(normalizedResult)}");
+            var output = sb.ToString().TrimEnd();
+            return (lastExpr, output);
         }
         catch (Exception ex)
         {
@@ -1776,6 +1978,21 @@ public class Interpreter
         {
             _stats.VarCounter = 0; // Reset recursion depth counter
         }
+    }
+
+    // Ensure built-in range and range2 functions exist (lazy, stepped ranges)
+    public async Task EnsureRangeBuiltinsAsync()
+    {
+        bool needRange = !_context.ContainsKey("range");
+        bool needRange2 = !_context.ContainsKey("range2");
+        if (!needRange && !needRange2) return;
+        var defs = new List<string>();
+        if (needRange)
+            defs.Add(":let range = (fix (lambda r. lambda a. lambda b. (if (= a b) (cons a nil) (if (< a b) (cons a (r (succ a) b)) (cons a (r (pred a) b))))))");
+        if (needRange2)
+            defs.Add(":let range2 = (lambda a. lambda b. lambda c. ((lambda step. (if (= step 0) (cons a nil) ((fix (lambda r. lambda x. (if (if (> step 0) (<= x c) (>= x c)) (cons x (r ((if (> step 0) succ pred) x))) nil))) a))) (- b a)))");
+        var joined = string.Join("; ", defs);
+        await ProcessInputAsync(joined);
     }
 
     private async Task DisplayOutput((Expr? expr, string str) result, TimeSpan elapsed)
@@ -2596,6 +2813,13 @@ public class Interpreter
 
     private string HandleInfixCommand(string arg)
     {
+        // Allow trailing comments beginning with '#'
+        if (!string.IsNullOrWhiteSpace(arg))
+        {
+            var hash = arg.IndexOf('#');
+            if (hash >= 0)
+                arg = arg[..hash].TrimEnd();
+        }
         if (string.IsNullOrWhiteSpace(arg))
             return ShowInfixOperators();
 
@@ -2941,12 +3165,15 @@ public class Interpreter
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
           [a .. b]               List range (syntactic sugar for [a, a+1, ..., b]) both asc and desc
+          [expr1 .. expr2]       General range (desugars to (range expr1 expr2) if endpoints not both integer literals)
+          [a, b .. c]            Stepped range: expands if all integers else desugars to (range2 a b c)
           Y f1                   Y combinator (e.g., Y \f.\x.f (f x)) Y = λf.(λx.f (x x)) (λx.f (x x))
           a + b                  Infix operations (when operators are defined) desugar to plus a b
           a . b . c              composition operator desugar to a (b c)
           a |> f |> g            Pipeline operator desugar to g (f a)
           \_ . expr              Use '_' as a placeholder/ignored parameter in lambdas
           (x, _, _ -> x) 42 9 8  Multiple '_'s are allowed; each is treated as a unique, ignorable variable
+          expr1; expr2; expr3    Multiple expressions / assignments on one line separated by ';'
 
         -- Commands (prefix with ':') --
           :clear                 Clear the current environment and caches
@@ -3655,6 +3882,7 @@ public class Program
         var interpreter = new Interpreter(logger: new());
 
         await interpreter.LoadFileIfExistsAsync("stdlib.lambda");
+    await interpreter.EnsureRangeBuiltinsAsync();
 
         foreach (var filePath in args)
         {
@@ -3662,6 +3890,7 @@ public class Program
             if (result.StartsWith("File not found:"))
                 Console.WriteLine(result);
         }
+    await interpreter.EnsureRangeBuiltinsAsync();
 
         Logger.LogToConsole("");
         Logger.LogToConsole("Lambda Calculus Interpreter - Interactive Mode");

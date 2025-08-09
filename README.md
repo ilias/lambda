@@ -16,6 +16,10 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
 - [Building and Running](#building-and-running)
+- [Range Syntax Extensions](#range-syntax-extensions)
+- [Parser Errors & Diagnostics](#parser-errors--diagnostics)
+- [Unary Minus / Negative Literals](#unary-minus--negative-literals)
+- [Either monad for detailed error reporting](#either-monad-for-detailed-error-reporting)
 
 ## Features
 
@@ -26,6 +30,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - **Lazy Evaluation**: Efficient lazy evaluation with thunk caching (can be toggled to eager)
 - **Y Combinator**: Built-in support for recursion via the Y combinator
 - **Multi-line Input**: Intelligent multi-line expression support with auto-completion detection
+- **Top-level Sequencing**: Semicolon (`;`) support to evaluate multiple expressions sequentially at the REPL or in files
 
 ### Advanced Features
 
@@ -34,6 +39,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - **Native Arithmetic**: Optional native arithmetic optimizations for Church numerals
 - **Pretty Printing**: Automatic formatting of Church numerals and lists
 - **Comprehensive Standard Library**: Over 200 predefined functions and utilities
+- **General & Stepped Ranges**: Rich list range syntax `[a .. b]`, `[a, b .. c]` with lazy dynamic expansion
 
 ### Performance Optimizations
 
@@ -97,6 +103,13 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 []                      # → nil
 [1 .. 5]                # → cons 1 (cons 2 (cons 3 (cons 4 (cons 5 nil))))
 [10 .. 5]               # → cons 10 (cons 9 (cons 8 (cons 7 (cons 6 (cons 5 nil)))))
+[-3 .. 3]               # Negative & positive literal range
+[1, 3 .. 11]            # Stepped range (step = 2) → [1, 3, 5, 7, 9, 11]
+[10, 7 .. -2]           # Descending stepped range (step = -3) → [10, 7, 4, 1, -2]
+
+# General / dynamic ranges (non-literal endpoints are desugared, not expanded eagerly)
+[f x .. g y]            # Desugars to (range (f x) (g y)) and is produced lazily
+[a, a+2 .. b]           # Desugars to (range2 a (a+2) b) when any part is non-literal
 
 # Built-in operators
 5 |> succ |> mult 2     # Pipeline operator: left-to-right data flow → 12
@@ -105,6 +118,14 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 
 # Comments
 # This is a comment
+
+# Semicolon sequencing (top-level only)
+expr1; expr2; expr3     # Evaluate expr1, then expr2, then expr3; final result shown
+let x = 5 in x; succ 10 # Two separate evaluations
+
+# Notes:
+# - Semicolons are only recognized at the top level (REPL root or file root)
+# - A semicolon inside a list, lambda, let, etc. triggers a parse error (UnexpectedSemicolon)
 ```
 
 ### Advanced Syntax Features
@@ -244,7 +265,55 @@ Lists are implemented as right-folded structures:
 [1 .. 5]                # [1, 2, 3, 4, 5]
 [10 .. 5]               # [10, 9, 8, 7, 6, 5] (descending)
 
-# List operations
+#### Range Syntax Extensions
+```
+
+#### Range Syntax Extensions
+
+The interpreter supports an expressive Haskell‑style range family:
+
+```lambda
+[a .. b]        # Inclusive range; expands immediately if a & b are integer literals
+[a, b .. c]     # Stepped range; step = b - a; expands immediately if all literals
+[-5 .. 5]       # Negative literals allowed
+[10, 7 .. -2]   # Descending stepped range using negative step
+[f x .. g y]    # Dynamic endpoints → desugars to (range (f x) (g y)) lazily
+[a, a+2 .. b]   # Dynamic stepped → desugars to (range2 a (a+2) b)
+```
+
+Expansion Rules:
+
+1. If every endpoint (and the second element for stepped ranges) is a literal integer, the list is eagerly expanded at parse time.
+2. Otherwise it desugars to one of the built-ins:
+    - `[start .. end]` → `(range start end)`
+    - `[a, b .. c]` → `(range2 a b c)` (step = b - a)
+3. A zero step (e.g. `[5,5 .. 10]`) yields a singleton `[5]`.
+4. Stepped progression stops before crossing the target bound (inclusive if exactly hits it).
+
+These built-ins are injected automatically if not already defined:
+
+```lambda
+range a b         # (Built-in injected) generates numbers from a to b (ascending or descending) lazily
+range2 a b c      # Stepped; b supplies a+step; works both directions lazily
+```
+
+Practical examples:
+
+```lambda
+map (mult 2) [1,3 .. 11]          # [2,6,10,14,18,22]
+sum [10,7 .. -5]                  # Handles descending & negative endpoints
+take 5 [f n .. g n]               # Works with dynamic expressions lazily
+```
+
+Error Cases:
+
+- Missing second element in a stepped form (e.g. `[a, .. b]`) raises a parse error.
+- Extra commas or malformed patterns (e.g. `[a, b, c .. d]`) are rejected.
+- Double dots in non-range contexts raise `UnexpectedDot`.
+
+List operations:
+
+```lambda
 head [1, 2, 3]          # 1
 tail [1, 2, 3]          # [2, 3]
 length [1, 2, 3]        # 3
@@ -381,6 +450,9 @@ range 5                             # [0, 1, 2, 3, 4]
 enumFromTo 3 7                      # [3, 4, 5, 6, 7]
 repeat 3 42                         # [42, 42, 42]
 primes 20                           # [2, 3, 5, 7, 11, 13, 17, 19]
+range 3 9                           # Built-in two-arg form (injected) → [3,4,5,6,7,8,9]
+range2 2 4 12                       # Step = 2 (4-2) → [2,4,6,8,10,12]
+range2 10 7 -2                      # Step = -3 → [10,7,4,1,-2]
 ```
 
 #### List Utilities
@@ -829,7 +901,36 @@ computeSafely = λx y.
 computeSafely 100 5  # → just 6.64... (log(20) * 2)
 computeSafely 100 0  # → nothing (division by zero)
 
-# Either monad for detailed error reporting
+### Parser Errors & Diagnostics
+
+The parser produces precise diagnostic categories to aid troubleshooting:
+
+| Error | Meaning |
+|-------|---------|
+| UnexpectedSemicolon | A semicolon appeared where only an expression is allowed (non top-level). |
+| UnexpectedLambda    | A lambda parameter list wasn’t followed by a required dot (`λx y.`) before the body. |
+| UnexpectedDot       | Misplaced or duplicate dot (e.g., `λx..x` or malformed range). |
+
+Additional Safeguards:
+- Lambda parameter lists now strictly require a dot; missing it triggers `UnexpectedLambda`.
+- Internal semicolons are disallowed in nested constructs.
+- Range syntax validates pattern shapes early for clearer messages.
+
+### Unary Minus / Negative Literals
+
+Negative integers are tokenized directly (no need to write `minus 0 5`). Unary minus is recognized when `-` precedes a number at the start of an expression or after delimiters (`(`, `[`, `=`, `,`, `->`, `;`). Examples:
+
+```lambda
+-3 + 5              # 2
+[ -2 .. 2 ]         # [-2,-1,0,1,2]
+[10,7 .. -5]        # [10,7,4,1,-2,-5]
+```
+
+If `-` follows a value (e.g. `x-3`), it’s parsed as subtraction (infix operator) when `-` has been defined via `:infix - <prec> left`.
+
+#### Either monad for detailed error reporting
+
+```lambda
 :macro (left $error) => (pair false $error)
 :macro (right $value) => (pair true $value)
 :macro (bindEither $either $func) => (
@@ -838,14 +939,14 @@ computeSafely 100 0  # → nothing (division by zero)
         $either
 )
 
-parseNumber = λstr. 
-    if (isdigit (head str)) 
+parseNumber = λstr.
+    if (isdigit (head str))
         (right (parseDigits str))
         (left "Not a number")
 
 validatePositive = λn.
-    if (gt n 0) 
-        (right n) 
+    if (gt n 0)
+        (right n)
         (left "Must be positive")
 
 processInput = λstr.
