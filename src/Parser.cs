@@ -1143,8 +1143,10 @@ public class Parser
         // Try to match against macro patterns
             foreach (var entry in _macros)
             {
-                foreach (var macro in entry.Value)
+                var list = entry.Value;
+                for (int mi = list.Count - 1; mi >= 0; mi--)
                 {
+                    var macro = list[mi];
                     var result = TryExpandMacro(expr, macro, depth);
                     if (result.Success)
                         return result.ExpandedExpr!;
