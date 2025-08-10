@@ -36,7 +36,8 @@ public record InfixOperator(string Symbol, int Precedence, Associativity Associa
 public class Parser
 {
     public readonly Dictionary<string, InfixOperator> _infixOperators = new(StringComparer.Ordinal);
-    public readonly Dictionary<string, MacroDefinition> _macros = new(StringComparer.Ordinal);
+    // Multi-clause macro support: map name -> list of clauses
+    public readonly Dictionary<string, List<MacroDefinition>> _macros = new(StringComparer.Ordinal);
 
     public Parser()
     {
@@ -305,7 +306,11 @@ public class Parser
             if (slice[0].Type == TokenType.Macro)
             {
                 var macro = ParseMacroDefinition(slice);
-                _macros[macro.Name] = macro;
+                if (!_macros.TryGetValue(macro.Name, out var list)) {
+                    list = [];
+                    _macros[macro.Name] = list;
+                }
+                list.Add(macro);
                 continue;
             }
             // Assignment
@@ -1047,6 +1052,11 @@ public class Parser
             throw new ParseException(TreeErrorType.UnclosedParen, tokens[2].Position);
         
         i++; // Skip ')'
+
+        // Validate rest pattern position (if any)
+        var restIndexValidate = patterns.FindIndex(p => p is VariablePattern vp && vp.IsRest);
+        if (restIndexValidate >= 0 && restIndexValidate != patterns.Count - 1)
+            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
         
         if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
             throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
@@ -1071,7 +1081,31 @@ public class Parser
                     throw new ParseException(TreeErrorType.MissingLetVariable, token.Position);
                 var varName = tokens[i].Value!;
                 i++; // Skip variable name
-                return MacroPattern.Variable(varName);
+                // Detect rest pattern forms after variable:
+                // 1. Three consecutive '.' infix ops: . . .
+                // 2. A Range token '..' followed by '.' infix op
+                bool isRest = false;
+                if (i < tokens.Count)
+                {
+                    // Pattern 2: '..' then '.'
+                    if (tokens[i].Type == TokenType.Range && i + 1 < tokens.Count && tokens[i + 1].Type == TokenType.InfixOp && tokens[i + 1].Value == ".")
+                    {
+                        isRest = true;
+                        i += 2; // consume both tokens
+                    }
+                    else
+                    {
+                        // Pattern 1: three '.' infix ops
+                        int dots = 0; int look = i;
+                        while (look < tokens.Count && dots < 3 && tokens[look].Type == TokenType.InfixOp && tokens[look].Value == ".") { dots++; look++; }
+                        if (dots == 3)
+                        {
+                            isRest = true;
+                            i = look; // consume the three dots
+                        }
+                    }
+                }
+                return MacroPattern.Variable(varName, isRest);
                 
             case TokenType.LParen:
                 var nestedPatterns = new List<MacroPattern>();
@@ -1107,14 +1141,15 @@ public class Parser
             return expr;
             
         // Try to match against macro patterns
-        foreach (var (macroName, macro) in _macros)
-        {
-            var result = TryExpandMacro(expr, macro, depth);
-            if (result.Success)
+            foreach (var entry in _macros)
             {
-                return result.ExpandedExpr!;
+                foreach (var macro in entry.Value)
+                {
+                    var result = TryExpandMacro(expr, macro, depth);
+                    if (result.Success)
+                        return result.ExpandedExpr!;
+                }
             }
-        }
         
         // Recursively expand subexpressions
         return expr.Type switch
@@ -1153,7 +1188,8 @@ public class Parser
         // Check if the expression has the right structure to match this macro
         
         // The patterns list contains only argument patterns, not the macro name
-        var expectedArgs = macro.Pattern.Count;
+    var expectedArgs = macro.Pattern.Count;
+    bool hasRest = macro.Pattern.Any(p => p is VariablePattern vp && vp.IsRest);
         
         if (expectedArgs == 0)
         {
@@ -1174,7 +1210,7 @@ public class Parser
         }
         
         // Check if we found the macro name at the base and have the right number of arguments
-        var result2 = current.Type == ExprType.Var && current.VarName == macro.Name && actualArgs == expectedArgs;
+    var result2 = current.Type == ExprType.Var && current.VarName == macro.Name && (hasRest ? actualArgs >= expectedArgs - 1 : actualArgs == expectedArgs);
         return result2;
     }
     
@@ -1192,21 +1228,45 @@ public class Parser
         var current = expr;
         var args = new List<Expr>();
         
-        // Extract arguments from right-to-left application chain
-        for (int i = patterns.Count - 1; i >= 0; i--)
+        // Extract ALL arguments from right-to-left application chain (don't stop at pattern count yet, needed for rest)
+        while (current.Type == ExprType.App)
         {
-            if (current.Type != ExprType.App)
-                return false;
             args.Insert(0, current.AppRight!);
             current = current.AppLeft!;
         }
-        
-        // Match each argument against its pattern
-        for (int i = 0; i < args.Count; i++)
+
+        // At this point current should be the macro name already validated earlier.
+
+        // If there is a rest variable, patterns.Count - 1 non-rest patterns + rest captures remainder.
+        int restIndex = -1;
+        for (int pi = 0; pi < patterns.Count; pi++)
+            if (patterns[pi] is VariablePattern vp && vp.IsRest) { restIndex = pi; break; }
+
+        if (restIndex >= 0)
         {
-            if (!MatchSinglePattern(args[i], patterns[i], bindings))
-                return false;
+            // Need at least restIndex args to match fixed prefix
+            if (args.Count < restIndex) return false;
+            // Match prefix
+            for (int pi = 0; pi < restIndex; pi++)
+                if (!MatchSinglePattern(args[pi], patterns[pi], bindings)) return false;
+            // Capture rest
+            var restVar = (VariablePattern)patterns[restIndex];
+            var restArgs = args.Skip(restIndex).ToList();
+            // Represent captured list as nested cons (or nil)
+            Expr listExpr = Expr.Var("nil");
+            for (int j = restArgs.Count - 1; j >= 0; j--)
+                listExpr = Expr.App(Expr.App(Expr.Var("cons"), restArgs[j]), listExpr);
+            bindings[restVar.Name] = listExpr;
+            return true;
         }
+        else
+        {
+            if (args.Count != patterns.Count) return false;
+        }
+        
+        // Match each argument against its pattern (no rest)
+        for (int i = 0; i < patterns.Count; i++)
+            if (!MatchSinglePattern(args[i], patterns[i], bindings)) return false;
         
         return true;
     }
@@ -1216,7 +1276,7 @@ public class Parser
         return pattern switch
         {
             LiteralPattern literal => expr.Type == ExprType.Var && expr.VarName == literal.Value,
-            VariablePattern variable => (bindings[variable.Name] = expr) == expr, // Always succeeds, captures the expression
+            VariablePattern variable when !variable.IsRest => (bindings[variable.Name] = expr) == expr,
             ListPattern list => TryMatchPattern(expr, list.Patterns, bindings),
             _ => false
         };
@@ -1292,7 +1352,11 @@ public class Parser
         try
         {
             var macro = new MacroDefinition(name, pattern, transformation);
-            _macros[name] = macro;
+            if (!_macros.TryGetValue(name, out var list)) {
+                list = [];
+                _macros[name] = list;
+            }
+            list.Add(macro);
             return $"Macro '{name}' defined successfully";
         }
         catch (Exception ex)
@@ -1308,7 +1372,11 @@ public class Parser
             var tokens = Tokenize(input);
             var macro = ParseMacroDefinitionFromInput(tokens);
             
-            _macros[macro.Name] = macro;
+            if (!_macros.TryGetValue(macro.Name, out var list)) {
+                list = [];
+                _macros[macro.Name] = list;
+            }
+            list.Add(macro);
             return $"Macro '{macro.Name}' defined successfully";
         }
         catch (Exception ex)
@@ -1344,6 +1412,11 @@ public class Parser
             throw new ParseException(TreeErrorType.UnclosedParen, tokens[1].Position);
         
         i++; // Skip ')'
+
+        // Validate rest pattern position (if any)
+        var restIndexValidate = patterns.FindIndex(p => p is VariablePattern vp && vp.IsRest);
+        if (restIndexValidate >= 0 && restIndexValidate != patterns.Count - 1)
+            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
         
         if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
             throw new ParseException(TreeErrorType.IllegalAssignment, i < tokens.Count ? tokens[i].Position : tokens[tokens.Count - 1].Position);
@@ -1412,8 +1485,9 @@ public class Parser
             return [];
             
         var result = new List<string>();
-        foreach (var (name, macro) in _macros.OrderBy(p => p.Key))
-            result.Add($"  {macro}");
+        foreach (var (name, list) in _macros.OrderBy(p => p.Key))
+            foreach (var macro in list)
+                result.Add($"  {macro}");
         return result;
     }
 }
