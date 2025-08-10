@@ -10,7 +10,7 @@ public class Program
         var interpreter = new Interpreter(logger: new());
 
         await interpreter.LoadFileIfExistsAsync("stdlib.lambda");
-    await interpreter.EnsureRangeBuiltinsAsync();
+        await interpreter.EnsureRangeBuiltinsAsync();
 
         foreach (var filePath in args)
         {
@@ -18,7 +18,7 @@ public class Program
             if (result.StartsWith("File not found:"))
                 Console.WriteLine(result);
         }
-    await interpreter.EnsureRangeBuiltinsAsync();
+        await interpreter.EnsureRangeBuiltinsAsync();
 
         Logger.LogToConsole("");
         Logger.LogToConsole("Lambda Calculus Interpreter - Interactive Mode");
