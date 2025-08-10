@@ -28,3 +28,15 @@ and here are some examples
 :macro (flip $f) => (\x y. $f y x)
 
 I am open to a better or more flexible design.
+
+:macro (max2 $a $b) when (geq $a $b) => $a
+
+:macro (max2 $a $b) => $b
+
+max2 5 3
+
+max2 2 7
+
+:macros
+
+:exit
