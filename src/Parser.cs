@@ -1,7 +1,7 @@
 namespace LambdaCalculus;
 
 
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar, Semicolon }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar, Semicolon, Ellipsis }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody, UnexpectedSemicolon, UnexpectedLambda, UnexpectedDot }
 public class ParseException(TreeErrorType errorType, int position)
@@ -140,7 +140,17 @@ public class Parser
                 continue;
             }
 
-            // Handle range operator '..' early
+            // Handle range operator '..' and ellipsis '...'
+            if (ch == '.' && i + 2 < input.Length && input[i + 1] == '.' && input[i + 2] == '.') {
+                if (currentTerm.Length > 0) {
+                    var termValue = currentTerm.ToString();
+                    var tokenType = MyTokenType(termValue);
+                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
+                    currentTerm.Clear();
+                }
+                result.Add(new Token(TokenType.Ellipsis, pos, "..."));
+                i += 2; pos += 2; continue;
+            }
             if (ch == '.' && i + 1 < input.Length && input[i + 1] == '.') {
                 if (currentTerm.Length > 0) {
                     var termValue = currentTerm.ToString();
@@ -1058,15 +1068,32 @@ public class Parser
         if (restIndexValidate >= 0 && restIndexValidate != patterns.Count - 1)
             throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
         
+        // Optional guard: 'when' <expr>  (we treat 'when' as a Term literal here)
+        Expr? guard = null;
+        if (i < tokens.Count - 1 && tokens[i].Type == TokenType.Term && tokens[i].Value == "when")
+        {
+            i++; // consume 'when'
+            // Parse guard expression up to FatArrow
+            int guardStart = i;
+            int guardEnd = -1;
+            for (int gi = i; gi < tokens.Count; gi++) {
+                if (tokens[gi].Type == TokenType.FatArrow) { guardEnd = gi - 1; break; }
+            }
+            if (guardEnd < guardStart)
+                throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
+            guard = ParseMacroGuardExpression(tokens, guardStart, guardEnd);
+            i = guardEnd + 1;
+        }
+
         if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
-            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
-        
+            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[Math.Max(i - 1,0)].Position);
+
         i++; // Skip '=>'
         
         // Parse transformation
-        var transformation = BuildExpressionTree(tokens, i, tokens.Count - 1);
+    var transformation = BuildExpressionTree(tokens, i, tokens.Count - 1);
         
-        return new MacroDefinition(macroName, patterns, transformation);
+    return new MacroDefinition(macroName, patterns, transformation, guard);
     }
     
     private MacroPattern ParseMacroPattern(List<Token> tokens, ref int i)
@@ -1081,29 +1108,11 @@ public class Parser
                     throw new ParseException(TreeErrorType.MissingLetVariable, token.Position);
                 var varName = tokens[i].Value!;
                 i++; // Skip variable name
-                // Detect rest pattern forms after variable:
-                // 1. Three consecutive '.' infix ops: . . .
-                // 2. A Range token '..' followed by '.' infix op
                 bool isRest = false;
-                if (i < tokens.Count)
+                if (i < tokens.Count && tokens[i].Type == TokenType.Ellipsis)
                 {
-                    // Pattern 2: '..' then '.'
-                    if (tokens[i].Type == TokenType.Range && i + 1 < tokens.Count && tokens[i + 1].Type == TokenType.InfixOp && tokens[i + 1].Value == ".")
-                    {
-                        isRest = true;
-                        i += 2; // consume both tokens
-                    }
-                    else
-                    {
-                        // Pattern 1: three '.' infix ops
-                        int dots = 0; int look = i;
-                        while (look < tokens.Count && dots < 3 && tokens[look].Type == TokenType.InfixOp && tokens[look].Value == ".") { dots++; look++; }
-                        if (dots == 3)
-                        {
-                            isRest = true;
-                            i = look; // consume the three dots
-                        }
-                    }
+                    isRest = true;
+                    i++; // consume ellipsis token
                 }
                 return MacroPattern.Variable(varName, isRest);
                 
@@ -1143,10 +1152,14 @@ public class Parser
         // Try to match against macro patterns
             foreach (var entry in _macros)
             {
-                var list = entry.Value;
-                for (int mi = list.Count - 1; mi >= 0; mi--)
+                var originalList = entry.Value; // insertion order
+                var ordered = originalList
+                    .Select((m, idx) => (m, idx))
+                    .OrderByDescending(t => t.m.Pattern.Count)
+                    .ThenByDescending(t => t.idx) // newer (higher idx) first among same arity
+                    .Select(t => t.m);
+                foreach (var macro in ordered)
                 {
-                    var macro = list[mi];
                     var result = TryExpandMacro(expr, macro, depth);
                     if (result.Success)
                         return result.ExpandedExpr!;
@@ -1177,6 +1190,15 @@ public class Parser
         // Try to match the pattern
         if (TryMatchPattern(expr, macro.Pattern, bindings))
         {
+            // Guard check if present
+            if (macro.Guard is not null)
+            {
+                var guardEvaluated = SubstituteMacroVariables(macro.Guard, bindings);
+                // Basic normalization: if guard reduces to Var("true") proceed, if Var("false") reject.
+                if (guardEvaluated.Type == ExprType.Var && guardEvaluated.VarName == "false")
+                    return MacroExpansionResult.Failed("Guard failed");
+                // For any other value (including true or complex), proceed (full evaluation would require interpreter).
+            }
             var expandedTransformation = SubstituteMacroVariables(macro.Transformation, bindings);
             var result = ExpandMacrosRecursive(expandedTransformation, bindings, depth + 1);
             return MacroExpansionResult.Successful(result);
@@ -1420,15 +1442,27 @@ public class Parser
         if (restIndexValidate >= 0 && restIndexValidate != patterns.Count - 1)
             throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
         
+        // Optional guard: when <expr> before =>
+        Expr? guard = null;
+        if (i < tokens.Count - 1 && tokens[i].Type == TokenType.Term && tokens[i].Value == "when")
+        {
+            i++; // consume 'when'
+            int guardStart = i; int guardEnd = -1;
+            for (int gi = i; gi < tokens.Count; gi++)
+                if (tokens[gi].Type == TokenType.FatArrow) { guardEnd = gi - 1; break; }
+            if (guardEnd < guardStart)
+                throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
+            guard = ParseMacroGuardExpression(tokens, guardStart, guardEnd);
+            i = guardEnd + 1;
+        }
         if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
-            throw new ParseException(TreeErrorType.IllegalAssignment, i < tokens.Count ? tokens[i].Position : tokens[tokens.Count - 1].Position);
-        
+            throw new ParseException(TreeErrorType.IllegalAssignment, i < tokens.Count ? tokens[i].Position : tokens[^1].Position);
         i++; // Skip '=>'
         
         // Parse transformation
-        var transformation = ParseMacroTransformation(tokens, i, tokens.Count - 1);
+    var transformation = ParseMacroTransformation(tokens, i, tokens.Count - 1);
         
-        return new MacroDefinition(macroName, patterns, transformation);
+    return new MacroDefinition(macroName, patterns, transformation, guard);
     }
     
     private Expr ParseMacroTransformation(List<Token> tokens, int startIndex, int endIndex)
@@ -1479,6 +1513,32 @@ public class Parser
         }
         
         return BuildExpressionTree(processedTokens, 0, processedTokens.Count - 1);
+    }
+
+    private Expr ParseMacroGuardExpression(List<Token> tokens, int startIndex, int endIndex)
+    {
+        // Similar to transformation parsing: allow $var references inside guard
+        var processed = new List<Token>();
+        for (int i = startIndex; i <= endIndex; i++)
+        {
+            if (tokens[i].Type == TokenType.Dollar && i + 1 <= endIndex && tokens[i + 1].Type == TokenType.Term)
+            {
+                var varName = tokens[i + 1].Value!;
+                processed.Add(new Token(TokenType.Term, tokens[i + 1].Position, $"__MACRO_VAR_{varName}"));
+                i++; // skip name
+            }
+            else if (tokens[i].Type == TokenType.Integer)
+            {
+                processed.Add(new Token(TokenType.Term, tokens[i].Position, $"__MACRO_INT_{tokens[i].Value}"));
+            }
+            else
+            {
+                processed.Add(tokens[i]);
+            }
+        }
+        if (processed.Count == 0)
+            throw new ParseException(TreeErrorType.EmptyExprList, startIndex < tokens.Count ? tokens[startIndex].Position : 0);
+        return BuildExpressionTree(processed, 0, processed.Count - 1);
     }
     
     public List<string> ShowMacros()

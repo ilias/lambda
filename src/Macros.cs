@@ -15,10 +15,12 @@ public record VariablePattern(string Name, bool IsRest) : MacroPattern(MacroPatt
 public record ListPattern(IList<MacroPattern> Patterns) : MacroPattern(MacroPatternType.List);
 
 // A single macro clause (pattern -> transformation). Multiple clauses with same Name allowed.
-public record MacroDefinition(string Name, IList<MacroPattern> Pattern, Expr Transformation)
+public record MacroDefinition(string Name, IList<MacroPattern> Pattern, Expr Transformation, Expr? Guard = null)
 {
     public override string ToString() =>
-        $":macro ({Name} {string.Join(" ", Pattern.Select(FormatPattern))}) => {Transformation}"
+    $":macro ({Name} {string.Join(" ", Pattern.Select(FormatPattern))})" +
+    (Guard is not null ? $" when {Guard}" : "") +
+    $" => {Transformation}"
         .Replace("__MACRO_VAR_", "$")
         .Replace("__MACRO_INT_", "");
 
