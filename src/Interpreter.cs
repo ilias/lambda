@@ -16,7 +16,7 @@ public class Interpreter
     private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
     private readonly Logger _logger;
-    private readonly Statsistics _stats;
+    private readonly Statistics _stats;
     private readonly Parser _parser = new();
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
@@ -26,10 +26,10 @@ public class Interpreter
     private bool _useNativeArithmetic = true;
     private bool _usedRandom = false;
 
-    public Interpreter(Logger logger, Statsistics? stats = null)
+    public Interpreter(Logger logger, Statistics? stats = null)
     {
         _logger = logger;
-        _stats = stats ?? new Statsistics();
+        _stats = stats ?? new Statistics();
     }
 
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
