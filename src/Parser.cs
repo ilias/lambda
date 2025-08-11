@@ -7,15 +7,24 @@ public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LB
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody, UnexpectedSemicolon, UnexpectedLambda, UnexpectedDot }
 public class ParseException(TreeErrorType errorType, int position) : Exception($"{errorType} at position {position}")
-{ public TreeErrorType ErrorType { get; } = errorType; public int Position { get; } = position; }
+{
+    public TreeErrorType ErrorType { get; } = errorType;
+    public int Position { get; } = position;
+}
 
 public enum StatementType : byte { Expr, Assignment }
 public record Statement(StatementType Type, Expr Expression, string? VarName = null)
-{ public static Statement ExprStatement(Expr expr) => new(StatementType.Expr, expr); public static Statement AssignmentStatement(string varName, Expr expr) => new(StatementType.Assignment, expr, varName); public override string ToString() => Type == StatementType.Expr ? Expression.ToString() : $"{VarName} = {Expression}"; }
+{
+    public static Statement ExprStatement(Expr expr) => new(StatementType.Expr, expr);
+    public static Statement AssignmentStatement(string varName, Expr expr) => new(StatementType.Assignment, expr, varName);
+    public override string ToString() => Type == StatementType.Expr ? Expression.ToString() : $"{VarName} = {Expression}";
+}
 
 public enum Associativity : byte { Left, Right }
 public record InfixOperator(string Symbol, int Precedence, Associativity Associativity, string? FunctionName = null)
-{ public string GetFunctionName() => FunctionName ?? Symbol; }
+{
+    public string GetFunctionName() => FunctionName ?? Symbol;
+}
 
 public class Parser
 {
@@ -40,22 +49,36 @@ public class Parser
         _infixOperators[symbol] = new(symbol, precedence, assoc);
         return $"Infix operator '{symbol}' defined with precedence {precedence} and {associativity} associativity";
     }
+
     public bool IsInfixOperator(string symbol) => _infixOperators.ContainsKey(symbol);
+
     public InfixOperator? GetInfixOperator(string symbol) => _infixOperators.GetValueOrDefault(symbol);
+
     internal TokenType ClassifyTerm(string? term) => term switch
-    { "Y" => TokenType.Y, "let" => TokenType.Let, "in" => TokenType.In, "rec" => TokenType.Rec, ":macro" => TokenType.Macro, _ when term != null && IsInfixOperator(term) => TokenType.InfixOp, _ => TokenType.Term };
+    {
+        "Y" => TokenType.Y,
+        "let" => TokenType.Let,
+        "in" => TokenType.In,
+        "rec" => TokenType.Rec,
+        ":macro" => TokenType.Macro,
+        _ when term != null && IsInfixOperator(term) => TokenType.InfixOp,
+        _ => TokenType.Term
+    };
 
     public List<Token> Tokenize(string input) => _tokenizer.Tokenize(input);
+
     public Statement? Parse(string input) => ParseAll(input).LastOrDefault();
+
     public List<Statement> ParseAll(string input)
     {
         var tokens = Tokenize(input);
         if (tokens.Count == 0) return [];
 
         // Split by top-level semicolons
-        var segments = new List<(int start,int end)>();
-        int paren=0, bracket=0; int segStart=0;
-        for (int i=0;i<tokens.Count;i++)
+        var segments = new List<(int start, int end)>();
+        int paren = 0, bracket = 0;
+        int segStart = 0;
+        for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
             switch (t.Type)
@@ -64,36 +87,52 @@ public class Parser
                 case TokenType.RParen: paren--; break;
                 case TokenType.LBracket: bracket++; break;
                 case TokenType.RBracket: bracket--; break;
-                case TokenType.Semicolon when paren==0 && bracket==0:
-                    if (i-1>=segStart) segments.Add((segStart,i-1));
-                    segStart=i+1; break;
+                case TokenType.Semicolon when paren == 0 && bracket == 0:
+                    if (i - 1 >= segStart) segments.Add((segStart, i - 1));
+                    segStart = i + 1; break;
             }
         }
-        if (segStart<tokens.Count) segments.Add((segStart,tokens.Count-1));
+        if (segStart < tokens.Count) segments.Add((segStart, tokens.Count - 1));
 
         var stmts = new List<Statement>();
-        foreach (var (s,e) in segments)
+        foreach (var (s, e) in segments)
         {
-            if (e < s) continue; var slice = tokens.GetRange(s, e-s+1); if (slice.Count==0) continue;
-            if (slice[0].Type == TokenType.Macro) { _macroExpander.ParseAndStoreMacroDefinition(slice); continue; }
+            if (e < s) continue;
+            var slice = tokens.GetRange(s, e - s + 1);
+            if (slice.Count == 0) continue;
+            if (slice[0].Type == TokenType.Macro)
+            {
+                _macroExpander.ParseAndStoreMacroDefinition(slice);
+                continue;
+            }
             // Infix operator directive: :infix <symbol> <precedence> <assoc>
-            if (slice.Count >= 4 && slice[0].Type==TokenType.Term && slice[0].Value==":infix" && slice[1].Type==TokenType.Term && slice[2].Type==TokenType.Integer && slice[3].Type==TokenType.Term)
+            if (slice.Count >= 4 && slice[0].Type == TokenType.Term && slice[0].Value == ":infix" && slice[1].Type == TokenType.Term && slice[2].Type == TokenType.Integer && slice[3].Type == TokenType.Term)
             {
                 if (int.TryParse(slice[2].Value, out int prec))
                 {
                     var msg = DefineInfixOperator(slice[1].Value!, prec, slice[3].Value!);
                     // Represent directive as an assignment-like statement for echoing
-                    stmts.Add(Statement.ExprStatement(Expr.Var(msg.StartsWith("Error")?"error":"ok")));
+                    stmts.Add(Statement.ExprStatement(Expr.Var(msg.StartsWith("Error") ? "error" : "ok")));
                     continue;
                 }
             }
-            if (slice.Count>2 && (slice[0].Type==TokenType.Term || slice[0].Type==TokenType.InfixOp) && slice[1].Type==TokenType.Equals)
+            if (slice.Count > 2 && (slice[0].Type == TokenType.Term || slice[0].Type == TokenType.InfixOp) && slice[1].Type == TokenType.Equals)
             {
-                var expr = BuildExpressionTree(slice,2,slice.Count-1); expr = ExpandMacros(expr); stmts.Add(Statement.AssignmentStatement(slice[0].Value!, expr)); continue;
+                var expr = BuildExpressionTree(slice, 2, slice.Count - 1);
+                expr = ExpandMacros(expr);
+                stmts.Add(Statement.AssignmentStatement(slice[0].Value!, expr));
+                continue;
             }
-            if (slice[0].Type==TokenType.Let)
-            { int idx=0; var letExpr = ParseLetExpr(slice, ref idx, slice.Count-1); stmts.Add(Statement.ExprStatement(letExpr)); continue; }
-            var expr2 = BuildExpressionTree(slice,0,slice.Count-1); expr2 = ExpandMacros(expr2); stmts.Add(Statement.ExprStatement(expr2));
+            if (slice[0].Type == TokenType.Let)
+            {
+                int idx = 0;
+                var letExpr = ParseLetExpr(slice, ref idx, slice.Count - 1);
+                stmts.Add(Statement.ExprStatement(letExpr));
+                continue;
+            }
+            var expr2 = BuildExpressionTree(slice, 0, slice.Count - 1);
+            expr2 = ExpandMacros(expr2);
+            stmts.Add(Statement.ExprStatement(expr2));
         }
         return stmts;
     }
@@ -120,26 +159,41 @@ public class Parser
             var names = new List<string>();
             if (tokens[pos].Type == TokenType.LParen)
             {
-                int startPos = pos; pos++; // skip '('
+                int startPos = pos;
+                pos++; // skip '('
                 while (pos <= end && tokens[pos].Type == TokenType.Term)
                 {
-                    names.Add(tokens[pos].Value!); pos++;
-                    if (pos <= end && tokens[pos].Type == TokenType.Comma) { pos++; continue; }
+                    names.Add(tokens[pos].Value!);
+                    pos++;
+                    if (pos <= end && tokens[pos].Type == TokenType.Comma)
+                    {
+                        pos++;
+                        continue;
+                    }
                     break;
                 }
-                if (pos > end || tokens[pos].Type != TokenType.RParen) throw new ParseException(TreeErrorType.UnclosedParen, tokens[Math.Max(0,pos-1)].Position);
+                if (pos > end || tokens[pos].Type != TokenType.RParen) throw new ParseException(TreeErrorType.UnclosedParen, tokens[Math.Max(0, pos - 1)].Position);
                 pos++; // skip ')'
             }
             else
             {
                 while (pos <= end && tokens[pos].Type == TokenType.Term)
-                { names.Add(tokens[pos].Value!); pos++; if (pos <= end && tokens[pos].Type == TokenType.Comma) { pos++; continue; } break; }
+                {
+                    names.Add(tokens[pos].Value!);
+                    pos++;
+                    if (pos <= end && tokens[pos].Type == TokenType.Comma)
+                    {
+                        pos++;
+                        continue;
+                    }
+                    break;
+                }
             }
-            if (names.Count == 0) throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[Math.Max(0,pos-1)].Position);
-            if (pos > end || tokens[pos].Type != TokenType.Arrow) throw new ParseException(TreeErrorType.IllegalAssignment, tokens[Math.Max(0,pos-1)].Position);
+            if (names.Count == 0) throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[Math.Max(0, pos - 1)].Position);
+            if (pos > end || tokens[pos].Type != TokenType.Arrow) throw new ParseException(TreeErrorType.IllegalAssignment, tokens[Math.Max(0, pos - 1)].Position);
             pos++; // consume '->'
             var body = ParseExpression(tokens, ref pos, end, 0);
-            left = names.AsEnumerable().Reverse().Aggregate(body,(acc,n)=>Expr.Abs(n,acc));
+            left = names.AsEnumerable().Reverse().Aggregate(body, (acc, n) => Expr.Abs(n, acc));
         }
         else
         {
@@ -148,11 +202,12 @@ public class Parser
 
         while (pos <= end && tokens[pos].Type == TokenType.InfixOp)
         {
-            var opTok = tokens[pos]; var op = GetInfixOperator(opTok.Value!)!;
+            var opTok = tokens[pos];
+            var op = GetInfixOperator(opTok.Value!)!;
             if (op.Precedence < minPrec) break;
             pos++;
-            var rhs = ParseExpression(tokens, ref pos, end, op.Precedence + (op.Associativity==Associativity.Left?1:0));
-            left = DesugarInfix(op,left,rhs);
+            var rhs = ParseExpression(tokens, ref pos, end, op.Precedence + (op.Associativity == Associativity.Left ? 1 : 0));
+            left = DesugarInfix(op, left, rhs);
         }
         return left;
     }
@@ -167,61 +222,108 @@ public class Parser
         }
         return left;
     }
-    private bool IsPrimaryStart(TokenType t) => t is TokenType.LParen or TokenType.LBracket or TokenType.Lambda or TokenType.Term or TokenType.Integer or TokenType.Y or TokenType.Let;
 
+    // Parse a single atomic / primary expression
     private Expr ParsePrimary(List<Token> tokens, ref int pos, int end)
     {
-        if (pos > end) throw new ParseException(TreeErrorType.EmptyExprList, end>=0 && end<tokens.Count ? tokens[end].Position : 0);
-        var t = tokens[pos];
-        return t.Type switch
+        if (pos > end) throw new ParseException(TreeErrorType.EmptyExprList, pos > 0 ? tokens[pos - 1].Position : 0);
+        var tk = tokens[pos];
+        switch (tk.Type)
         {
-            TokenType.LParen => ParseParenthesizedExpr(tokens, ref pos, end),
-            TokenType.LBracket => ParseListExpr(tokens, ref pos, end),
-            TokenType.Lambda => ParseLambdaExpr(tokens, ref pos, end),
-            TokenType.Let => ParseLetExpr(tokens, ref pos, end),
-            TokenType.Y => ++pos > 0 ? Expr.YCombinator() : Expr.YCombinator(),
-            TokenType.Term => Expr.Var(tokens[pos++].Value!),
-            TokenType.Integer when int.TryParse(t.Value, out int v) => (pos++, CreateChurchNumeral(v)).Item2,
-            _ => throw new ParseException(TreeErrorType.IllegalAssignment, t.Position)
-        };
+            case TokenType.LParen:
+                return ParseParenthesizedExpr(tokens, ref pos, end);
+            case TokenType.LBracket:
+                return ParseListExpr(tokens, ref pos, end);
+            case TokenType.Lambda:
+                return ParseLambdaExpr(tokens, ref pos, end);
+            case TokenType.Integer:
+                if (!int.TryParse(tk.Value, out int n)) n = 0;
+                pos++;
+                return CreateChurchNumeral(n);
+            case TokenType.Term:
+                pos++;
+                return Expr.Var(tk.Value!);
+            case TokenType.Y:
+                pos++;
+                return Expr.YCombinator();
+            case TokenType.Let:
+                return ParseLetExpr(tokens, ref pos, end);
+            default:
+                throw new ParseException(TreeErrorType.IllegalAssignment, tk.Position);
+        }
     }
 
-    private bool IsArrowParamListAhead(List<Token> tokens, int pos, int end)
+    private static bool IsPrimaryStart(TokenType t) => t is TokenType.LParen or TokenType.LBracket or TokenType.Lambda or TokenType.Term or TokenType.Integer or TokenType.Y or TokenType.Let;
+
+    private static bool IsArrowParamListAhead(List<Token> tokens, int pos, int end)
     {
         if (pos > end) return false;
         // Parenthesized form: (x, y) ->
         if (tokens[pos].Type == TokenType.LParen)
         {
-            int i = pos + 1; bool any=false; while (i <= end && tokens[i].Type == TokenType.Term)
-            { any = true; i++; if (i<=end && tokens[i].Type==TokenType.Comma) { i++; continue; } break; }
-            if (!any) return false; if (i > end || tokens[i].Type != TokenType.RParen) return false; i++; return i<=end && tokens[i].Type==TokenType.Arrow;
+            int i = pos + 1;
+            bool any = false;
+            while (i <= end && tokens[i].Type == TokenType.Term)
+            {
+                any = true;
+                i++;
+                if (i <= end && tokens[i].Type == TokenType.Comma)
+                {
+                    i++;
+                    continue;
+                }
+                break;
+            }
+            if (!any) return false;
+            if (i > end || tokens[i].Type != TokenType.RParen) return false;
+            i++;
+            return i <= end && tokens[i].Type == TokenType.Arrow;
         }
         // Bare form: x, y ->
-        int j=pos; bool anyBare=false; while (j <= end && tokens[j].Type == TokenType.Term)
-        { anyBare=true; j++; if (j<=end && tokens[j].Type==TokenType.Comma) { j++; continue; } break; }
-        if (!anyBare) return false; return j<=end && tokens[j].Type==TokenType.Arrow;
+        int j = pos;
+        bool anyBare = false;
+        while (j <= end && tokens[j].Type == TokenType.Term)
+        {
+            anyBare = true;
+            j++;
+            if (j <= end && tokens[j].Type == TokenType.Comma)
+            {
+                j++;
+                continue;
+            }
+            break;
+        }
+        if (!anyBare) return false;
+        return j <= end && tokens[j].Type == TokenType.Arrow;
     }
 
     private Expr DesugarInfix(InfixOperator op, Expr left, Expr right)
     {
         if (op.Symbol == ".") return Expr.App(left, right);
         if (op.Symbol == "|>") return Expr.App(right, left);
-        var f = Expr.Var(op.GetFunctionName()); return Expr.App(Expr.App(f,left), right);
+        var f = Expr.Var(op.GetFunctionName());
+        return Expr.App(Expr.App(f, left), right);
     }
 
     // ---------------- Atoms ----------------
     private Expr ParseParenthesizedExpr(List<Token> tokens, ref int pos, int end)
     {
-        int start = pos; int depth=0; for (int j=pos+1;j<=end;j++)
+        int start = pos;
+        int depth = 0;
+        for (int j = pos + 1; j <= end; j++)
         {
-            if (tokens[j].Type==TokenType.LParen) depth++;
-            else if (tokens[j].Type==TokenType.RParen)
+            if (tokens[j].Type == TokenType.LParen) depth++;
+            else if (tokens[j].Type == TokenType.RParen)
             {
-                if (depth==0)
-                { var inner = BuildExpressionTree(tokens, start+1, j-1); pos = j+1; return inner; }
+                if (depth == 0)
+                {
+                    var inner = BuildExpressionTree(tokens, start + 1, j - 1);
+                    pos = j + 1;
+                    return inner;
+                }
                 depth--;
             }
-            else if (tokens[j].Type==TokenType.Semicolon) throw new ParseException(TreeErrorType.UnexpectedSemicolon, tokens[j].Position);
+            else if (tokens[j].Type == TokenType.Semicolon) throw new ParseException(TreeErrorType.UnexpectedSemicolon, tokens[j].Position);
         }
         throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
     }
@@ -229,120 +331,324 @@ public class Parser
     private Expr ParseLambdaExpr(List<Token> tokens, ref int pos, int end)
     {
         pos++; // skip λ
-        var vars = new List<string>(); int underscore=0;
-        while (pos<=end && tokens[pos].Type==TokenType.Term)
-        { var v = tokens[pos].Value!; if (v=="_") { underscore++; v=$"_placeholder{underscore}"; } vars.Add(v); pos++; }
-        if (vars.Count==0) throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[Math.Max(0,pos-1)].Position);
-        if (pos> end || tokens[pos].Type != TokenType.Dot) throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[Math.Max(0,pos-1)].Position);
+        var vars = new List<string>();
+        int underscore = 0;
+        while (pos <= end && tokens[pos].Type == TokenType.Term)
+        {
+            var v = tokens[pos].Value!;
+            if (v == "_")
+            {
+                underscore++;
+                v = $"_placeholder{underscore}";
+            }
+            vars.Add(v);
+            pos++;
+        }
+        if (vars.Count == 0) throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[Math.Max(0, pos - 1)].Position);
+        if (pos > end || tokens[pos].Type != TokenType.Dot) throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[Math.Max(0, pos - 1)].Position);
         pos++; // skip '.'
-        if (pos> end) throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[Math.Max(0,pos-1)].Position);
+        if (pos > end) throw new ParseException(TreeErrorType.MissingLambdaBody, tokens[Math.Max(0, pos - 1)].Position);
         var body = BuildExpressionTree(tokens, pos, end); // consume rest of span
-        pos = end+1;
-        return vars.AsEnumerable().Reverse().Aggregate(body,(acc,v)=>Expr.Abs(v,acc));
+        pos = end + 1;
+        return vars.AsEnumerable().Reverse().Aggregate(body, (acc, v) => Expr.Abs(v, acc));
     }
 
     private Expr ParseLetExpr(List<Token> tokens, ref int pos, int end)
     {
-        var letPos = tokens[pos].Position; pos++;
-        bool isRec = pos<=end && tokens[pos].Type==TokenType.Rec; if (isRec) pos++;
-        if (pos> end) throw new ParseException(TreeErrorType.MissingLetVariable, letPos);
-        var names=new List<string>(); var values=new List<Expr>();
-        while (pos<=end)
+        var letPos = tokens[pos].Position;
+        pos++;
+        bool isRec = pos <= end && tokens[pos].Type == TokenType.Rec;
+        if (isRec) pos++;
+        if (pos > end) throw new ParseException(TreeErrorType.MissingLetVariable, letPos);
+        var names = new List<string>();
+        var values = new List<Expr>();
+        while (pos <= end)
         {
-            if (tokens[pos].Type!=TokenType.Term) throw new ParseException(TreeErrorType.MissingLetVariable, tokens[pos].Position);
-            var name = tokens[pos].Value!; names.Add(name); pos++;
-            if (pos> end || tokens[pos].Type!=TokenType.Equals) throw new ParseException(TreeErrorType.MissingLetEquals, tokens[Math.Max(0,pos-1)].Position);
+            if (tokens[pos].Type != TokenType.Term) throw new ParseException(TreeErrorType.MissingLetVariable, tokens[pos].Position);
+            var name = tokens[pos].Value!;
+            names.Add(name);
+            pos++;
+            if (pos > end || tokens[pos].Type != TokenType.Equals) throw new ParseException(TreeErrorType.MissingLetEquals, tokens[Math.Max(0, pos - 1)].Position);
             pos++; // skip '='
-                        // Special case: detect lambda parameter list using commas:  x, y -> body
-                        int temp = pos; bool lambdaParamList=false;
-                        if (temp<=end)
+            // Special case: detect lambda parameter list using commas:  x, y -> body
+            int temp = pos;
+            bool lambdaParamList = false;
+            if (temp <= end)
+            {
+                if (tokens[temp].Type == TokenType.LParen)
+                {
+                    int scan = temp + 1;
+                    int depth = 1;
+                    bool sawTerm = false;
+                    while (scan <= end && depth > 0)
+                    {
+                        var tk = tokens[scan];
+                        if (tk.Type == TokenType.LParen)
                         {
-                            if (tokens[temp].Type==TokenType.LParen)
+                            depth++;
+                        }
+                        else if (tk.Type == TokenType.RParen)
+                        {
+                            depth--;
+                            if (depth == 0)
                             {
-                                int scan = temp+1; int depth=1; bool sawTerm=false; while (scan<=end && depth>0)
-                                {
-                                    var tk = tokens[scan];
-                                    if (tk.Type==TokenType.LParen) { depth++; }
-                                    else if (tk.Type==TokenType.RParen) { depth--; if (depth==0) { scan++; break; } }
-                                    else if (depth==1 && tk.Type==TokenType.Term) { sawTerm=true; scan++; if (scan<=end && tokens[scan].Type==TokenType.Comma) { scan++; continue; } }
-                                    else scan++;
-                                }
-                                if (sawTerm && scan<=end && tokens[scan].Type==TokenType.Arrow) lambdaParamList=true;
-                            }
-                            else if (tokens[temp].Type==TokenType.Term)
-                            {
-                                int scan=temp; bool sawTerm=false; while (scan<=end && tokens[scan].Type==TokenType.Term){ sawTerm=true; scan++; if (scan<=end && tokens[scan].Type==TokenType.Comma) { scan++; continue;} break; }
-                                if (sawTerm && scan<=end && tokens[scan].Type==TokenType.Arrow) lambdaParamList=true;
+                                scan++;
+                                break;
                             }
                         }
-                        // find end of value (comma / in at top level) unless lambdaParamList where commas belong to params
-                        int valueStart=pos; int valueEnd=-1; int nesting=0; int letNesting=0; int arrowPos=-1;
-            for (int probe=pos; probe<=end; probe++)
+                        else if (depth == 1 && tk.Type == TokenType.Term)
+                        {
+                            sawTerm = true;
+                            scan++;
+                            if (scan <= end && tokens[scan].Type == TokenType.Comma)
+                            {
+                                scan++;
+                                continue;
+                            }
+                        }
+                        else scan++;
+                    }
+                    if (sawTerm && scan <= end && tokens[scan].Type == TokenType.Arrow) lambdaParamList = true;
+                }
+                else if (tokens[temp].Type == TokenType.Term)
+                {
+                    int scan = temp;
+                    bool sawTerm = false;
+                    while (scan <= end && tokens[scan].Type == TokenType.Term)
+                    {
+                        sawTerm = true;
+                        scan++;
+                        if (scan <= end && tokens[scan].Type == TokenType.Comma)
+                        {
+                            scan++;
+                            continue;
+                        }
+                        break;
+                    }
+                    if (sawTerm && scan <= end && tokens[scan].Type == TokenType.Arrow) lambdaParamList = true;
+                }
+            }
+            // find end of value (comma / in at top level) unless lambdaParamList where commas belong to params
+            int valueStart = pos;
+            int valueEnd = -1;
+            int nesting = 0;
+            int letNesting = 0;
+            int arrowPos = -1;
+            for (int probe = pos; probe <= end; probe++)
             {
                 var t = tokens[probe];
                 if (t.Type is TokenType.LParen or TokenType.LBracket) nesting++;
                 else if (t.Type is TokenType.RParen or TokenType.RBracket) nesting--;
-                else if (nesting==0)
+                else if (nesting == 0)
                 {
-                                        if (t.Type==TokenType.Let) letNesting++;
-                                        else if (t.Type==TokenType.In) { if (letNesting>0) letNesting--; else { valueEnd=probe-1; break; } }
-                                        else if (t.Type==TokenType.Arrow && arrowPos==-1) arrowPos=probe;
-                                        else if (!lambdaParamList && t.Type==TokenType.Comma && letNesting==0)
-                                        { if (arrowPos==-1 || probe>arrowPos) { valueEnd=probe-1; break; } }
+                    if (t.Type == TokenType.Let) letNesting++;
+                    else if (t.Type == TokenType.In)
+                    {
+                        if (letNesting > 0) letNesting--;
+                        else
+                        {
+                            valueEnd = probe - 1;
+                            break;
+                        }
+                    }
+                    else if (t.Type == TokenType.Arrow && arrowPos == -1) arrowPos = probe;
+                    else if (!lambdaParamList && t.Type == TokenType.Comma && letNesting == 0)
+                    {
+                        if (arrowPos == -1 || probe > arrowPos)
+                        {
+                            valueEnd = probe - 1;
+                            break;
+                        }
+                    }
                 }
             }
-            if (valueEnd==-1) valueEnd=end;
-            if (valueStart>valueEnd) throw new ParseException(TreeErrorType.MissingLetValue, tokens[Math.Max(0,valueStart)].Position);
-            values.Add(BuildExpressionTree(tokens,valueStart,valueEnd));
-            pos = valueEnd+1;
-            while (pos<=end && tokens[pos].Type==TokenType.Comma) pos++; // consume commas
-            if (pos<=end && tokens[pos].Type==TokenType.In) { pos++; break; }
-            if (pos<=end && tokens[pos].Type==TokenType.Term) continue; // next binding w/out comma
-            if (pos> end) break;
-            if (tokens[pos].Type!=TokenType.Term) throw new ParseException(TreeErrorType.MissingLetIn, tokens[pos].Position);
+            if (valueEnd == -1) valueEnd = end;
+            if (valueStart > valueEnd) throw new ParseException(TreeErrorType.MissingLetValue, tokens[Math.Max(0, valueStart)].Position);
+            values.Add(BuildExpressionTree(tokens, valueStart, valueEnd));
+            pos = valueEnd + 1;
+            while (pos <= end && tokens[pos].Type == TokenType.Comma) pos++; // consume commas
+            if (pos <= end && tokens[pos].Type == TokenType.In)
+            {
+                pos++;
+                break;
+            }
+            if (pos <= end && tokens[pos].Type == TokenType.Term) continue; // next binding w/out comma
+            if (pos > end) break;
+            if (tokens[pos].Type != TokenType.Term) throw new ParseException(TreeErrorType.MissingLetIn, tokens[pos].Position);
         }
-        if (pos> end) throw new ParseException(TreeErrorType.MissingLetBody, tokens[Math.Max(0,pos-1)].Position);
-        var bodyExpr = BuildExpressionTree(tokens,pos,end); pos = end+1;
+        if (pos > end) throw new ParseException(TreeErrorType.MissingLetBody, tokens[Math.Max(0, pos - 1)].Position);
+        var bodyExpr = BuildExpressionTree(tokens, pos, end);
+        pos = end + 1;
         if (isRec)
         {
-            if (names.Count!=1) throw new ParseException(TreeErrorType.IllegalAssignment, letPos);
-            var recVar = names[0]; var recVal = values[0]; var finalVal = Expr.App(Expr.YCombinator(), Expr.Abs(recVar, recVal));
+            if (names.Count != 1) throw new ParseException(TreeErrorType.IllegalAssignment, letPos);
+            var recVar = names[0];
+            var recVal = values[0];
+            var finalVal = Expr.App(Expr.YCombinator(), Expr.Abs(recVar, recVal));
             return Expr.App(Expr.Abs(recVar, bodyExpr), finalVal);
         }
-        var abs = names.AsEnumerable().Reverse().Aggregate(bodyExpr,(b,n)=>Expr.Abs(n,b));
-        var app = abs; foreach (var v in values) app = Expr.App(app, v); return app;
+        var abs = names.AsEnumerable().Reverse().Aggregate(bodyExpr, (b, n) => Expr.Abs(n, b));
+        var app = abs;
+        foreach (var v in values) app = Expr.App(app, v);
+        return app;
     }
 
-    private Expr CreateChurchNumeral(int n) => n < 1 ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x"))) : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f","x", n)));
-    private Expr GenerateApplicationChain(string f,string x,int count)=> Enumerable.Range(0,count).Aggregate(Expr.Var(x),(acc,_)=>Expr.App(Expr.Var(f),acc));
+    private Expr CreateChurchNumeral(int n) => n < 1 ? Expr.Abs("f", Expr.Abs("x", Expr.Var("x"))) : Expr.Abs("f", Expr.Abs("x", GenerateApplicationChain("f", "x", n)));
+
+    private Expr GenerateApplicationChain(string f, string x, int count) => Enumerable.Range(0, count).Aggregate(Expr.Var(x), (acc, _) => Expr.App(Expr.Var(f), acc));
 
     private Expr ParseListExpr(List<Token> tokens, ref int pos, int end)
     {
-        int start = pos; pos++; // skip '['
+        int start = pos;
+        pos++; // skip '['
         var elements = new List<Expr>();
         // stepped range [a , b .. c]
-        if (pos<=end)
+        if (pos <= end)
         {
-            int scan=pos, nest=0, firstComma=-1, rangeIdx=-1; bool extra=false;
-            while (scan<=end && tokens[scan].Type!=TokenType.RBracket)
-            { var tk=tokens[scan]; if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++; else if (tk.Type is TokenType.RParen or TokenType.RBracket) nest--; else if (nest==0){ if (tk.Type==TokenType.Comma){ if (firstComma==-1) firstComma=scan; else { extra=true; break; }} else if (tk.Type==TokenType.Range){ if (rangeIdx==-1) rangeIdx=scan; else { rangeIdx=-2; break; } } } scan++; }
-            if (!extra && firstComma!=-1 && rangeIdx>firstComma && rangeIdx!=-2)
-            { int aS=pos,aE=firstComma-1,bS=firstComma+1,bE=rangeIdx-1,cS=rangeIdx+1,cE=scan-1; if (aS<=aE && bS<=bE && cS<=cE)
-                { bool ints = aS==aE && bS==bE && cS==cE && tokens[aS].Type==TokenType.Integer && tokens[bS].Type==TokenType.Integer && tokens[cS].Type==TokenType.Integer; if (ints && int.TryParse(tokens[aS].Value,out int a)&& int.TryParse(tokens[bS].Value,out int b)&& int.TryParse(tokens[cS].Value,out int c)) { int step=b-a; bool fwd=step>0; if (step==0) elements.Add(CreateChurchNumeral(a)); else if (!(fwd && a>c) && !(!fwd && a<c)) for (int v=a; fwd? v<=c: v>=c; v+=step) elements.Add(CreateChurchNumeral(v)); while (scan<=end && tokens[scan].Type!=TokenType.RBracket) scan++; if (scan> end || tokens[scan].Type!=TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen,tokens[start].Position); pos=scan+1; return BuildList(elements); } var aExpr=BuildExpressionTree(tokens,aS,aE); var bExpr=BuildExpressionTree(tokens,bS,bE); var cExpr=BuildExpressionTree(tokens,cS,cE); while (scan<=end && tokens[scan].Type!=TokenType.RBracket) scan++; if (scan> end||tokens[scan].Type!=TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen,tokens[start].Position); pos=scan+1; return Expr.App(Expr.App(Expr.App(Expr.Var("range2"),aExpr),bExpr),cExpr); } }
+            int scan = pos, nest = 0, firstComma = -1, rangeIdx = -1;
+            bool extra = false;
+            while (scan <= end && tokens[scan].Type != TokenType.RBracket)
+            {
+                var tk = tokens[scan];
+                if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++;
+                else if (tk.Type is TokenType.RParen or TokenType.RBracket) nest--;
+                else if (nest == 0)
+                {
+                    if (tk.Type == TokenType.Comma)
+                    {
+                        if (firstComma == -1) firstComma = scan;
+                        else
+                        {
+                            extra = true;
+                            break;
+                        }
+                    }
+                    else if (tk.Type == TokenType.Range)
+                    {
+                        if (rangeIdx == -1) rangeIdx = scan;
+                        else
+                        {
+                            rangeIdx = -2;
+                            break;
+                        }
+                    }
+                }
+                scan++;
+            }
+            if (!extra && firstComma != -1 && rangeIdx > firstComma && rangeIdx != -2)
+            {
+                int aS = pos, aE = firstComma - 1, bS = firstComma + 1, bE = rangeIdx - 1, cS = rangeIdx + 1, cE = scan - 1;
+                if (aS <= aE && bS <= bE && cS <= cE)
+                {
+                    bool ints = aS == aE && bS == bE && cS == cE && tokens[aS].Type == TokenType.Integer && tokens[bS].Type == TokenType.Integer && tokens[cS].Type == TokenType.Integer;
+                    if (ints && int.TryParse(tokens[aS].Value, out int a) && int.TryParse(tokens[bS].Value, out int b) && int.TryParse(tokens[cS].Value, out int c))
+                    {
+                        int step = b - a;
+                        bool fwd = step > 0;
+                        if (step == 0) elements.Add(CreateChurchNumeral(a));
+                        else if (!(fwd && a > c) && !(!fwd && a < c))
+                            for (int v = a; fwd ? v <= c : v >= c; v += step)
+                                elements.Add(CreateChurchNumeral(v));
+                        while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
+                        if (scan > end || tokens[scan].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+                        pos = scan + 1;
+                        return BuildList(elements);
+                    }
+                    var aExpr = BuildExpressionTree(tokens, aS, aE);
+                    var bExpr = BuildExpressionTree(tokens, bS, bE);
+                    var cExpr = BuildExpressionTree(tokens, cS, cE);
+                    while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
+                    if (scan > end || tokens[scan].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+                    pos = scan + 1;
+                    return Expr.App(Expr.App(Expr.App(Expr.Var("range2"), aExpr), bExpr), cExpr);
+                }
+            }
         }
         // simple range [a .. b]
-        if (pos<=end)
+        if (pos <= end)
         {
-            int scan=pos,nest=0,rangePos=-1; bool hasComma=false; while (scan<=end && tokens[scan].Type!=TokenType.RBracket){ var tk=tokens[scan]; if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++; else if (tk.Type is TokenType.RParen or TokenType.RBracket) nest--; else if (nest==0){ if (tk.Type==TokenType.Comma){ hasComma=true; break;} if (tk.Type==TokenType.Range){ if (rangePos!=-1){ rangePos=-2; break;} rangePos=scan; } } scan++; }
-            if (!hasComma && rangePos>=pos && rangePos!=-2)
-            { int aS=pos,aE=rangePos-1,bS=rangePos+1,bE=scan-1; if (aS<=aE && bS<=bE){ bool aInt=aS==aE && tokens[aS].Type==TokenType.Integer; bool bInt=bS==bE && tokens[bS].Type==TokenType.Integer; if (aInt && bInt && int.TryParse(tokens[aS].Value,out int from) && int.TryParse(tokens[bS].Value,out int to)){ if (from<=to) for (int v=from; v<=to; v++) elements.Add(CreateChurchNumeral(v)); else for (int v=from; v>=to; v--) elements.Add(CreateChurchNumeral(v)); while (scan<=end && tokens[scan].Type!=TokenType.RBracket) scan++; if (scan> end || tokens[scan].Type!=TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen,tokens[start].Position); pos=scan+1; return BuildList(elements); } var aExpr=BuildExpressionTree(tokens,aS,aE); var bExpr=BuildExpressionTree(tokens,bS,bE); while (scan<=end && tokens[scan].Type!=TokenType.RBracket) scan++; if (scan> end || tokens[scan].Type!=TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen,tokens[start].Position); pos=scan+1; return Expr.App(Expr.App(Expr.Var("range"),aExpr), bExpr); } }
+            int scan = pos, nest = 0, rangePos = -1;
+            bool hasComma = false;
+            while (scan <= end && tokens[scan].Type != TokenType.RBracket)
+            {
+                var tk = tokens[scan];
+                if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++;
+                else if (tk.Type is TokenType.RParen or TokenType.RBracket) nest--;
+                else if (nest == 0)
+                {
+                    if (tk.Type == TokenType.Comma)
+                    {
+                        hasComma = true;
+                        break;
+                    }
+                    if (tk.Type == TokenType.Range)
+                    {
+                        if (rangePos != -1)
+                        {
+                            rangePos = -2;
+                            break;
+                        }
+                        rangePos = scan;
+                    }
+                }
+                scan++;
+            }
+            if (!hasComma && rangePos >= pos && rangePos != -2)
+            {
+                int aS = pos, aE = rangePos - 1, bS = rangePos + 1, bE = scan - 1;
+                if (aS <= aE && bS <= bE)
+                {
+                    bool aInt = aS == aE && tokens[aS].Type == TokenType.Integer;
+                    bool bInt = bS == bE && tokens[bS].Type == TokenType.Integer;
+                    if (aInt && bInt && int.TryParse(tokens[aS].Value, out int from) && int.TryParse(tokens[bS].Value, out int to))
+                    {
+                        if (from <= to) for (int v = from; v <= to; v++) elements.Add(CreateChurchNumeral(v));
+                        else for (int v = from; v >= to; v--) elements.Add(CreateChurchNumeral(v));
+                        while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
+                        if (scan > end || tokens[scan].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+                        pos = scan + 1;
+                        return BuildList(elements);
+                    }
+                    var aExpr = BuildExpressionTree(tokens, aS, aE);
+                    var bExpr = BuildExpressionTree(tokens, bS, bE);
+                    while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
+                    if (scan > end || tokens[scan].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+                    pos = scan + 1;
+                    return Expr.App(Expr.App(Expr.Var("range"), aExpr), bExpr);
+                }
+            }
         }
         // general list
-        while (pos<=end && tokens[pos].Type!=TokenType.RBracket)
-        { int elemStart=pos, elemEnd=pos, nest=0; while (elemEnd<=end){ var tk=tokens[elemEnd]; if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++; else if (tk.Type is TokenType.RParen or TokenType.RBracket){ if (nest==0) break; nest--; } else if (nest==0 && tk.Type==TokenType.Comma) break; elemEnd++; } if (elemStart<elemEnd) elements.Add(BuildExpressionTree(tokens, elemStart, elemEnd-1)); pos=elemEnd; if (pos<=end && tokens[pos].Type==TokenType.Comma) pos++; }
-        if (pos> end || tokens[pos].Type!=TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position); pos++; return BuildList(elements);
+        while (pos <= end && tokens[pos].Type != TokenType.RBracket)
+        {
+            int elemStart = pos, elemEnd = pos, nest = 0;
+            while (elemEnd <= end)
+            {
+                var tk = tokens[elemEnd];
+                if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++;
+                else if (tk.Type is TokenType.RParen or TokenType.RBracket)
+                {
+                    if (nest == 0) break;
+                    nest--;
+                }
+                else if (nest == 0 && tk.Type == TokenType.Comma) break;
+                elemEnd++;
+            }
+            if (elemStart < elemEnd) elements.Add(BuildExpressionTree(tokens, elemStart, elemEnd - 1));
+            pos = elemEnd;
+            if (pos <= end && tokens[pos].Type == TokenType.Comma) pos++;
+        }
+        if (pos > end || tokens[pos].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
+        pos++;
+        return BuildList(elements);
 
-        Expr BuildList(List<Expr> elems){ var res=Expr.Var("nil"); for (int k=elems.Count-1;k>=0;k--) res=Expr.App(Expr.App(Expr.Var("cons"), elems[k]), res); return res; }
+        Expr BuildList(List<Expr> elems)
+        {
+            var res = Expr.Var("nil");
+            for (int k = elems.Count - 1; k >= 0; k--)
+                res = Expr.App(Expr.App(Expr.Var("cons"), elems[k]), res);
+            return res;
+        }
     }
 
     // Macro pass wrappers
@@ -353,4 +659,3 @@ public class Parser
     public string ParseAndDefineMacro(string input) => _macroExpander.ParseAndDefineMacro(input);
     public List<string> ShowMacros() => _macroExpander.ShowMacros();
 }
-
