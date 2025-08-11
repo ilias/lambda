@@ -1105,10 +1105,10 @@ public class Interpreter
                 lines.Add("# =============================================================================");
                 lines.Add("");
 
-                foreach (var (name, macro) in _parser._macros.OrderBy(p => p.Key))
+                foreach (var macro in _parser.ShowMacros())
                 {
                     // Use the macro's ToString method which formats it properly
-                    lines.Add(macro.ToString());
+                    lines.Add(macro);
                 }
                 lines.Add("");
             }

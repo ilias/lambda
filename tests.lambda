@@ -637,3 +637,69 @@ iff true  then 42 else 9                               # expect 42
 # Review the output for each test variable above.
 # To run: :load stdlib.lambda, then :load tests.lambda
 
+
+# ============================================================================
+# Additional Macro Capability Tests (Multi-clause, Variadic, Guards, Ordering)
+# ============================================================================
+# These tests specifically validate the enhanced macro system features:
+#   1. Multi-clause (alternation) macros (same name, different arities/patterns)
+#   2. Variadic / rest pattern capture using $name...
+#   3. Guarded clauses with 'when <expr>' (guard fails only for literal false)
+#   4. Clause ordering: higher arity preferred; newer definition wins on ties
+# ============================================================================
+
+# 1. Multi-clause macro by arity
+:macro (arityDemo) => 0
+:macro (arityDemo $a) => 1
+:macro (arityDemo $a $b) => 2
+arityDemo                                           # expect 0
+arityDemo 42                                        # expect 1
+arityDemo 7 8                                       # expect 2
+
+# 2. Variadic (rest) macro capturing any number of arguments as a list
+:macro (listify $xs...) => $xs
+listify                                             # expect nil
+listify 1                                           # expect [1]
+listify 1 2 3                                       # expect [1,2,3]
+
+# 3. Variadic with fixed prefix + rest
+:macro (sumall $x $rest...) => (foldl plus $x $rest)
+sumall 5                                            # expect 5
+sumall 1 2 3 4                                      # expect 10
+
+# 4. Guards: first clause guard fails (false), second used
+:macro (choose $x) when false => 0
+:macro (choose $x) => $x
+choose 9                                            # expect 9
+
+# 5. Guards: first clause guard true, selected
+# Define fallback first, guarded second so guarded (newer) wins when guard passes
+:macro (choose2 $x) => $x
+:macro (choose2 $x) when true => 42
+choose2 7                                           # expect 42
+
+# 6. Guard depending on a macro variable (only fails when literal false)
+# Fallback first, guarded second (ordering prefers newer guarded clause)
+:macro (guardVar $flag $x) => 0
+:macro (guardVar $flag $x) when $flag => $x
+guardVar true  7                                    # expect 7
+guardVar false 7                                    # expect 0
+
+# 7. Ordering preference: higher arity wins over lower
+:macro (pref $x $y) => (mult $x $y)
+:macro (pref $x) => (succ $x)
+pref 3 4                                            # expect 12
+pref 5                                              # expect 6
+
+# 8. Recency ordering: newer same-arity clause shadows earlier one
+:macro (shadow $x) => (plus $x 1)
+:macro (shadow $x) => (plus $x 2)
+shadow 3                                            # expect 5
+
+# 9. Combined: multiple clauses with rest vs. fixed arity - fixed arity should win when exact match
+:macro (mix $a $b) => (plus $a $b)
+:macro (mix $a $rest...) => (foldl plus $a $rest)
+mix 2 3                                             # expect 5          (exact 2-arg clause)
+mix 2 3 4 5                                         # expect 14         (rest clause: 2+3+4+5)
+
+
