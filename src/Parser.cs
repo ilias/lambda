@@ -582,161 +582,96 @@ public class Parser
 
     private Expr ParseListExpr(List<Token> tokens, ref int pos, int end)
     {
-        int start = pos;
+        int listStart = pos;
         pos++; // skip '['
+
+        // Scan structure once: find closing ']' and first/second top-level occurrences
+        ScanListStructure(tokens, pos, end, out int close, out int firstComma, out int commaCount, out int firstRange, out int rangeCount);
+
         var elements = new List<Expr>();
-        // stepped range [a , b .. c]
-        if (pos <= end)
+
+        // Stepped range: a , b .. c (exactly one comma and one '..' at top level, in order)
+        if (firstComma != -1 && firstRange != -1 && firstRange > firstComma && commaCount == 1 && rangeCount == 1)
         {
-            int scan = pos, nest = 0, firstComma = -1, rangeIdx = -1;
-            bool extra = false;
-            while (scan <= end && tokens[scan].Type != TokenType.RBracket)
+            int aS = pos, aE = firstComma - 1;
+            int bS = firstComma + 1, bE = firstRange - 1;
+            int cS = firstRange + 1, cE = close - 1;
+            if (aS <= aE && bS <= bE && cS <= cE)
             {
-                var tk = tokens[scan];
+                bool ints = aS == aE && bS == bE && cS == cE
+                            && tokens[aS].Type == TokenType.Integer
+                            && tokens[bS].Type == TokenType.Integer
+                            && tokens[cS].Type == TokenType.Integer;
+                if (ints && int.TryParse(tokens[aS].Value, out int a)
+                        && int.TryParse(tokens[bS].Value, out int b)
+                        && int.TryParse(tokens[cS].Value, out int c))
+                {
+                    int step = b - a;
+                    bool fwd = step > 0;
+                    if (step == 0) elements.Add(CreateChurchNumeral(a));
+                    else if (!(fwd && a > c) && !(!fwd && a < c))
+                        for (int v = a; fwd ? v <= c : v >= c; v += step)
+                            elements.Add(CreateChurchNumeral(v));
+                    pos = close + 1;
+                    return BuildList(elements);
+                }
+                var aExpr = BuildExpressionTree(tokens, aS, aE);
+                var bExpr = BuildExpressionTree(tokens, bS, bE);
+                var cExpr = BuildExpressionTree(tokens, cS, cE);
+                var rangeSpec = new RangeSpec(aExpr, cExpr, bExpr, aS, cE);
+                pos = close + 1;
+                return Expr.App(Expr.App(Expr.App(Expr.Var("range2"), rangeSpec.Start), rangeSpec.Step!), rangeSpec.End);
+            }
+        }
+
+        // Simple range: a .. b (no top-level commas, exactly one '..')
+        if (firstRange != -1 && commaCount == 0 && rangeCount == 1)
+        {
+            int aS = pos, aE = firstRange - 1;
+            int bS = firstRange + 1, bE = close - 1;
+            if (aS <= aE && bS <= bE)
+            {
+                bool aInt = aS == aE && tokens[aS].Type == TokenType.Integer;
+                bool bInt = bS == bE && tokens[bS].Type == TokenType.Integer;
+                if (aInt && bInt && int.TryParse(tokens[aS].Value, out int from) && int.TryParse(tokens[bS].Value, out int to))
+                {
+                    if (from <= to) for (int v = from; v <= to; v++) elements.Add(CreateChurchNumeral(v));
+                    else for (int v = from; v >= to; v--) elements.Add(CreateChurchNumeral(v));
+                    pos = close + 1;
+                    return BuildList(elements);
+                }
+                var aExpr = BuildExpressionTree(tokens, aS, aE);
+                var bExpr = BuildExpressionTree(tokens, bS, bE);
+                var rangeSpec = new RangeSpec(aExpr, bExpr, null, aS, bE);
+                pos = close + 1;
+                return Expr.App(Expr.App(Expr.Var("range"), rangeSpec.Start), rangeSpec.End);
+            }
+        }
+
+        // General list: split on top-level commas up to closing bracket
+        if (pos < close)
+        {
+            int segStart = pos, nest = 0;
+            for (int i = pos; i < close; i++)
+            {
+                var tk = tokens[i];
                 if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++;
                 else if (tk.Type is TokenType.RParen or TokenType.RBracket) nest--;
-                else if (nest == 0)
+                else if (nest == 0 && tk.Type == TokenType.Comma)
                 {
-                    if (tk.Type == TokenType.Comma)
-                    {
-                        if (firstComma == -1) firstComma = scan;
-                        else
-                        {
-                            extra = true;
-                            break;
-                        }
-                    }
-                    else if (tk.Type == TokenType.Range)
-                    {
-                        if (rangeIdx == -1) rangeIdx = scan;
-                        else
-                        {
-                            rangeIdx = -2;
-                            break;
-                        }
-                    }
-                }
-                scan++;
-            }
-            if (!extra && firstComma != -1 && rangeIdx > firstComma && rangeIdx != -2)
-            {
-                int aS = pos, aE = firstComma - 1, bS = firstComma + 1, bE = rangeIdx - 1, cS = rangeIdx + 1, cE = scan - 1;
-                if (aS <= aE && bS <= bE && cS <= cE)
-                {
-                    bool ints = aS == aE && bS == bE && cS == cE && tokens[aS].Type == TokenType.Integer && tokens[bS].Type == TokenType.Integer && tokens[cS].Type == TokenType.Integer;
-                    if (ints && int.TryParse(tokens[aS].Value, out int a) && int.TryParse(tokens[bS].Value, out int b) && int.TryParse(tokens[cS].Value, out int c))
-                    {
-                        int step = b - a;
-                        bool fwd = step > 0;
-                        if (step == 0) elements.Add(CreateChurchNumeral(a));
-                        else if (!(fwd && a > c) && !(!fwd && a < c))
-                            for (int v = a; fwd ? v <= c : v >= c; v += step)
-                                elements.Add(CreateChurchNumeral(v));
-                        while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
-                        if (scan > end || tokens[scan].Type != TokenType.RBracket)
-                            throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
-                        pos = scan + 1;
-                        return BuildList(elements);
-                    }
-                    var aExpr = BuildExpressionTree(tokens, aS, aE);
-                    var bExpr = BuildExpressionTree(tokens, bS, bE);
-                    var cExpr = BuildExpressionTree(tokens, cS, cE);
-                    var rangeSpec = new RangeSpec(aExpr, cExpr, bExpr, aS, cE);
-                    while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
-                    if (scan > end || tokens[scan].Type != TokenType.RBracket)
-                        throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
-                    pos = scan + 1;
-                    return Expr.App(Expr.App(Expr.App(Expr.Var("range2"), rangeSpec.Start), rangeSpec.Step!), rangeSpec.End);
+                    if (segStart < i)
+                        elements.Add(BuildExpressionTree(tokens, segStart, i - 1));
+                    segStart = i + 1;
                 }
             }
+            if (segStart < close)
+                elements.Add(BuildExpressionTree(tokens, segStart, close - 1));
         }
-        // simple range [a .. b]
-        if (pos <= end)
-        {
-            int scan = pos, nest = 0, rangePos = -1;
-            bool hasComma = false;
-            while (scan <= end && tokens[scan].Type != TokenType.RBracket)
-            {
-                var tk = tokens[scan];
-                if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++;
-                else if (tk.Type is TokenType.RParen or TokenType.RBracket) nest--;
-                else if (nest == 0)
-                {
-                    if (tk.Type == TokenType.Comma)
-                    {
-                        hasComma = true;
-                        break;
-                    }
-                    if (tk.Type == TokenType.Range)
-                    {
-                        if (rangePos != -1)
-                        {
-                            rangePos = -2;
-                            break;
-                        }
-                        rangePos = scan;
-                    }
-                }
-                scan++;
-            }
-            if (!hasComma && rangePos >= pos && rangePos != -2)
-            {
-                int aS = pos, aE = rangePos - 1, bS = rangePos + 1, bE = scan - 1;
-                if (aS <= aE && bS <= bE)
-                {
-                    bool aInt = aS == aE && tokens[aS].Type == TokenType.Integer;
-                    bool bInt = bS == bE && tokens[bS].Type == TokenType.Integer;
-                    if (aInt && bInt && int.TryParse(tokens[aS].Value, out int from) && int.TryParse(tokens[bS].Value, out int to))
-                    {
-                        if (from <= to)
-                            for (int v = from; v <= to; v++)
-                                elements.Add(CreateChurchNumeral(v));
-                        else
-                            for (int v = from; v >= to; v--) elements.Add(CreateChurchNumeral(v));
-                        while (scan <= end && tokens[scan].Type != TokenType.RBracket)
-                            scan++;
-                        if (scan > end || tokens[scan].Type != TokenType.RBracket)
-                            throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
-                        pos = scan + 1;
-                        return BuildList(elements);
-                    }
-                    var aExpr = BuildExpressionTree(tokens, aS, aE);
-                    var bExpr = BuildExpressionTree(tokens, bS, bE);
-                    var rangeSpec = new RangeSpec(aExpr, bExpr, null, aS, bE);
-                    while (scan <= end && tokens[scan].Type != TokenType.RBracket)
-                        scan++;
-                    if (scan > end || tokens[scan].Type != TokenType.RBracket)
-                        throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
-                    pos = scan + 1;
-                    return Expr.App(Expr.App(Expr.Var("range"), rangeSpec.Start), rangeSpec.End);
-                }
-            }
-        }
-        // general list
-        while (pos <= end && tokens[pos].Type != TokenType.RBracket)
-        {
-            int elemStart = pos, elemEnd = pos, nest = 0;
-            while (elemEnd <= end)
-            {
-                var tk = tokens[elemEnd];
-                if (tk.Type is TokenType.LParen or TokenType.LBracket) nest++;
-                else if (tk.Type is TokenType.RParen or TokenType.RBracket)
-                {
-                    if (nest == 0) break;
-                    nest--;
-                }
-                else if (nest == 0 && tk.Type == TokenType.Comma) break;
-                elemEnd++;
-            }
-            if (elemStart < elemEnd)
-                elements.Add(BuildExpressionTree(tokens, elemStart, elemEnd - 1));
-            pos = elemEnd;
-            if (pos <= end && tokens[pos].Type == TokenType.Comma) pos++;
-        }
-        if (pos > end || tokens[pos].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
-        pos++;
+
+        pos = close + 1;
         return BuildList(elements);
 
+        // Local: Build cons-list using right-fold
         Expr BuildList(List<Expr> elems)
         {
             var res = Expr.Var("nil");
@@ -744,6 +679,29 @@ public class Parser
                 res = Expr.App(Expr.App(Expr.Var("cons"), elems[k]), res);
             return res;
         }
+    }
+
+    // Scan list structure between '[' (at start index - 1) and matching ']'
+    private void ScanListStructure(List<Token> tokens, int start, int end, out int close, out int firstComma, out int commaCount, out int firstRange, out int rangeCount)
+    {
+        int nest = 0; close = -1; firstComma = -1; commaCount = 0; firstRange = -1; rangeCount = 0;
+        for (int i = start; i <= end; i++)
+        {
+            var tk = tokens[i];
+            if (tk.Type == TokenType.LParen || tk.Type == TokenType.LBracket) { nest++; continue; }
+            if (tk.Type == TokenType.RParen) { nest--; continue; }
+            if (tk.Type == TokenType.RBracket)
+            {
+                if (nest == 0) { close = i; break; }
+                nest--; continue;
+            }
+            if (nest != 0) continue;
+            if (tk.Type == TokenType.Comma)
+            { if (firstComma == -1) firstComma = i; commaCount++; }
+            else if (tk.Type == TokenType.Range)
+            { if (firstRange == -1) firstRange = i; rangeCount++; }
+        }
+        if (close == -1) throw new ParseException(TreeErrorType.UnclosedParen, start < tokens.Count ? tokens[start].Position : 0);
     }
 
     // Macro pass wrappers
