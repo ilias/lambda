@@ -185,8 +185,6 @@ public partial class Interpreter
         await DisplayOutput(output, timing.Elapsed);
     }
 
-    // REPL methods moved to Interpreter.REPL.cs partial
-
     internal Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
     {
         _perfStopwatch.Restart();
@@ -310,8 +308,7 @@ public partial class Interpreter
 
             ("succ" or "++", 1, _) => a + 1,
             ("pred" or "--", 1, _) => Math.Max(0, a - 1),
-            ("square", 1, _) => a * a,
-            ("double", 1, _) => a * 2,
+            ("square" or "dbl" or "double", 1, _) => a * a,
             ("half", 1, _) => a / 2,
             ("sqrt", 1, _) => (int)Math.Sqrt(a),
             ("random", 1, _) => (_usedRandom = true, new Random().Next(0, a + 1)).Item2, // Random number in range [0, a]
@@ -327,16 +324,16 @@ public partial class Interpreter
 
         bool? boolResult = (opName, args.Count, isArg2Number) switch
         {
-            ("iszero", 1, _) => a == 0,
-            ("even", 1, _) => a % 2 == 0,
-            ("odd", 1, _) => a % 2 != 0,
-
             ("lt" or "<", 2, true) => a < b,
             ("leq" or "<=", 2, true) => a <= b,
             ("eq" or "==", 2, true) => a == b,
             ("geq" or ">=", 2, true) => a >= b,
             ("gt" or ">", 2, true) => a > b,
             ("neq" or "!=", 2, true) => a != b,
+
+            ("iszero", 1, _) => a == 0,
+            ("even", 1, _) => a % 2 == 0,
+            ("odd", 1, _) => a % 2 != 0,
 
             _ => null
         };
@@ -353,31 +350,10 @@ public partial class Interpreter
     }
 
     // Try to extract a Church numeral as int, resolving variables if needed
-    private bool TryGetChurchInt(Expr expr, Dictionary<string, Expr> env, out int value)
-    {
-        // Resolve variables
-        while (expr.Type == ExprType.Var && env.TryGetValue(expr.VarName!, out var v))
-            expr = v;
-        var n = ExtractChurchNumeralValue(expr);
-        if (n != null)
-        {
-            value = n.Value;
-            return true;
-        }
-        value = 0;
-        return false;
-    }
+    // (removed duplicate TryGetChurchInt moved to Interpreter.Church.cs)
 
     // Build a Church numeral expression for a given int λf.λx.f^n(x)
-    private Expr MakeChurchNumeral(int n)
-    {
-        var f = "f";
-        var x = "x";
-        Expr body = Expr.Var(x);
-        for (int i = 0; i < n; i++)
-            body = Expr.App(Expr.Var(f), body);
-        return Expr.Abs(f, Expr.Abs(x, body));
-    }
+    // (removed duplicate MakeChurchNumeral moved to Interpreter.Church.cs)
 
     private Expr Intern(Expr expr)
     {
@@ -407,24 +383,6 @@ public partial class Interpreter
         return false;
     }
 
-    // REPL methods moved to Interpreter.REPL.cs partial
-
-    // Enhanced multi-line input support with intelligent completion detection
-    // REPL methods moved to Interpreter.REPL.cs partial
-    
-    // Intelligent detection of incomplete expressions
-    // REPL methods moved to Interpreter.REPL.cs partial
-    
-    // REPL methods moved to Interpreter.REPL.cs partial
-    
-    // REPL methods moved to Interpreter.REPL.cs partial
-    
-    // REPL methods moved to Interpreter.REPL.cs partial
-    
-    // REPL methods moved to Interpreter.REPL.cs partial
-
-    // REPL methods moved to Interpreter.REPL.cs partial
-
     private async Task<string> HandleCommandAsync(string input)
     {
         var parts = input.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
@@ -453,96 +411,11 @@ public partial class Interpreter
             _ => $"Unknown command: {command}"
         };
     }
-
-    // ...existing code...
-
-    private string HandleNativeArithmetic(string arg)
-    {
-        if (arg == "show")
-            return ShowNativeFunctions();
-
-        _useNativeArithmetic = arg == "on";
-        return "Native arithmetic " + (_useNativeArithmetic ? "enabled" : "disabled");
-    }
-
-    private string HandlePrettyPrint(string arg)
-    {
-        _prettyPrint = arg != "off";
-        return $"Pretty printing {(_prettyPrint ? "enabled" : "disabled")}";
-    }
-
-    private string HandleStep(string arg)
-    {
-        _showStep = arg == "on";
-        return $"Step mode {(_showStep ? "enabled" : "disabled")}";
-    }
-
-    private string HandleLazy(string arg)
-    {
-        _lazyEvaluation = arg != "off";
-        return $"Lazy evaluation {(_lazyEvaluation ? "enabled" : "disabled")}";
-    }
-
-    private string HandleRecursionDepth(string arg)
-    {
-        if (string.IsNullOrWhiteSpace(arg))
-            return $"Current recursion depth limit: {_stats.MaxRecursionDepth}";
-
-        if (int.TryParse(arg, out int value) && value >= 10 && value <= 10000)
-        {
-            _stats.MaxRecursionDepth = value;
-            return $"Recursion depth limit set to {_stats.MaxRecursionDepth}";
-        }
-
-        return "Error: Please provide a number between 10 and 10000.";
-    }
-
-    private string HandleInfixCommand(string arg)
-    {
-        // Allow trailing comments beginning with '#'
-        if (!string.IsNullOrWhiteSpace(arg))
-        {
-            var hash = arg.IndexOf('#');
-            if (hash >= 0)
-                arg = arg[..hash].TrimEnd();
-        }
-        if (string.IsNullOrWhiteSpace(arg))
-            return ShowInfixOperators();
-
-        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        
-        if (parts.Length != 3)
-            return "Usage: :infix <operator> <precedence> <associativity>\nExample: :infix + 6 left";
-        
-        var symbol = parts[0];
-        
-        if (!int.TryParse(parts[1], out int precedence))
-            return "Error: Precedence must be a number between 1 and 10";
-        
-        var associativity = parts[2].ToLowerInvariant();
-        
-        return _parser.DefineInfixOperator(symbol, precedence, associativity);
-    }
-
-    private string HandleMacroDefinition(string arg)
-    {
-        if (string.IsNullOrWhiteSpace(arg))
-            return "Usage: :macro (pattern) => transformation\nExample: :macro (when $cond $body) => (if $cond $body unit)";
-
-        try
-        {
-            // Parse the macro definition from the argument string
-            return _parser.ParseAndDefineMacro(arg);
-        }
-        catch (Exception ex)
-        {
-            return $"Error defining macro: {ex.Message}";
-        }
-    }
+    // Handle* command methods moved to Interpreter.Handle.cs partial
 
     // Consolidated formatting method that uses the enhanced Expr.ToString()
     private string FormatWithNumerals(Expr expr) => 
-        expr.ToString(_prettyPrint, _prettyPrint ? ExtractChurchNumeralValue : null);
+        expr.ToString(_prettyPrint, _prettyPrint ? new System.Func<Expr,int?>(ExtractChurchNumeralValue) : null);
 
     // Force evaluation of a thunk (lazy value)
     private Expr Force(Expr expr)
@@ -584,140 +457,6 @@ public partial class Interpreter
         GC.Collect(); // Suggest garbage collection to free memory
         return "All caches cleared.";
     }
-
-    // Save the current environment to a file or to console if path is "console"
-    private async Task<string> SaveFileAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return "Error: Please specify a filename. Usage: :save <filename>";
-
-        try
-        {
-            var lines = new List<string>();
-
-            // Add file header with timestamp and stats
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var definitionCount = _context.Count;
-            var infixCount = _parser._infixOperators.Count;
-            var macroCount = _parser._macros.Count;
-
-            lines.Add($"# ============================================================================");
-            lines.Add($"# Lambda Calculus Environment Export");
-            lines.Add($"# Generated: {timestamp}");
-            lines.Add($"# Definitions: {definitionCount}, Infix Operators: {infixCount}, Macros: {macroCount}");
-            lines.Add($"# ============================================================================");
-            lines.Add("");
-
-            // Save variable definitions/assignments
-            if (_context.Count > 0)
-            {
-                lines.Add("# =============================================================================");
-                lines.Add("# VARIABLE DEFINITIONS");
-                lines.Add("# =============================================================================");
-                lines.Add("");
-
-                // Group definitions by type for better organization
-                var simpleVars = new List<(string, Expr)>();
-                var functionVars = new List<(string, Expr)>();
-                var complexVars = new List<(string, Expr)>();
-
-                foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
-                {
-                    // Categorize by expression type for better file organization
-                    if (value.Type == ExprType.Abs)
-                        functionVars.Add((key, value));
-                    else if (value.Type == ExprType.Var ||
-                            (value.Type == ExprType.App && IsSimpleApplication(value)))
-                        simpleVars.Add((key, value));
-                    else
-                        complexVars.Add((key, value));
-                }
-                
-                // Write simple variables first
-                if (simpleVars.Count > 0)
-                {
-                    lines.Add("# Simple definitions and constants");
-                    foreach (var (key, value) in simpleVars)
-                        lines.Add($"{key} = {FormatWithNumerals(value)}");
-                    lines.Add("");
-                }
-
-                // Write function definitions
-                if (functionVars.Count > 0)
-                {
-                    lines.Add("# Function definitions");
-                    foreach (var (key, value) in functionVars)
-                        lines.Add($"{key} = {FormatWithNumerals(value)}");
-                    lines.Add("");
-                }
-
-                // Write complex expressions
-                if (complexVars.Count > 0)
-                {
-                    lines.Add("# Complex expressions");
-                    foreach (var (key, value) in complexVars)
-                        lines.Add($"{key} = {FormatWithNumerals(value)}");
-                    lines.Add("");
-                }
-            }
-
-            // Save infix operators first (they need to be defined before use)
-            if (_parser._infixOperators.Count > 0)
-            {
-                lines.Add("# =============================================================================");
-                lines.Add("# INFIX OPERATORS");
-                lines.Add("# =============================================================================");
-                lines.Add("");
-
-                var operators = _parser._infixOperators.Values
-                    .OrderByDescending(op => op.Precedence)
-                    .ThenBy(op => op.Symbol);
-
-                foreach (var op in operators)
-                    lines.Add($":infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()}");
-                lines.Add("");
-            }
-
-            // Save macro definitions (they should be defined before variable assignments that might use them)
-            if (_parser._macros.Count > 0)
-            {
-                lines.Add("# =============================================================================");
-                lines.Add("# MACRO DEFINITIONS");
-                lines.Add("# =============================================================================");
-                lines.Add("");
-
-                foreach (var macro in _parser.ShowMacros())
-                {
-                    // Use the macro's ToString method which formats it properly
-                    lines.Add(macro);
-                }
-                lines.Add("");
-            }
-
-            // Add footer with loading instructions
-            lines.Add("");
-            lines.Add("# =============================================================================");
-            lines.Add("# END OF EXPORT");
-            lines.Add("# =============================================================================");
-            lines.Add("# To load this environment, use: :load " + Path.GetFileName(path));
-            lines.Add("# Note: This will add to your current environment. Use :clear first for a clean state.");
-
-            if (path == "console")
-            {
-                // Write the lines to the console instead of a file
-                foreach (var line in lines)
-                    _logger.Log(line);
-                return $"Environment displayed in console ({definitionCount} definitions, {infixCount} infix operators, {macroCount} macros)";
-            }
-            await File.WriteAllLinesAsync(path, lines);
-
-            return $"Environment saved to '{path}' ({definitionCount} definitions, {infixCount} infix operators, {macroCount} macros)";
-        }
-        catch (Exception ex)
-        {
-            return $"Error saving to '{path}': {ex.Message}";
-        }
-    }
     
     // Helper method to determine if an application is "simple" for categorization
     private bool IsSimpleApplication(Expr expr)
@@ -745,8 +484,6 @@ public partial class Interpreter
         _stats.Reset();
         return "Environment cleared.";
     }
-
-    // ...existing code...
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
 
@@ -1231,66 +968,13 @@ public partial class Interpreter
     }
 
     // Returns the integer value of a Church numeral (λf.λx.f^n(x)), or null if not valid.
-    public static int? ExtractChurchNumeralValue(Expr expr)
-    {
-        // Force evaluation if it's a thunk
-        if (expr.Type == ExprType.Thunk)
-            expr = expr.ThunkValue?.IsForced == true ? expr.ThunkValue.ForcedValue! : expr;
-
-        if (expr is not { Type: ExprType.Abs, AbsVarName: var f, AbsBody: { Type: ExprType.Abs, AbsVarName: var x, AbsBody: var body } })
-            return null;
-        if (body is { Type: ExprType.Var, VarName: var v } && v == x)
-            return 0;
-        int n = 0;
-        while (body is { Type: ExprType.App, AppLeft: { Type: ExprType.Var, VarName: var fn }, AppRight: var next } && fn == f)
-        {
-            n++;
-            body = next;
-        }
-        return body is { Type: ExprType.Var, VarName: var v2 } && v2 == x ? n : null;
-    }
+    // (removed duplicate ExtractChurchNumeralValue moved to Interpreter.Church.cs)
 
     // Detect if this is a Church conditional (if p a b) 
-    private bool IsChurchConditional(Expr expr, Dictionary<string, Expr> env)
-    {
-        // Check if this is a fully applied Church conditional: App(App(App(if, condition), then_branch), else_branch)
-        if (expr is not { Type: ExprType.App, AppLeft: { Type: ExprType.App, AppLeft: { Type: ExprType.App, AppLeft: var ifExpr } } })
-            return false;
-
-        // Check if the leftmost expression resolves to the 'if' function
-        if (ifExpr == null) return false;
-        var resolvedIf = ResolveVariable(ifExpr, env);
-        return IsIfFunction(resolvedIf);
-    }
+    // (removed duplicate IsChurchConditional moved to Interpreter.Church.cs)
 
     // Check if an expression is the Church 'if' function: λp.λa.λb.p a b
-    private static bool IsIfFunction(Expr expr) =>
-        expr is
-        {
-            Type: ExprType.Abs,
-            AbsVarName: var p,
-            AbsBody:
-            {
-                Type: ExprType.Abs,
-                AbsVarName: var a,
-                AbsBody:
-                {
-                    Type: ExprType.Abs,
-                    AbsVarName: var b,
-                    AbsBody:
-                    {
-                        Type: ExprType.App,
-                        AppLeft:
-                        {
-                            Type: ExprType.App,
-                            AppLeft: { Type: ExprType.Var, VarName: var p2 },
-                            AppRight: { Type: ExprType.Var, VarName: var a2 }
-                        },
-                        AppRight: { Type: ExprType.Var, VarName: var b2 }
-                    }
-                }
-            }
-        } && p == p2 && a == a2 && b == b2;
+    // (removed duplicate IsIfFunction moved to Interpreter.Church.cs)
 
     // (Removed IsChurchTrue duplicate – use Expr.TryExtractBoolean instead for centralized pattern logic.)
 
