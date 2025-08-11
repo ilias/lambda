@@ -7,6 +7,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Features](#features)
 - [Getting Started](#getting-started)
 - [Core Language](#core-language)
+- [Formal Grammar](#formal-grammar)
 - [Advanced Syntax Features](#advanced-syntax-features)
 - [Interactive Commands](#interactive-commands)
 - [Command / Expression Chaining](#command--expression-chaining)
@@ -274,6 +275,132 @@ add = x, y -> x + y                 # Arrow syntax → λx.λy.x + y
 twice = f -> x -> f (f x)           # → λf.λx.f (f x)
 compose = f -> g -> x -> f (g x)    # → λf.λg.λx.f (g x)
 ```
+
+## Formal Grammar
+
+This section specifies the concrete grammar accepted by the parser after the Pratt refactor. Grammar is written in an EBNF‑style notation; terminals appear in single quotes; parentheses group; `*` = 0+ repetition, `+` = 1+ repetition, `?` = optional, `|` = alternation.
+
+Precedence (loosest → tightest):
+
+```text
+let  <  arrow (paramList '->')  <  infix operators (by declared precedence number)  <  application  <  atom
+```
+
+Associativity:
+
+- Let: right (body extends to the rightmost expression)
+- Arrow (`->`): right (parameters associate to the right, `x, y, z -> e` = `x -> (y -> (z -> e))`)
+- Infix: per definition (`:infix <op> <prec> left|right`); higher precedence number binds tighter
+- Application: left (juxtaposition chains left‑to‑right)
+
+Lexical elements:
+
+```ebnf
+Identifier    ::= Letter (Letter | Digit | '_' | '?')*
+Integer       ::= Digit+            # Parsed into Church numeral
+Underscore    ::= '_'               # Placeholder parameter (fresh name generated)
+Comment       ::= '#' <until end of line>
+Whitespace    ::= (' ' | '\t' | '\r' | '\n')+
+Arrow         ::= '->'
+LambdaIntro   ::= 'λ' | '\\'
+Ellipsis      ::= '...'
+```
+
+Top level & segmentation:
+
+```ebnf
+Program       ::= Segment (';' Segment)*                      # Semicolons only at top level
+Segment       ::= (Command | Definition | Expression)?        # Empty segments ignored
+Command       ::= ':' CommandName CommandArgs?
+CommandName   ::= Identifier | 'infix' | 'macro' | 'macros' | 'load' | 'clear' | ... (see Interactive Commands)
+Definition    ::= Identifier '=' Expression                   # Eagerly evaluated & stored
+```
+
+Expressions (ordered by parsing precedence):
+
+```ebnf
+Expression    ::= LetExpr | ArrowExpr | InfixExpr
+
+LetExpr       ::= 'let' ('rec')? LetBinding (',' LetBinding)* 'in' Expression
+LetBinding    ::= Identifier '=' Expression
+               | Identifier ParamList '->' Expression         # Sugar: params desugar to nested lambdas
+
+ArrowExpr     ::= ParamList '->' Expression                   # Recognized only if followed by '->'
+ParamList     ::= Param (',' Param)* | '(' Param (',' Param)* ')'
+Param         ::= Identifier | Underscore
+
+InfixExpr     ::= Application (InfixOp Application)*          # Pratt: precedence & associativity driven
+InfixOp       ::= OperatorSymbol                              # Previously defined via :infix
+
+Application   ::= Atom+                                       # Left associative
+Atom          ::= Integer
+               | Identifier
+               | Lambda
+               | List
+               | '(' Expression ')'
+               | MacroInvocation
+
+Lambda        ::= LambdaIntro Param+ '.' Expression           # λx y z.body → λx.λy.λz.body
+MacroInvocation ::= Identifier Arg*                           # After expansion behaves as ordinary expr
+Arg           ::= Atom | '(' Expression ')'
+```
+
+Lists & ranges:
+
+```ebnf
+List          ::= '[' ListBody? ']'
+ListBody      ::= Elements | RangeSpec | SteppedRangeSpec
+Elements      ::= Expression (',' Expression)*
+RangeSpec     ::= Expression '..' Expression                  # Literal endpoints → expanded; else desugars (range a b)
+SteppedRangeSpec ::= Expression ',' Expression '..' Expression # Desugars (range2 a b c) if non‑literal
+```
+
+Notes:
+
+1. Ranges expand eagerly only when all endpoints (and middle for stepped) are integer literals (supports negative forms `-3`).
+2. A stepped range with zero step yields a singleton list.
+3. Non‑literal endpoints produce a desugaring: `[a .. b]` → `(range a b)`, `[a, b .. c]` → `(range2 a b c)`.
+
+Macros & directives:
+
+```ebnf
+MacroDef      ::= ':macro' '(' Pattern ')' GuardOpt '=>' Expansion
+GuardOpt      ::= ('when' '(' Expression ')')?
+Pattern       ::= PatternPart+                               # $var, symbols, rest ($xs ... at tail)
+RestPattern   ::= '$' Identifier Ellipsis
+Expansion     ::= Expression                                  # Parsed pre‑expansion then substituted
+InfixDecl     ::= ':infix' OperatorSymbol Integer ('left' | 'right')
+OperatorSymbol ::= NonAlnumSymbol+                            # e.g. +, *, ^, &&, |> , . , <=
+```
+
+Placeholders:
+
+```text
+Every '_' in a ParamList becomes a fresh, unique variable (e.g., _placeholder1) and may be referenced positionally in the body with the same `_` spelling.
+```
+
+Desugarings (informal):
+
+```text
+let x = A in B                ≡ (λx.B) A
+let x = a, y = b in B         ≡ (λx.λy.B) a b
+let rec f = E in B            ≡ (λf.B) (Y (λf.E))
+x, y, z -> R                  ≡ x -> (y -> (z -> R)) ≡ λx.λy.λz.R
+[a, b, c]                     ≡ cons a (cons b (cons c nil))
+a |> f                        ≡ f a        (left‑to‑right pipeline)
+f . g                         ≡ λx.f (g x) (composition)
+```
+
+Error Handling Summary (parser): `UnexpectedToken`, `MissingLetEquals`, `UnexpectedArrow`, `UnexpectedComma`, `EmptyExprList`, `UnexpectedSemicolon`, `IllegalAssignment`, `UnexpectedDot`, `UnterminatedList`, `MacroPatternError`, etc. See "Parser Errors & Diagnostics" for details.
+
+For a condensed in‑REPL quick reference, run `:help`. The help view omits some extended macro and range details for brevity.
+
+---
+
+Rationale: The grammar is optimized for clarity over minimality. Pratt parsing handles `InfixExpr` with dynamic precedence tables populated at runtime via `:infix` declarations; thus `InfixOp` is not a fixed token set.
+
+---
+
 
 ### Church Numerals
 

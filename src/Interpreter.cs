@@ -1317,29 +1317,41 @@ public class Interpreter
 
         -- Expression Syntax --
           x                      Variable (e.g., myVar)
-          \x.expr or λx.expr     Lambda abstraction (e.g., \x.x or λf.λx.f x)
-          \x y z.expr            Multi-argument lambda (sugar for \x.\y.\z.expr)
-          x -> expr              Arrow function (sugar for \x.expr, e.g., x -> x + 1)
-          x, y -> expr           Multi-parameter arrow function (sugar for \x.\y.expr)
-          (expr)                 Grouping (e.g., (\x.x) y)
+          \\x.expr or λx.expr     Lambda abstraction (e.g., \\x.x or λf.λx.f x)
+          \\x y z.expr            Multi-argument lambda (sugar for \\x.\\y.\\z.expr)
+          x -> expr              Arrow function (sugar for \\x.expr, e.g., x -> x + 1)
+          x, y -> expr           Multi-parameter arrow function (sugar for \\x.\\y.expr)
+          (expr)                 Grouping (e.g., (\\x.x) y)
           expr1 expr2            Application (e.g., succ 0)
-          let x = expr1 in expr2 Local binding (e.g., let id = \x.x in id 0) sugar for (\x.expr2) expr1
-          let x = a, y = b in B  Multiple assignments in let (e.g., let x = 1, y = 2 in x + y) sugar for (\x.\y.B) a b
+          let x = expr1 in expr2 Local binding (e.g., let id = \\x.x in id 0) sugar for (\\x.expr2) expr1
+          let x = a, y = b in B  Multiple assignments in let (e.g., let x = 1, y = 2 in x + y) sugar for (\\x.\\y.B) a b
           let f = x -> x+1 in e1 Arrow functions in let (e.g., let add = x, y -> x + y in add 3 4)
-          let rec f = E in B     Recursive local binding desugar to (\f.B) (Y (\f.E))
-          name = expr            Assignment (e.g., id = \x.x)
+          let rec f = E in B     Recursive local binding desugar to (\\f.B) (Y (\\f.E))
+          name = expr            Assignment (e.g., id = \\x.x)
           123                    Integer literal (Church numeral λf.λx.f^n(x))
           [a, b, c]              List literal (cons a (cons b (cons c nil)))
           [a .. b]               List range (syntactic sugar for [a, a+1, ..., b]) both asc and desc
           [expr1 .. expr2]       General range (desugars to (range expr1 expr2) if endpoints not both integer literals)
           [a, b .. c]            Stepped range: expands if all integers else desugars to (range2 a b c)
-          Y f1                   Y combinator (e.g., Y \f.\x.f (f x)) Y = λf.(λx.f (x x)) (λx.f (x x))
+          Y f1                   Y combinator (e.g., Y \\f.\\x.f (f x)) Y = λf.(λx.f (x x)) (λx.f (x x))
           a + b                  Infix operations (when operators are defined) desugar to plus a b
           a . b . c              composition operator desugar to a (b c)
           a |> f |> g            Pipeline operator desugar to g (f a)
-          \_ . expr              Use '_' as a placeholder/ignored parameter in lambdas
+          \\_ . expr              Use '_' as a placeholder/ignored parameter in lambdas
           (x, _, _ -> x) 42 9 8  Multiple '_'s are allowed; each is treated as a unique, ignorable variable
           expr1; expr2; expr3    Multiple expressions / assignments on one line separated by ';'
+
+        -- Minimal Grammar (see README Formal Grammar for full version) --
+          Expression    ::= LetExpr | ArrowExpr | InfixExpr
+          LetExpr       ::= 'let' ('rec')? LetBinding (',' LetBinding)* 'in' Expression
+          LetBinding    ::= Identifier '=' Expression | Identifier ParamList '->' Expression
+          ArrowExpr     ::= ParamList '->' Expression
+          ParamList     ::= Param (',' Param)* | '(' Param (',' Param)* ')'
+          Param         ::= Identifier | '_'
+          InfixExpr     ::= Application (InfixOp Application)*
+          Application   ::= Atom+
+          Atom          ::= Integer | Identifier | Lambda | List | '(' Expression ')'
+          Lambda        ::= (λ|\\) Param+ '.' Expression
 
         -- Commands (prefix with ':') --
           :clear                 Clear the current environment and caches
@@ -1368,9 +1380,9 @@ public class Interpreter
                                  Define a macro with pattern matching
           Examples:
             :macro (when $cond $body) => (if $cond $body unit)
-            :macro (compose $f $g) => (\x. $f ($g x))
-            :macro (flip $f) => (\x y. $f y x)
-            :macro (for $var at $list do $body) => (map (\$var.$body) $list)
+            :macro (compose $f $g) => (\\x. $f ($g x))
+            :macro (flip $f) => (\\x y. $f y x)
+            :macro (for $var at $list do $body) => (map (\\$var.$body) $list)
             :macro (iff $p then $then else $else) => if $p $then $else
 
         -- Interactive Features --
@@ -1379,7 +1391,7 @@ public class Interpreter
             - Lambda expressions continue until body is complete (λx. <body>)
             - Let expressions continue until 'in' clause is complete
             - Macro definitions continue until '=>' and body are complete
-            - Use '\' at end of line for explicit continuation
+            - Use '\\' at end of line for explicit continuation
             - Type ':cancel' or ':abort' to discard current multi-line input
             - Type ':show' to display current multi-line input buffer
             - Press Enter on empty line to attempt completion of current input
@@ -1388,70 +1400,40 @@ public class Interpreter
           • Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)
           • Macro variables: Use $variable in patterns to capture expressions
           • Internally, each '_' is renamed to a unique variable (_placeholder1, _placeholder2, ...)
+
+        For the complete formal grammar & desugaring rules see README section "Formal Grammar".
         """;
 
-    private static string ShowMultiLineHelp() =>
-        """
-        ===== Multi-Line Input System =====
-        
-        The interpreter supports intelligent multi-line input with automatic completion detection:
-        
-        -- Automatic Continuation --
-        Input automatically continues when:
-        • Parentheses are unmatched: (expr1 (expr2 
-        • Brackets are unmatched: [list element1
-        • Lambda expressions are incomplete: λx.
-        • Let expressions lack 'in': let x = 5
-        • Macro definitions lack '=>': :macro (when $cond $body)
-        
-        -- Manual Continuation --
-        • Use '\' at end of line for explicit continuation
-        • The interpreter shows enhanced prompts:
-          lambda> first line
-          ......> [2] second line (with auto-indentation)
-          ......> [3] third line
-        
-        -- Multi-Line Commands --
-        While in multi-line mode, you can use:
-        • :cancel or :abort  - Discard current input and start over
-        • :show             - Display formatted current input buffer
-        • Empty line        - Attempt to complete and execute current input
-        
-        -- Examples --
-        
-        1. Lambda function (auto-detects incomplete lambda):
-           lambda> λx y.
-           ......> [2]   x + y
-           
-        2. Let expression (auto-detects missing 'in'):
-           lambda> let factorial = Y (λf n.
-           ......> [2]     if (iszero n) 1 (mult n (f (pred n))))
-           ......> [3]   in factorial 5
-           
-        3. Complex nested expression (auto-detects unmatched parentheses):
-           lambda> map (λx.
-           ......> [2]     mult x x) [1, 2, 3]
-           
-        4. Explicit continuation with backslash:
-           lambda> let long_name = very_long_expression \
-           ......> [2] that_continues_here in long_name
-           
-        5. Macro definition (auto-detects missing '=>'):
-           lambda> :macro (when $condition $body)
-           ......> [2] => if $condition $body I
-        
-        -- Smart Indentation --
-        The interpreter provides automatic indentation based on:
-        • Nesting depth (parentheses/brackets)
-        • Lambda body indentation after '.'
-        • Let body indentation after 'in'
-        
-        -- Tips --
-        • Use ':show' to see your current input with formatting
-        • Press Enter on empty line to force completion
-        • Type ':cancel' if you get stuck in multi-line mode
-        • The system is forgiving - it tries to detect completion intelligently
-        """;
+        private static string ShowMultiLineHelp() =>
+                """
+                ===== Multi-Line Input System =====
+
+                The interpreter supports intelligent multi-line input with automatic completion detection:
+
+                -- Automatic Continuation --
+                Input automatically continues when:
+                • Parentheses are unmatched: (expr1 (expr2 
+                • Brackets are unmatched: [list element1
+                • Lambda expressions are incomplete: λx.
+                • Let expressions lack 'in': let x = 5
+                • Macro definitions lack '=>': :macro (when $cond $body)
+
+                -- Manual Continuation --
+                • Use '\\' at end of line for explicit continuation
+                • The interpreter shows enhanced prompts:
+                    lambda> first line
+                    ......> [2] second line (numbers are visual aids, not part of input)
+                • Blank line attempts completion of current buffer
+
+                -- Buffer Management --
+                :cancel / :abort   Discard current multi-line buffer
+                :show               Display current collected lines
+
+                -- Tips --
+                • Keep parentheses balanced for faster detection
+                • Complex let / macro bodies can span many lines; indentation is optional but recommended
+                • You can chain top-level segments with ';' only after completion, never mid buffer
+                """;
 
     private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
 

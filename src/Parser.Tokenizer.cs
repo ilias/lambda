@@ -16,7 +16,10 @@ internal sealed class Tokenizer
         for (int i = 0; i < input.Length; i++)
         {
             var ch = input[i]; pos++;
-            if (ch == '#') break; // comment rest of line
+            if (ch == '#') { // comment rest of line (support inline comments)
+                while (i + 1 < input.Length && input[i+1] != '\n' && input[i+1] != '\r') { i++; pos++; }
+                continue; // skip to newline
+            }
 
             // Whitespace acts as a delimiter between terms; ensure we flush accumulated term
             if (char.IsWhiteSpace(ch))
