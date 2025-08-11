@@ -295,7 +295,7 @@ public class Interpreter
         var isArg2Number = args.Count == 2 && TryGetChurchInt(args[1], env, out b);
 
         // Only intercept known arithmetic primitives
-        int? result = (opName, args.Count, isArg2Number) switch
+        int? intResult = (opName, args.Count, isArg2Number) switch
         {
             ("plus" or "+", 2, true) => a + b,
             ("minus" or "-", 2, true) => Math.Max(0, a - b),   
@@ -314,31 +314,40 @@ public class Interpreter
             ("sqrt", 1, _) => (int)Math.Sqrt(a),
             ("random", 1, _) => (_usedRandom = true, new Random().Next(0, a + 1)).Item2, // Random number in range [0, a]
 
-            ("iszero", 1, _) => a == 0 ? -1 : -2,
-            ("even", 1, _) => a % 2 == 0 ? -1 : -2,
-            ("odd", 1, _) => a % 2 != 0 ? -1 : -2,
+            _ => null
+        };
 
-            ("lt" or "<", 2, true) => a < b ? -1 : -2,
-            ("leq" or "<=", 2, true) => a <= b ? -1 : -2,
-            ("eq" or "==", 2, true) => a == b ? -1 : -2,
-            ("geq" or ">=", 2, true) => a >= b ? -1 : -2,
-            ("gt" or ">", 2, true) => a > b ? -1 : -2,
-            ("neq" or "!=", 2, true) => a != b ? -1 : -2,
+        if (intResult is not null)
+        {
+            _nativeArithmetic++;
+            return MakeChurchNumeral(intResult.Value);
+        }
+
+        bool? boolResult = (opName, args.Count, isArg2Number) switch
+        {
+            ("iszero", 1, _) => a == 0,
+            ("even", 1, _) => a % 2 == 0,
+            ("odd", 1, _) => a % 2 != 0,
+
+            ("lt" or "<", 2, true) => a < b,
+            ("leq" or "<=", 2, true) => a <= b,
+            ("eq" or "==", 2, true) => a == b,
+            ("geq" or ">=", 2, true) => a >= b,
+            ("gt" or ">", 2, true) => a > b,
+            ("neq" or "!=", 2, true) => a != b,
 
             _ => null
         };
 
-        if (result is null)
-            return null; // Not a recognized operation or invalid arguments
-
-        _nativeArithmetic++;
-        // Negative results are used for boolean-like values
-        return result.Value switch
+        if (boolResult is not null)
         {
-            -1 => Expr.Abs("f", Expr.Abs("x", Expr.Var("f"))), // Church true
-            -2 => Expr.Abs("f", Expr.Abs("x", Expr.Var("x"))), // Church false
-            _ => MakeChurchNumeral(result.Value) // Return Church numeral for non-negative results
-        };
+            _nativeArithmetic++;
+            return boolResult.Value
+                ? Expr.Abs("f", Expr.Abs("x", Expr.Var("f")))
+                : Expr.Abs("f", Expr.Abs("x", Expr.Var("x")));
+        }
+
+        return null; // Not a recognized native arithmetic or boolean operation
     }
 
     // Try to extract a Church numeral as int, resolving variables if needed
@@ -1501,10 +1510,10 @@ public class Interpreter
                 break;
 
             case { Type: KontinuationType.Conditional, ThenBranch: var thenBranch, ElseBranch: var elseBranch, Environment: var condEnv, Next: var next }:
-                // We have evaluated the condition, now choose the appropriate branch
-                // The condition should be a Church boolean: true = λx.λy.x, false = λx.λy.y
-                var selectedBranch = IsChurchTrue(value) ? thenBranch! : elseBranch!;
-                stateStack.Push(new CEKState(selectedBranch, condEnv!, next!));
+                // Evaluate Church boolean condition using centralized boolean pattern (Expr.TryExtractBoolean)
+                // true = λa.λb.a, false = λa.λb.b
+                var isTrue = Expr.TryExtractBoolean(value, out var boolVal) && boolVal;
+                stateStack.Push(new CEKState(isTrue ? thenBranch! : elseBranch!, condEnv!, next!));
                 break;
         }
     }
@@ -1988,19 +1997,7 @@ public class Interpreter
             }
         } && p == p2 && a == a2 && b == b2;
 
-    // Check if an expression is Church true: λx.λy.x
-    private static bool IsChurchTrue(Expr expr) =>
-        expr is
-        {
-            Type: ExprType.Abs,
-            AbsVarName: var x,
-            AbsBody:
-            {
-                Type: ExprType.Abs,
-                AbsVarName: var y,
-                AbsBody: { Type: ExprType.Var, VarName: var x2 }
-            }
-        } && x == x2;
+    // (Removed IsChurchTrue duplicate – use Expr.TryExtractBoolean instead for centralized pattern logic.)
 
     // Handle Church conditional with lazy evaluation of branches
     private void HandleChurchConditional(Expr control, Dictionary<string, Expr> env, Kontinuation kont, Stack<CEKState> stateStack)
