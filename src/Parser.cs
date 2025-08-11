@@ -449,100 +449,14 @@ public class Parser
             if (pos > end || tokens[pos].Type != TokenType.Equals)
                 throw new ParseException(TreeErrorType.MissingLetEquals, tokens[Math.Max(0, pos - 1)].Position);
             pos++; // skip '='
-            // Special case: detect lambda parameter list using commas:  x, y -> body
-            int temp = pos;
-            bool lambdaParamList = false;
-            if (temp <= end)
-            {
-                if (tokens[temp].Type == TokenType.LParen)
-                {
-                    int scan = temp + 1;
-                    int depth = 1;
-                    bool sawTerm = false;
-                    while (scan <= end && depth > 0)
-                    {
-                        var tk = tokens[scan];
-                        if (tk.Type == TokenType.LParen)
-                        {
-                            depth++;
-                        }
-                        else if (tk.Type == TokenType.RParen)
-                        {
-                            depth--;
-                            if (depth == 0)
-                            {
-                                scan++;
-                                break;
-                            }
-                        }
-                        else if (depth == 1 && tk.Type == TokenType.Term)
-                        {
-                            sawTerm = true;
-                            scan++;
-                            if (scan <= end && tokens[scan].Type == TokenType.Comma)
-                            {
-                                scan++;
-                                continue;
-                            }
-                        }
-                        else scan++;
-                    }
-                    if (sawTerm && scan <= end && tokens[scan].Type == TokenType.Arrow) lambdaParamList = true;
-                }
-                else if (tokens[temp].Type == TokenType.Term)
-                {
-                    int scan = temp;
-                    bool sawTerm = false;
-                    while (scan <= end && tokens[scan].Type == TokenType.Term)
-                    {
-                        sawTerm = true;
-                        scan++;
-                        if (scan <= end && tokens[scan].Type == TokenType.Comma)
-                        {
-                            scan++;
-                            continue;
-                        }
-                        break;
-                    }
-                    if (sawTerm && scan <= end && tokens[scan].Type == TokenType.Arrow) lambdaParamList = true;
-                }
-            }
-            // find end of value (comma / in at top level) unless lambdaParamList where commas belong to params
+            // Detect arrow param list at the start (x, y -> body) or x, y -> body
+            int arrowIdx = -1;
+            TryGetArrowIndexForParamList(tokens, pos, end, out arrowIdx);
+            // Find value end: stops at top-level 'in' or comma (with commas before arrow ignored)
             int valueStart = pos;
-            int valueEnd = -1;
-            int nesting = 0;
-            int letNesting = 0;
-            int arrowPos = -1;
-            for (int probe = pos; probe <= end; probe++)
-            {
-                var t = tokens[probe];
-                if (t.Type is TokenType.LParen or TokenType.LBracket) nesting++;
-                else if (t.Type is TokenType.RParen or TokenType.RBracket) nesting--;
-                else if (nesting == 0)
-                {
-                    if (t.Type == TokenType.Let) letNesting++;
-                    else if (t.Type == TokenType.In)
-                    {
-                        if (letNesting > 0) letNesting--;
-                        else
-                        {
-                            valueEnd = probe - 1;
-                            break;
-                        }
-                    }
-                    else if (t.Type == TokenType.Arrow && arrowPos == -1) arrowPos = probe;
-                    else if (!lambdaParamList && t.Type == TokenType.Comma && letNesting == 0)
-                    {
-                        if (arrowPos == -1 || probe > arrowPos)
-                        {
-                            valueEnd = probe - 1;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (valueEnd == -1) valueEnd = end;
-            if (valueStart > valueEnd) throw new ParseException(TreeErrorType.MissingLetValue, tokens[Math.Max(0, valueStart)].Position);
+            int valueEnd = FindLetValueEnd(tokens, valueStart, end, arrowIdx);
+            if (valueStart > valueEnd)
+                throw new ParseException(TreeErrorType.MissingLetValue, tokens[Math.Max(0, valueStart)].Position);
             values.Add(BuildExpressionTree(tokens, valueStart, valueEnd));
             pos = valueEnd + 1;
             while (pos <= end && tokens[pos].Type == TokenType.Comma) pos++; // consume commas
@@ -702,6 +616,74 @@ public class Parser
             { if (firstRange == -1) firstRange = i; rangeCount++; }
         }
         if (close == -1) throw new ParseException(TreeErrorType.UnclosedParen, start < tokens.Count ? tokens[start].Position : 0);
+    }
+
+    // Detect if a parameter list starts at 'pos' and return the index of the following '->' if so.
+    private static bool TryGetArrowIndexForParamList(List<Token> tokens, int pos, int end, out int arrowIdx)
+    {
+        arrowIdx = -1;
+        if (pos > end) return false;
+        if (tokens[pos].Type == TokenType.LParen)
+        {
+            int i = pos + 1;
+            bool any = false;
+            while (i <= end && tokens[i].Type == TokenType.Term)
+            {
+                any = true;
+                i++;
+                if (i <= end && tokens[i].Type == TokenType.Comma) { i++; continue; }
+                break;
+            }
+            if (!any || i > end || tokens[i].Type != TokenType.RParen) return false;
+            i++;
+            if (i <= end && tokens[i].Type == TokenType.Arrow) { arrowIdx = i; return true; }
+            return false;
+        }
+        if (tokens[pos].Type == TokenType.Term)
+        {
+            int j = pos;
+            bool anyBare = false;
+            while (j <= end && tokens[j].Type == TokenType.Term)
+            {
+                anyBare = true;
+                j++;
+                if (j <= end && tokens[j].Type == TokenType.Comma) { j++; continue; }
+                break;
+            }
+            if (!anyBare) return false;
+            if (j <= end && tokens[j].Type == TokenType.Arrow) { arrowIdx = j; return true; }
+        }
+        return false;
+    }
+
+    // Find the end index for a let-binding value, respecting nested let/in and param-list commas up to arrowIdx.
+    private static int FindLetValueEnd(List<Token> tokens, int valueStart, int end, int arrowIdx)
+    {
+        int valueEnd = -1;
+        int nesting = 0;
+        int letNesting = 0;
+        for (int i = valueStart; i <= end; i++)
+        {
+            var t = tokens[i];
+            if (t.Type == TokenType.LParen || t.Type == TokenType.LBracket) { nesting++; continue; }
+            if (t.Type == TokenType.RParen || t.Type == TokenType.RBracket) { nesting--; continue; }
+            if (nesting != 0) continue;
+
+            if (t.Type == TokenType.Let) { letNesting++; continue; }
+            if (t.Type == TokenType.In)
+            {
+                if (letNesting > 0) { letNesting--; continue; }
+                valueEnd = i - 1; break;
+            }
+            if (t.Type == TokenType.Comma && letNesting == 0)
+            {
+                // Ignore commas that are part of an initial param-list up to the arrow
+                if (arrowIdx != -1 && i <= arrowIdx) continue;
+                valueEnd = i - 1; break;
+            }
+        }
+        if (valueEnd == -1) valueEnd = end;
+        return valueEnd;
     }
 
     // Macro pass wrappers
