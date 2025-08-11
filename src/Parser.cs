@@ -57,6 +57,44 @@ public record InfixOperator(string Symbol, int Precedence, Associativity Associa
 
 public class Parser
 {
+    /// <summary>
+    /// Represents a parsed parameter list (bare or parenthesized).
+    /// </summary>
+    public readonly struct ParameterList
+    {
+        public ParameterList(IReadOnlyList<string> names, int startToken, int endToken, bool parenthesized)
+        {
+            Names = names;
+            StartToken = startToken;
+            EndToken = endToken;
+            Parenthesized = parenthesized;
+        }
+        public IReadOnlyList<string> Names { get; }
+        public int StartToken { get; }
+        public int EndToken { get; }
+        public bool Parenthesized { get; }
+    }
+
+    /// <summary>
+    /// Represents a parsed range specification (simple or stepped).
+    /// </summary>
+    public readonly struct RangeSpec
+    {
+        public RangeSpec(Expr start, Expr end, Expr? step, int startToken, int endToken)
+        {
+            Start = start;
+            End = end;
+            Step = step;
+            StartToken = startToken;
+            EndToken = endToken;
+        }
+        public Expr Start { get; }
+        public Expr End { get; }
+        public Expr? Step { get; }
+        public int StartToken { get; }
+        public int EndToken { get; }
+        public bool IsStepped => Step != null;
+    }
     public readonly Dictionary<string, InfixOperator> _infixOperators = new(StringComparer.Ordinal);
     public readonly Dictionary<string, List<MacroDefinition>> _macros = new(StringComparer.Ordinal);
     private readonly Tokenizer _tokenizer;
