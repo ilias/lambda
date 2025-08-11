@@ -40,40 +40,61 @@ public class Interpreter
             _usedRandom = false;
             if (string.IsNullOrWhiteSpace(input)) return (null, "");
             input = input.TrimEnd('\\');
-
-            // Comments
+            // Comments (whole-line)
             if (input.StartsWith('#')) return (null, input.Trim());
 
-            // Handle commands
-            if (input.Trim().StartsWith(':'))
-                return (null, await HandleCommandAsync(input));
+            // Split input into top-level segments by ';' (outside parens/brackets)
+            var segments = SplitTopLevelSegments(input);
+            if (segments.Count == 0) return (null, "");
 
-            var statements = _parser.ParseAll(input);
-            if (statements.Count == 0) return (null, "");
+            // Fast path: single segment that is a command
+            if (segments.Count == 1 && segments[0].TrimStart().StartsWith(':'))
+                return (null, await HandleCommandAsync(segments[0]));
+
             var sb = new System.Text.StringBuilder();
             Expr? lastExpr = null;
-            foreach (var st in statements)
+            foreach (var seg in segments)
             {
-                if (st.Type == StatementType.Assignment)
+                var trimmed = seg.Trim();
+                if (trimmed.Length == 0) continue;
+                if (trimmed.StartsWith('#')) continue; // skip comment segment
+
+                if (trimmed.StartsWith(':'))
                 {
-                    var val = EvaluateCEK(st.Expression);
-                    _context[st.VarName!] = val;
-                    sb.AppendLine($"-> {st.VarName} = {FormatWithNumerals(val)}");
-                    lastExpr = null; // assignments don't become final result by themselves
+                    // Command segment
+                    var cmdResult = await HandleCommandAsync(trimmed);
+                    sb.AppendLine(cmdResult);
+                    // If exit/quit, stop processing further segments
+                    if (trimmed is ":exit" or ":quit")
+                        break;
+                    continue;
                 }
-                else
+
+                // Expression / assignment segment (may itself contain multiple assignments if user grouped without semicolons)
+                var statements = _parser.ParseAll(trimmed);
+                foreach (var st in statements)
                 {
-                    _logger.Log($"Eval: {FormatWithNumerals(st.Expression)}");
-                    if (_showStep) _logger.Log($"Processing: {st}");
-                    var res = EvaluateCEK(st.Expression);
-                    var norm = NormalizeExpression(res);
-                    _stats.TotalIterations += _stats.Iterations;
-                    sb.AppendLine($"-> {FormatWithNumerals(norm)}");
-                    lastExpr = norm; // track last expression result
+                    if (st.Type == StatementType.Assignment)
+                    {
+                        var val = EvaluateCEK(st.Expression);
+                        _context[st.VarName!] = val;
+                        sb.AppendLine($"-> {st.VarName} = {FormatWithNumerals(val)}");
+                        lastExpr = null;
+                    }
+                    else
+                    {
+                        _logger.Log($"Eval: {FormatWithNumerals(st.Expression)}");
+                        if (_showStep) _logger.Log($"Processing: {st}");
+                        var res = EvaluateCEK(st.Expression);
+                        var norm = NormalizeExpression(res);
+                        _stats.TotalIterations += _stats.Iterations;
+                        sb.AppendLine($"-> {FormatWithNumerals(norm)}");
+                        lastExpr = norm;
+                    }
                 }
             }
-            var output = sb.ToString().TrimEnd();
-            return (lastExpr, output);
+
+            return (lastExpr, sb.ToString().TrimEnd());
         }
         catch (Exception ex)
         {
@@ -83,6 +104,35 @@ public class Interpreter
         {
             _stats.VarCounter = 0; // Reset recursion depth counter
         }
+    }
+
+    // Split a raw input line into top-level semicolon-separated segments, ignoring semicolons inside () and []
+    private static List<string> SplitTopLevelSegments(string input)
+    {
+        var segments = new List<string>();
+        int paren = 0, bracket = 0; int start = 0;
+        for (int i = 0; i < input.Length; i++)
+        {
+            var c = input[i];
+            switch (c)
+            {
+                case '(': paren++; break;
+                case ')': if (paren > 0) paren--; break;
+                case '[': bracket++; break;
+                case ']': if (bracket > 0) bracket--; break;
+                case ';' when paren == 0 && bracket == 0:
+                    var seg = input.Substring(start, i - start).Trim();
+                    if (seg.Length > 0) segments.Add(seg);
+                    start = i + 1;
+                    break;
+            }
+        }
+        if (start < input.Length)
+        {
+            var last = input[start..].Trim();
+            if (last.Length > 0) segments.Add(last);
+        }
+        return segments;
     }
 
     // Ensure built-in range and range2 functions exist (lazy, stepped ranges)

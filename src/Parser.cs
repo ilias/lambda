@@ -360,23 +360,24 @@ public class Parser
         for (var i = start; i <= end; i++)
         {
             var token = tokens[i];
-            expressions.Add(token.Type switch
+            var expr = token.Type switch
             {
                 TokenType.LParen => ParseParenthesizedExpr(tokens, ref i, end),
                 TokenType.RParen => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
                 TokenType.LBracket => ParseListExpr(tokens, ref i, end),
                 TokenType.RBracket => throw new ParseException(TreeErrorType.UnopenedParen, token.Position),
-                TokenType.Semicolon => throw new ParseException(TreeErrorType.UnexpectedSemicolon, token.Position),
+                TokenType.Semicolon => null, // ignore
                 TokenType.Lambda => ParseLambdaExpr(tokens, ref i, end),
                 TokenType.Let => ParseLetExpr(tokens, ref i, end),
                 TokenType.Y => Expr.YCombinator(),
                 TokenType.Term => Expr.Var(token.Value!),
                 TokenType.Integer when int.TryParse(token.Value, out int value) => CreateChurchNumeral(value),
-                TokenType.InfixOp => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position), // Should be handled by infix parser
-                TokenType.Arrow => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position), // Should be handled by arrow parser
+                TokenType.InfixOp => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position),
+                TokenType.Arrow => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position),
                 TokenType.Equals => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position),
                 _ => throw new ParseException(TreeErrorType.EmptyExprList, token.Position)
-            });
+            };
+            if (expr != null) expressions.Add(expr);
         }
         return expressions.Count == 0
             ? throw new ParseException(TreeErrorType.EmptyExprList, tokens.Count > 0 ? tokens[0].Position : 0)

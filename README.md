@@ -9,10 +9,11 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Core Language](#core-language)
 - [Advanced Syntax Features](#advanced-syntax-features)
 - [Interactive Commands](#interactive-commands)
+- [Command / Expression Chaining](#command--expression-chaining)
 - [Standard Library](#standard-library)
 - [Infix Operators](#infix-operators)
 - [Macro System](#macro-system)
-- [Examples](#examples)
+- [Examples (Extended)](#examples-extended)
 - [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
 - [Building and Running](#building-and-running)
@@ -218,6 +219,42 @@ The interpreter provides numerous commands for managing your session:
 :multiline               # Show multi-line input help
 :native show             # Show all native arithmetic functions
 ```
+
+## Command / Expression Chaining
+
+You can place multiple commands and/or expressions on a single line (or in a file) separated by top‑level semicolons. This works uniformly for colon commands (e.g. `:load`, `:macro`, `:infix`) and ordinary expressions.
+
+### Examples
+
+```shell
+# Define a macro then immediately use it
+:macro (inc $x) => (succ $x); inc 5            # → 6
+
+# Load a file then run an expression
+:load stdlib.lambda; plus 2 3                  # (loads stdlib, then evaluates) → 5
+
+# Chain several expressions (only final result is printed; earlier ones still evaluate)
+let x = 10 in succ x; let y = 2 in mult y 5    # → 10
+
+# Mix multiple commands and expressions
+:macro (sq $x) => (mult $x $x); :macros; sq 7  # Lists macros, then evaluates → 49
+```
+
+### Rules
+
+- Semicolons are recognized only at the top level (i.e. not inside parentheses, brackets, lambdas, lets, lists, or macro bodies).
+- Empty segments (e.g. stray trailing `;`) are ignored.
+- `:exit` / `:quit` stop further processing of subsequent segments on the same line.
+- Each segment is processed in left‑to‑right order; environment changes (definitions, macros, infix ops) take effect for later segments in the same line.
+- Errors in a segment abort the remaining segments on that line.
+
+### Practical Uses
+
+- Rapid prototyping: define + test in one line.
+- Batch loading: `:load a.lambda; :load b.lambda; :stats`.
+- Macro refinement: redeclare a macro and immediately inspect with `:macros`.
+
+This feature streamlines interactive workflows by reducing the number of round trips required to iterate on definitions and tests.
 
 ## Core Language
 
@@ -756,7 +793,7 @@ Precedence guidance for `:infix` mirrors typical arithmetic (higher number binds
 
 Tip: After heavy experimentation, run `:clear` to avoid subtle interactions from lingering definitions, and then `:load stdlib.lambda` to restore the standard library.
 
-## Examples
+## Examples (Extended)
 
 ### Fibonacci Sequence
 
