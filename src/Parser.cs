@@ -70,6 +70,20 @@ public class Parser
         _macroExpander = new MacroExpander(this);
     }
 
+    /// <summary>
+    /// Builds a left-nested application chain from a sequence of expressions.
+    /// Example: [f, x, y] => ((f x) y)
+    /// </summary>
+    public static Expr BuildApplicationChain(IEnumerable<Expr> exprs)
+    {
+        var list = exprs.ToList();
+        if (list.Count == 0) throw new ArgumentException("Empty application chain");
+        Expr result = list[0];
+        for (int i = 1; i < list.Count; i++)
+            result = Expr.App(result, list[i]);
+        return result;
+    }
+
     public string DefineInfixOperator(string symbol, int precedence, string associativity)
     {
         if (string.IsNullOrWhiteSpace(symbol)) return "Error: Operator symbol cannot be empty";
@@ -243,13 +257,10 @@ public class Parser
 
     private Expr ParseApplication(List<Token> tokens, ref int pos, int end)
     {
-        var left = ParsePrimary(tokens, ref pos, end);
+        var exprs = new List<Expr> { ParsePrimary(tokens, ref pos, end) };
         while (pos <= end && IsPrimaryStart(tokens[pos].Type))
-        {
-            var right = ParsePrimary(tokens, ref pos, end);
-            left = Expr.App(left, right);
-        }
-        return left;
+            exprs.Add(ParsePrimary(tokens, ref pos, end));
+        return BuildApplicationChain(exprs);
     }
 
     // Parse a single atomic / primary expression
