@@ -301,8 +301,8 @@ range2 a b c      # Stepped; b supplies a+step; works both directions lazily
 Practical examples:
 
 ```lambda
-map (mult 2) [1,3 .. 11]          # [2,6,10,14,18,22]
-sum [10,7 .. -5]                  # Handles descending & negative endpoints
+map (mult 2) [1, 3 .. 11]          # [2, 6, 10, 14, 18, 22]
+sum [10, 7 .. -5]                  # Handles descending & negative endpoints
 take 5 [f n .. g n]               # Works with dynamic expressions lazily
 ```
 
@@ -321,18 +321,25 @@ length [1, 2, 3]        # 3
 append [1, 2] [3, 4]    # [1, 2, 3, 4]
 ```
 
-### Pattern Matching with Let
+#### Multi-line Input
+
+The interpreter supports intelligent multi-line input:
 
 ```lambda
-# Simple let binding (syntactic sugar for function application)
-let x = 5 in x + 1                                 # → (λx.x + 1) 5
+# Automatic continuation for incomplete expressions
+lambda> let factorial = Y (λf n.
+......> [2]     if (iszero n) 1 
+......> [3]         (mult n (f (pred n))))
+......> [4] in factorial 5
 
-# Multiple bindings (desugared to nested lambdas)
-let x = 3, y = 4 in x * y                          # → (λx.λy.x * y) 3 4
+# Manual continuation with backslash
+lambda> let result = very_long_expression \
+......> [2] that_continues_here in result
 
-# Recursive definitions (uses Y combinator internally)
-let rec fib = n -> if (iszero n) 1 (fib (pred n) + fib (pred (pred n))) in fib 10
-# → (λfib.fib 10) (Y (λfib.λn.if (iszero n) 1 (fib (pred n) + fib (pred (pred n)))))
+# Multi-line commands while editing
+:cancel                            # Discard current input
+:show                              # Display current buffer
+:abort                             # Same as :cancel
 ```
 
 ## Standard Library
@@ -531,38 +538,6 @@ either (λe.0) (λv.v) (right 42)   # 42
 either (λe.0) (λv.v) (left "err") # 0
 ```
 
-### 6. Functional Programming Utilities
-
-```lambda
-# Function composition and application
-compose (mult 2) (plus 3) 5        # 16 ((5+3)*2)
-apply (mult 3) 7                   # 21
-flip minus 10 3                    # -7 (3-10)
-
-# Currying and partial application
-curry (λp.plus (first p) (second p)) 3 4  # 7
-partial plus 5 7                   # 12
-
-# Iteration and repetition
-iterate (mult 2) 3 16              # 128 (16*2*2*2)
-times 4 succ 0                     # 4
-```
-
-### 7. String and Character Operations
-
-```lambda
-# ASCII character utilities
-space, newline, tab               # ASCII constants
-isdigit 65                        # false ('A')
-isalpha 65                        # true ('A')
-tolower 65                        # 97 ('a')
-toupper 97                        # 65 ('A')
-
-# String operations (on lists of numbers)
-words [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]  # Split on spaces
-lines [72, 101, 108, 108, 111, 10, 87, 111, 114, 108, 100]  # Split on newlines
-```
-
 ## Infix Operators
 
 Define custom infix operators with precedence and associativity:
@@ -666,6 +641,120 @@ square 7                           # → mult 7 7 → 49
 :macro (for $var at $list do $body) => (map (λ$var.$body) $list)
 for x at [1, 2, 3] do (mult x x)   # → map (λx.mult x x) [1, 2, 3] → [1, 4, 9]
 ```
+
+### Macro System Enhancements (Recent)
+
+The macro system has been extended beyond simple one-clause textual substitution to support more expressive, pattern-driven transformations:
+
+1. Multi‑Clause (Alternation) Macros
+   - Multiple definitions may share the same name.
+   - The engine picks the first matching clause using precedence rules (see Ordering below).
+        - Example:
+
+    ```lambda
+    :macro (max2 $a $b) when (geq $a $b) => $a
+    :macro (max2 $a $b) => $b
+    max2 5 3   # → 5 (guarded clause fires)
+    max2 2 7   # → 7 (fallback clause)
+    ```
+
+2. Variadic / Rest Patterns
+   - Use an ellipsis after a variable at the end of a pattern to capture zero or more trailing arguments.
+   - Syntax: `$xs ...` (three-dot ellipsis recognized lexically).
+   - Captured arguments are provided to the expansion as a list (Church-encoded list of arguments).
+        - Example:
+
+    ```lambda
+    :macro (list $xs ...) => $xs
+    list 1 2 3 4   # expands to the list [1,2,3,4]
+    ```
+
+3. Guards
+   - Optional `when (<expr>)` between the pattern and the `=>` allows conditional selection among clauses.
+   - Guard expressions can reference pattern variables (e.g. `$a`, `$b`).
+   - A clause only matches if the pattern matches AND the guard does not evaluate to boolean false.
+   - Example shown in max2 above.
+
+4. Clause Ordering & Precedence
+   - Clauses are ordered primarily by arity (more specific = more fixed arguments before a rest parameter).
+   - Ties are broken by recency (most recently defined matching clause wins) to allow incremental refinement.
+
+5. Pattern Variable Placeholders
+   - During parsing, occurrences of `$name` in transformation (and guard) bodies are internally converted to placeholders, ensuring capture-safe substitution.
+   - Integer literals inside macro bodies are delayed (kept as integers) until normal expression building, supporting lightweight numeric macros.
+
+6. Rest Pattern Constraints
+   - At most one rest variable per pattern and it must appear at the end.
+   - Rest cannot appear in nested list subpatterns (future enhancement may relax this).
+
+7. Display / Introspection
+   - `:macros` lists every clause including its guard (if any) and a `...` marker for rest variables.
+
+#### Example Putting It Together
+
+```lambda
+:macro (assert-max $a $b) when (geq $a $b) => (assert (geq $a $b) $a)
+:macro (assert-max $a $b) => (assert (geq $b $a) $b)
+:macro (pipeline $first $rest ...) => ($rest ... $first)
+```
+
+### Planned / Future Improvements
+
+These enhancements are on the roadmap to further strengthen the macro system:
+
+- Hygiene & gensym (automatic alpha-renaming to prevent variable capture).
+- Quasiquote / unquote / splicing for more ergonomic macro bodies.
+- Richer guard evaluation semantics (full interpretation with short-circuiting, pattern predicates).
+- Macro removal / redefinition controls (`:unmacro` or named groups).
+- Namespacing and selective macro importing.
+- Nested rest patterns and rest in sublists.
+- Compile-time evaluation blocks.
+
+### Performance Metrics Reference
+
+The `:stats` command now exposes fine‑grained runtime counters and timers to help you understand performance characteristics of reductions:
+
+| Metric | Meaning |
+|--------|---------|
+| TimeInCacheLookup | Elapsed ticks spent checking the evaluation cache |
+| TimeInSubstitution | Time spent performing variable substitution / beta-reduction prep |
+| TimeInEvaluation | Core CEK evaluation loop time (excluding forcing & cache lookups) |
+| TimeInForcing | Time spent forcing (evaluating) thunks in lazy mode |
+| NormalizeCEKCount | Number of normalization (evaluation) passes completed |
+| CacheHits | Number of successful cache lookups (expression result reused) |
+| CacheMisses | Number of times an expression wasn’t cached and had to be evaluated |
+| TotalIterations | Cumulative machine steps across all evaluations in the session |
+| Iterations | Machine steps for the last evaluated top‑level expression |
+| SubstitutionExprCount | Count of expressions traversed during substitution operations |
+| ThunkForceCount | How many thunks were forced (realized) |
+| VarCounter | Internal counter for generating fresh variable names (used for avoiding clashes) |
+| MaxRecursionDepth | Safety cut‑off to prevent runaway / infinite recursive expansions |
+
+Notes:
+
+- Timings are raw tick counts (convert with `TimeSpan.FromTicks` if needed) and are indicative rather than absolute wall time.
+- `CacheHits` vs `CacheMisses` helps gauge effectiveness of memoization; a very low hit rate may signal highly unique expressions.
+- A rapidly growing `SubstitutionExprCount` or `Iterations` value can indicate a need to refactor or introduce more sharing.
+- If you routinely hit the `MaxRecursionDepth`, consider refactoring with tail recursion or increasing the limit in code (config command forthcoming).
+
+## REPL Command Reference
+
+Unified list of interactive commands (all start with a colon):
+
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| :load | `:load <file.lambda>` | Load and evaluate definitions from a file (appends to current environment) |
+| :clear | `:clear` | Reset environment, caches, statistics |
+| :lazy | `:lazy on` / `:lazy off` | Toggle lazy evaluation (on by default) |
+| :stats | `:stats` | Show performance metrics (see Performance Metrics Reference) |
+| :infix | `:infix SYMBOL PRECEDENCE ASSOCIATIVITY` | Define or list infix operators (ASSOCIATIVITY = left\|right) |
+| :macros | `:macros` | List all currently defined macro clauses (with guards & rest markers) |
+| :help | `:help` | Show detailed built-in help text |
+| :exit / :quit | `:exit` | Leave the interpreter |
+
+Precedence guidance for `:infix` mirrors typical arithmetic (higher number binds tighter). Use `:infix` with no args to list existing operators.
+
+Tip: After heavy experimentation, run `:clear` to avoid subtle interactions from lingering definitions, and then `:load stdlib.lambda` to restore the standard library.
 
 ## Examples
 
@@ -786,219 +875,6 @@ processData [-5, 15, 25, 105, 75]  # → [31, 51, 151] after clamping, filtering
 
 ```lambda
 # Creating domain-specific languages with macros
-:macro (when $cond $then) => (if $cond $then I)
-:macro (unless $cond $then) => (if $cond I $then)
-:macro (cond $clauses) => (foldl (\acc clause. if (first clause) (second clause) acc) nil $clauses)
-
-# State machine using macros
-:macro (state $name $transitions) => (
-    λcurrent input. case current of $transitions
-)
-
-# Pattern matching simulation
-:macro (match $expr with $patterns) => (
-    let value = $expr in $patterns value
-)
-
-# Usage example
-validateAge = match _ with [
-    (between _ 0 12)   -> "child",
-    (between _ 13 19)  -> "teen", 
-    (between _ 20 64)  -> "adult",
-    (_ >= 65)          -> "senior"
-]
-
-validateAge 25  # → "adult"
-```
-
-### Functional Data Structures
-
-```lambda
-# Immutable stack implementation
-:macro (makeStack) => nil
-:macro (push $stack $item) => (cons $item $stack)
-:macro (pop $stack) => (if (isnil $stack) (pair nil nil) (pair (head $stack) (tail $stack)))
-:macro (peek $stack) => (if (isnil $stack) nil (head $stack))
-
-# Usage
-myStack = makeStack |> push 1 |> push 2 |> push 3
-peek myStack        # → 3
-top, rest = pop myStack  # → top = 3, rest = [2, 1]
-
-# Functional binary tree
-:macro (leaf $value) => (pair $value nil)
-:macro (node $value $left $right) => (pair $value (pair $left $right))
-:macro (treeValue $tree) => (first $tree)
-:macro (treeChildren $tree) => (second $tree)
-
-# Tree traversal with higher-order functions
-inorder = Y (λf tree. 
-    if (isnil (treeChildren tree))
-        [treeValue tree]
-        (let children = treeChildren tree in
-         append (f (first children)) 
-                (cons (treeValue tree) (f (second children)))))
-
-# Create and traverse tree
-binaryTree = node 4 (node 2 (leaf 1) (leaf 3)) (node 6 (leaf 5) (leaf 7))
-inorder binaryTree  # → [1, 2, 3, 4, 5, 6, 7]
-```
-
-### Advanced Recursion Patterns
-
-```lambda
-# Mutual recursion using Y combinator
-evenOdd = Y (λf. pair 
-    (λn. if (iszero n) true (second f (pred n)))
-    (λn. if (iszero n) false (first f (pred n))))
-
-isEven = first evenOdd
-isOdd = second evenOdd
-
-isEven 42  # → true
-isOdd 17   # → true
-
-# Continuation-passing style (CPS)
-factorialCPS = Y (λf n k. 
-    if (iszero n) 
-        (k 1) 
-        (f (pred n) (λresult. k (mult n result))))
-
-factorialCPS 5 id  # → 120 (using identity as final continuation)
-
-# Tail-recursive optimization patterns
-sumListTR = Y (λf list acc.
-    if (isnil list) 
-        acc 
-        (f (tail list) (plus acc (head list))))
-
-sumList = λlist. sumListTR list 0
-sumList [1, 2, 3, 4, 5]  # → 15
-```
-
-### Error Handling and Safe Operations
-
-```lambda
-# Monadic error handling patterns
-:macro (bind $maybe $func) => (
-    if (isNothing $maybe) 
-        nothing 
-        ($func (fromJust $maybe))
-)
-
-:macro (safe $operation) => (
-    λ...args. try ($operation ...args) catch nothing
-)
-
-# Chaining safe operations
-safeDivision = λa b. if (iszero b) nothing (just (div a b))
-safeLog = λx. if (leq x 0) nothing (just (log x))
-
-computeSafely = λx y.
-    bind (safeDivision x y) (λresult.
-    bind (safeLog result) (λlogResult.
-    just (mult logResult 2)))
-
-computeSafely 100 5  # → just 6.64... (log(20) * 2)
-computeSafely 100 0  # → nothing (division by zero)
-
-### Parser Errors & Diagnostics
-
-The parser produces precise diagnostic categories to aid troubleshooting:
-
-| Error | Meaning |
-|-------|---------|
-| UnexpectedSemicolon | A semicolon appeared where only an expression is allowed (non top-level). |
-| UnexpectedLambda    | A lambda parameter list wasn’t followed by a required dot (`λx y.`) before the body. |
-| UnexpectedDot       | Misplaced or duplicate dot (e.g., `λx..x` or malformed range). |
-
-Additional Safeguards:
-- Lambda parameter lists now strictly require a dot; missing it triggers `UnexpectedLambda`.
-- Internal semicolons are disallowed in nested constructs.
-- Range syntax validates pattern shapes early for clearer messages.
-
-### Unary Minus / Negative Literals
-
-Negative integers are tokenized directly (no need to write `minus 0 5`). Unary minus is recognized when `-` precedes a number at the start of an expression or after delimiters (`(`, `[`, `=`, `,`, `->`, `;`). Examples:
-
-```lambda
--3 + 5              # 2
-[ -2 .. 2 ]         # [-2,-1,0,1,2]
-[10,7 .. -5]        # [10,7,4,1,-2,-5]
-```
-
-If `-` follows a value (e.g. `x-3`), it’s parsed as subtraction (infix operator) when `-` has been defined via `:infix - <prec> left`.
-
-#### Either monad for detailed error reporting
-
-```lambda
-:macro (left $error) => (pair false $error)
-:macro (right $value) => (pair true $value)
-:macro (bindEither $either $func) => (
-    if (first $either)
-        ($func (second $either))
-        $either
-)
-
-parseNumber = λstr.
-    if (isdigit (head str))
-        (right (parseDigits str))
-        (left "Not a number")
-
-validatePositive = λn.
-    if (gt n 0)
-        (right n)
-        (left "Must be positive")
-
-processInput = λstr.
-    bindEither (parseNumber str) (λnum.
-    bindEither (validatePositive num) (λvalidNum.
-    right (mult validNum 2)))
-```
-
-### Performance Optimization Techniques
-
-```lambda
-# Memoization pattern for expensive recursive functions
-createMemoizedFib = 
-    let cache = ref emptyMap in
-    Y (λf n.
-        let cached = lookup n cache in
-        if (isJust cached)
-            (fromJust cached)
-            (let result = if (lt n 2) n (plus (f (pred n)) (f (pred (pred n)))) in
-             let _ = insert n result cache in
-             result))
-
-memoFib = createMemoizedFib
-memoFib 40  # Much faster than naive recursive version
-
-# Lazy evaluation for infinite data structures
-:macro (delay $expr) => (λ_. $expr)
-:macro (force $thunk) => ($thunk I)
-
-# Infinite list of natural numbers
-naturals = Y (λf n. cons n (delay (f (succ n)))) 0
-take 10 (force naturals)  # → [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-# Stream processing
-fibonacci_stream = Y (λf a b. cons a (delay (f b (plus a b)))) 0 1
-take 15 fibonacci_stream  # → [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]
-
-# Parallel-style computation simulation
-:macro (parallel $computations) => (map force (map delay $computations))
-
-heavyComputation1 = _ -> (factorial 100)
-heavyComputation2 = _ -> (fibonacci 30)
-heavyComputation3 = _ -> (sum (range 10000))
-
-results = parallel [heavyComputation1, heavyComputation2, heavyComputation3]
-```
-
-### Domain-Specific Language Creation
-
-```lambda
-# Creating a simple query language
 :macro (from $collection) => $collection
 :macro (where $predicate) => (filter $predicate)
 :macro (select $transform) => (map $transform)
@@ -1070,6 +946,20 @@ processRequest = λreq.
 
 ## Performance Features
 
+### Lazy vs Eager Evaluation and Macros
+
+Macros expand at parse time before evaluation mode (lazy/eager) matters. After expansion:
+
+- Lazy mode (default) defers evaluation of arguments and macro-expanded bodies until needed.
+- Switching with `:lazy off` makes evaluation eager; previously created thunks are forced as they appear.
+- Guards in multi-clause macros are evaluated under the current mode (a false value blocks the clause). Currently, guard evaluation short‑circuits only if the top-level evaluates to Church false; deeper reductions still follow normal evaluation semantics.
+
+Guidelines:
+
+- Prefer lazy mode for large or infinite ranges (e.g. `[1 .. 1000000]` with `take 10`).
+- Disable laziness (`:lazy off`) when benchmarking deterministic CPU-heavy pure functions to reduce overhead of thunk bookkeeping.
+- If a macro expansion intentionally builds large intermediate expressions that are immediately consumed, eager mode can expose performance differences for optimization.
+
 ### Native Arithmetic
 
 When enabled (`:native on`), the interpreter uses optimized native operations for Church numerals:
@@ -1098,27 +988,6 @@ Use `:stats` to view detailed performance information:
 ```shell
 :stats
 # Shows cache hit rates, evaluation counts, memory usage, etc.
-```
-
-## Multi-line Input
-
-The interpreter supports intelligent multi-line input:
-
-```lambda
-# Automatic continuation for incomplete expressions
-lambda> let factorial = Y (λf n.
-......> [2]     if (iszero n) 1 
-......> [3]         (mult n (f (pred n))))
-......> [4] in factorial 5
-
-# Manual continuation with backslash
-lambda> let result = very_long_expression \
-......> [2] that_continues_here in result
-
-# Multi-line commands while editing
-:cancel                            # Discard current input
-:show                              # Display current buffer
-:abort                             # Same as :cancel
 ```
 
 ## Building and Running
@@ -1256,5 +1125,3 @@ Disable with `:pretty off` when:
 - Teaching / demonstrations where raw encodings are pedagogically important.
 
 Re‑enable with `:pretty on` once finished.
-
----
