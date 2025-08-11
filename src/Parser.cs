@@ -1,3 +1,32 @@
+/*
+========================================
+ Minimal Grammar (Single Source of Truth)
+ Generated from parser rules below
+----------------------------------------
+ program        ::= expr (';' expr)*                // ParseProgram
+ expr           ::= letExpr | arrowExpr | infixExpr // ParseExpression
+ letExpr        ::= 'let' bindings 'in' expr        // ParseLetExpr
+ bindings       ::= binding (',' binding)*          // ParseLetExpr (multi-binding)
+ binding        ::= name '=' expr                   // ParseLetExpr (single binding)
+ arrowExpr      ::= paramList '->' expr             // ParseArrowExpr
+ paramList      ::= name (',' name)* | '(' name (',' name)* ')' // IsArrowParamListAhead
+ infixExpr      ::= appExpr (infixOp appExpr)*      // ParseApplication + Pratt
+ appExpr        ::= primary (primary)*              // ParseApplication
+ primary        ::= integer | name | '(' expr ')' | listExpr // ParsePrimary
+ listExpr       ::= '[' exprList ']'                // ParseListExpr
+ exprList       ::= expr (',' expr)*                // ParseListExpr
+ macroDef       ::= ':macro' '(' name pattern* ')' ['when' guard] '=>' transformation // MacroExpander.ParseMacroDefinition
+ pattern        ::= '$' name ['...'] | '(' pattern* ')' | name // MacroExpander.ParseMacroPattern
+ guard          ::= expr                            // MacroExpander.ParseMacroGuardExpression
+ transformation ::= expr                            // MacroExpander.ParseMacroTransformation
+ infixOp        ::= operatorSymbol                  // Infix registry
+----------------------------------------
+Notes:
+- Precedence: let < arrow < infix < application < atom
+- All rules are left-associative unless noted in infix registry
+- See README for extended grammar and desugarings
+========================================
+*/
 namespace LambdaCalculus;
 
 // -----------------------------------------------------------------------------
