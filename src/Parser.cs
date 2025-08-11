@@ -237,14 +237,16 @@ public class Parser
         else if (IsArrowParamListAhead(tokens, pos, end))
         {
             // arrow param list (possibly parenthesized)
-            var names = new List<string>();
+            int paramStart = pos;
+            var paramNames = new List<string>();
+            bool parenthesized = false;
             if (tokens[pos].Type == TokenType.LParen)
             {
-                int startPos = pos;
+                parenthesized = true;
                 pos++; // skip '('
                 while (pos <= end && tokens[pos].Type == TokenType.Term)
                 {
-                    names.Add(tokens[pos].Value!);
+                    paramNames.Add(tokens[pos].Value!);
                     pos++;
                     if (pos <= end && tokens[pos].Type == TokenType.Comma)
                     {
@@ -260,7 +262,7 @@ public class Parser
             {
                 while (pos <= end && tokens[pos].Type == TokenType.Term)
                 {
-                    names.Add(tokens[pos].Value!);
+                    paramNames.Add(tokens[pos].Value!);
                     pos++;
                     if (pos <= end && tokens[pos].Type == TokenType.Comma)
                     {
@@ -270,11 +272,13 @@ public class Parser
                     break;
                 }
             }
-            if (names.Count == 0) throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[Math.Max(0, pos - 1)].Position);
+            int paramEnd = pos - 1;
+            if (paramNames.Count == 0) throw new ParseException(TreeErrorType.MissingLambdaVar, tokens[Math.Max(0, pos - 1)].Position);
             if (pos > end || tokens[pos].Type != TokenType.Arrow) throw new ParseException(TreeErrorType.IllegalAssignment, tokens[Math.Max(0, pos - 1)].Position);
             pos++; // consume '->'
+            var paramList = new ParameterList(paramNames, paramStart, paramEnd, parenthesized);
             var body = ParseExpression(tokens, ref pos, end, 0);
-            left = names.AsEnumerable().Reverse().Aggregate(body, (acc, n) => Expr.Abs(n, acc));
+            left = paramList.Names.AsEnumerable().Reverse().Aggregate(body, (acc, n) => Expr.Abs(n, acc));
         }
         else
         {
@@ -635,10 +639,11 @@ public class Parser
                     var aExpr = BuildExpressionTree(tokens, aS, aE);
                     var bExpr = BuildExpressionTree(tokens, bS, bE);
                     var cExpr = BuildExpressionTree(tokens, cS, cE);
+                    var rangeSpec = new RangeSpec(aExpr, cExpr, bExpr, aS, cE);
                     while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
                     if (scan > end || tokens[scan].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
                     pos = scan + 1;
-                    return Expr.App(Expr.App(Expr.App(Expr.Var("range2"), aExpr), bExpr), cExpr);
+                    return Expr.App(Expr.App(Expr.App(Expr.Var("range2"), rangeSpec.Start), rangeSpec.Step!), rangeSpec.End);
                 }
             }
         }
@@ -689,10 +694,11 @@ public class Parser
                     }
                     var aExpr = BuildExpressionTree(tokens, aS, aE);
                     var bExpr = BuildExpressionTree(tokens, bS, bE);
+                    var rangeSpec = new RangeSpec(aExpr, bExpr, null, aS, bE);
                     while (scan <= end && tokens[scan].Type != TokenType.RBracket) scan++;
                     if (scan > end || tokens[scan].Type != TokenType.RBracket) throw new ParseException(TreeErrorType.UnclosedParen, tokens[start].Position);
                     pos = scan + 1;
-                    return Expr.App(Expr.App(Expr.Var("range"), aExpr), bExpr);
+                    return Expr.App(Expr.App(Expr.Var("range"), rangeSpec.Start), rangeSpec.End);
                 }
             }
         }
