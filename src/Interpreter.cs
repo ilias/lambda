@@ -18,6 +18,7 @@ public class Interpreter
     private readonly Logger _logger;
     private readonly Statistics _stats;
     private readonly Parser _parser = new();
+    private IEvaluator _evaluator; // strategy
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
     private bool _lazyEvaluation = true;
@@ -30,6 +31,7 @@ public class Interpreter
     {
         _logger = logger;
         _stats = stats ?? new Statistics();
+    _evaluator = new CEKEvaluator(this); // default strategy
     }
 
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
@@ -76,7 +78,7 @@ public class Interpreter
                 {
                     if (st.Type == StatementType.Assignment)
                     {
-                        var val = EvaluateCEK(st.Expression);
+                        var val = _evaluator.Evaluate(st.Expression);
                         _context[st.VarName!] = val;
                         sb.AppendLine($"-> {st.VarName} = {FormatWithNumerals(val)}");
                         lastExpr = null;
@@ -85,7 +87,7 @@ public class Interpreter
                     {
                         _logger.Log($"Eval: {FormatWithNumerals(st.Expression)}");
                         if (_showStep) _logger.Log($"Processing: {st}");
-                        var res = EvaluateCEK(st.Expression);
+                        var res = _evaluator.Evaluate(st.Expression);
                         var norm = NormalizeExpression(res);
                         _stats.TotalIterations += _stats.Iterations;
                         sb.AppendLine($"-> {FormatWithNumerals(norm)}");
@@ -183,7 +185,7 @@ public class Interpreter
         await DisplayOutput(output, timing.Elapsed);
     }
 
-    private Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
+    internal Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
     {
         _perfStopwatch.Restart();
         var environment = new Dictionary<string, Expr>(initialEnv ?? _context, StringComparer.Ordinal);
