@@ -1,282 +1,63 @@
+// NOTE: This file has been refactored for readability. Tokenization & macro expansion
+// have been moved into helper classes (Tokenizer, MacroExpander). Public API is preserved.
 namespace LambdaCalculus;
 
-
+// ---------------------------- Lexer / Tokens / Errors ----------------------------
 public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar, Semicolon, Ellipsis }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody, UnexpectedSemicolon, UnexpectedLambda, UnexpectedDot }
-public class ParseException(TreeErrorType errorType, int position)
-    : Exception($"{errorType} at position {position}")
-{
-    public TreeErrorType ErrorType { get; } = errorType;
-    public int Position { get; } = position;
-}
+public class ParseException(TreeErrorType errorType, int position) : Exception($"{errorType} at position {position}")
+{ public TreeErrorType ErrorType { get; } = errorType; public int Position { get; } = position; }
 
+// ---------------------------- Statements ----------------------------
 public enum StatementType : byte { Expr, Assignment }
 public record Statement(StatementType Type, Expr Expression, string? VarName = null)
-{
-    public static Statement ExprStatement(Expr expr) =>
-        new(StatementType.Expr, expr);
+{ public static Statement ExprStatement(Expr expr) => new(StatementType.Expr, expr); public static Statement AssignmentStatement(string varName, Expr expr) => new(StatementType.Assignment, expr, varName); public override string ToString() => Type == StatementType.Expr ? Expression.ToString() : $"{VarName} = {Expression}"; }
 
-    public static Statement AssignmentStatement(string varName, Expr expr) =>
-        new(StatementType.Assignment, expr, varName);
-
-    public override string ToString() => Type == StatementType.Expr
-        ? Expression.ToString()
-        : $"{VarName} = {Expression}";
-}
-
-
-// Represents an infix operator with precedence and associativity
+// ---------------------------- Infix Operator Model ----------------------------
 public enum Associativity : byte { Left, Right }
 public record InfixOperator(string Symbol, int Precedence, Associativity Associativity, string? FunctionName = null)
-{
-    public string GetFunctionName() => FunctionName ?? Symbol;
-}
+{ public string GetFunctionName() => FunctionName ?? Symbol; }
 
+// ---------------------------- Parser (Core) ----------------------------
 public class Parser
 {
+    // Public (legacy) fields referenced by Interpreter
     public readonly Dictionary<string, InfixOperator> _infixOperators = new(StringComparer.Ordinal);
-    // Multi-clause macro support: map name -> list of clauses
     public readonly Dictionary<string, List<MacroDefinition>> _macros = new(StringComparer.Ordinal);
+
+    // Helper components
+    private readonly Tokenizer _tokenizer;
+    private readonly MacroExpander _macroExpander;
 
     public Parser()
     {
-        // Register pipeline operator as right-associative, low precedence
-        DefineInfixOperator("|>", 1, "left");
-        // Register composition operator '.' as right-associative, high precedence
-        DefineInfixOperator(".", 9, "right");
+        DefineInfixOperator("|>", 1, "left"); // pipeline
+        DefineInfixOperator(".", 9, "right"); // composition
+        _tokenizer = new Tokenizer(this);
+        _macroExpander = new MacroExpander(this);
     }
+
     public string DefineInfixOperator(string symbol, int precedence, string associativity)
     {
-        if (string.IsNullOrWhiteSpace(symbol))
-            return "Error: Operator symbol cannot be empty";
-        
-        if (precedence is < 1 or > 10)
-            return "Error: Precedence must be between 1 and 10";
-        
-        if (!Enum.TryParse<Associativity>(associativity, true, out var assoc))
-            return "Error: Associativity must be 'left' or 'right'";
-        
+        if (string.IsNullOrWhiteSpace(symbol)) return "Error: Operator symbol cannot be empty";
+        if (precedence is < 1 or > 10) return "Error: Precedence must be between 1 and 10";
+        if (!Enum.TryParse<Associativity>(associativity, true, out var assoc)) return "Error: Associativity must be 'left' or 'right'";
         _infixOperators[symbol] = new(symbol, precedence, assoc);
         return $"Infix operator '{symbol}' defined with precedence {precedence} and {associativity} associativity";
     }
-
     public bool IsInfixOperator(string symbol) => _infixOperators.ContainsKey(symbol);
     public InfixOperator? GetInfixOperator(string symbol) => _infixOperators.GetValueOrDefault(symbol);
 
-    TokenType MyTokenType(string? term) => term switch
-    {
-        "Y" => TokenType.Y,
-        "let" => TokenType.Let,
-        "in" => TokenType.In,
-        "rec" => TokenType.Rec,
-        ":macro" => TokenType.Macro,
-        _ when term != null && IsInfixOperator(term) => TokenType.InfixOp,
-        _ => TokenType.Term
-    }; 
+    internal TokenType ClassifyTerm(string? term) => term switch
+    { "Y" => TokenType.Y, "let" => TokenType.Let, "in" => TokenType.In, "rec" => TokenType.Rec, ":macro" => TokenType.Macro, _ when term != null && IsInfixOperator(term) => TokenType.InfixOp, _ => TokenType.Term };
 
-    public List<Token> Tokenize(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return [];
+    // Delegated public API ------------------------------------------------------
+    public List<Token> Tokenize(string input) => _tokenizer.Tokenize(input);
 
-        var result = new List<Token>();
-        var currentTerm = new System.Text.StringBuilder();
-        var pos = 0;
-    int expectingLambdaDot = 0; // count of lambda parameter lists awaiting a body '.'
-
-        for (var i = 0; i < input.Length; i++)
-        {
-            var ch = input[i];
-            pos++;
-            // Unary minus / negative integer literal detection
-            if (ch == '-' && i + 1 < input.Length && char.IsDigit(input[i + 1]))
-            {
-                int prevIndex = result.Count - 1;
-                bool isUnary = prevIndex < 0 || result[prevIndex].Type is TokenType.LParen or TokenType.LBracket or TokenType.Comma or TokenType.Semicolon or TokenType.Range or TokenType.FatArrow or TokenType.Arrow or TokenType.Equals;
-                if (isUnary)
-                {
-                    int start = i;
-                    int startPos = pos;
-                    i++; pos++;
-                    while (i < input.Length && char.IsDigit(input[i])) { i++; pos++; }
-                    var num = input[start..i];
-                    result.Add(new Token(TokenType.Integer, startPos, num));
-                    i--; // loop will increment
-                    continue;
-                }
-            }
-            if (ch == '#') break; // Comments
-
-            // Check for arrow operators first
-            var remainingInput = input.AsSpan(i);
-            if (remainingInput.StartsWith("=>"))
-            {
-                if (currentTerm.Length > 0)
-                {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                
-                result.Add(new Token(TokenType.FatArrow, pos));
-                i += 1; // Skip the next character too
-                pos += 1;
-                continue;
-            }
-            if (remainingInput.StartsWith("->"))
-            {
-                if (currentTerm.Length > 0)
-                {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                
-                result.Add(new Token(TokenType.Arrow, pos));
-                i += 1; // Skip the next character too
-                pos += 1;
-                continue;
-            }
-
-            // Handle range operator '..' and ellipsis '...'
-            if (ch == '.' && i + 2 < input.Length && input[i + 1] == '.' && input[i + 2] == '.') {
-                if (currentTerm.Length > 0) {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                result.Add(new Token(TokenType.Ellipsis, pos, "..."));
-                i += 2; pos += 2; continue;
-            }
-            if (ch == '.' && i + 1 < input.Length && input[i + 1] == '.') {
-                if (currentTerm.Length > 0) {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                result.Add(new Token(TokenType.Range, pos, ".."));
-                i++; pos++;
-                continue;
-            }
-
-            // Detect lambda token to expect later '.'
-            if (ch is '\\' or 'λ') {
-                if (currentTerm.Length > 0) {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                result.Add(new Token(TokenType.Lambda, pos));
-                expectingLambdaDot++; // new lambda awaiting its body separator
-                continue;
-            }
-
-            // If this '.' closes a pending lambda parameter list, emit Dot token
-            if (ch == '.' && expectingLambdaDot > 0) {
-                if (currentTerm.Length > 0) {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                result.Add(new Token(TokenType.Dot, pos));
-                expectingLambdaDot--; // one lambda satisfied
-                continue;
-            }
-
-            string? bestMatch = null;
-            if (!char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch))
-            {
-                foreach (var opSymbol in _infixOperators.Keys)
-                {
-                    if (remainingInput.StartsWith(opSymbol) &&
-                        (bestMatch is null || opSymbol.Length > bestMatch.Length))
-                            bestMatch = opSymbol;
-                }
-            }
-
-            if (bestMatch != null)
-            {
-                if (currentTerm.Length > 0)
-                {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                result.Add(new Token(TokenType.InfixOp, pos, bestMatch));
-                i += bestMatch.Length - 1;
-                pos += bestMatch.Length - 1;
-                continue;
-            }
-
-            // Only treat '=' as TokenType.Equals when it is the only character in the token
-            Token? nextToken = ch switch
-            {
-                '(' => new Token(TokenType.LParen, pos),
-                ')' => new Token(TokenType.RParen, pos),
-                '[' => new Token(TokenType.LBracket, pos),
-                ']' => new Token(TokenType.RBracket, pos),
-                ',' => new Token(TokenType.Comma, pos),
-                '$' => new Token(TokenType.Dollar, pos),
-                ';' => new Token(TokenType.Semicolon, pos),
-                '=' when currentTerm.Length == 0 && (i + 1 == input.Length || !input[i + 1].Equals('=')) => new Token(TokenType.Equals, pos),
-                char c when char.IsDigit(c) && currentTerm.Length == 0 => ParseInteger(input, ref i, ref pos),
-                _ => null
-            };
-
-            // If '=' is not the only character, treat it as part of a term (e.g., '==')
-            if (ch == '=' && nextToken is null && !char.IsWhiteSpace(ch))
-            {
-                currentTerm.Append(ch);
-                continue;
-            }
-
-            if (nextToken is null && !char.IsWhiteSpace(ch))
-                currentTerm.Append(ch);
-            else
-            {
-                if (currentTerm.Length > 0)
-                {
-                    var termValue = currentTerm.ToString();
-                    var tokenType = MyTokenType(termValue);
-                    result.Add(new Token(tokenType, pos - currentTerm.Length, termValue));
-                    currentTerm.Clear();
-                }
-                if (nextToken is not null)
-                    result.Add(nextToken);
-            }
-        }
-
-        if (currentTerm.Length > 0)
-        {
-            var termValue = currentTerm.ToString();
-            var tokenType = MyTokenType(termValue);
-            result.Add(new Token(tokenType, pos - currentTerm.Length + 1, termValue));
-        }
-
-        return result;
-    }
-    private Token ParseInteger(string input, ref int i, ref int pos)
-    {
-        var start = i;
-        var startPos = pos;
-        while (i + 1 < input.Length && char.IsDigit(input[i + 1]))
-        {
-            pos++;
-            i++;
-        }
-        return new Token(TokenType.Integer, startPos, input[start..(i + 1)]);
-    }
-    // Backward compatible: returns last statement (or null) from possibly multi-statement input
+    // Backward compatible single statement parse
     public Statement? Parse(string input) => ParseAll(input).LastOrDefault();
-
-    // New: parse zero or more statements separated by top-level ';'
+    // Parse zero or more statements separated by top-level ';'
     public List<Statement> ParseAll(string input)
     {
         var tokens = Tokenize(input);
@@ -314,15 +95,7 @@ public class Parser
 
             // Macro definition
             if (slice[0].Type == TokenType.Macro)
-            {
-                var macro = ParseMacroDefinition(slice);
-                if (!_macros.TryGetValue(macro.Name, out var list)) {
-                    list = [];
-                    _macros[macro.Name] = list;
-                }
-                list.Add(macro);
-                continue;
-            }
+            { _macroExpander.ParseAndStoreMacroDefinition(slice); continue; }
             // Assignment
             if (slice.Count > 2 && slice[0].Type == TokenType.Term && slice[1].Type == TokenType.Equals)
             {
@@ -346,7 +119,7 @@ public class Parser
         }
         return statements;
     }
-    private Expr BuildExpressionTree(List<Token> tokens, int start, int end)
+    internal Expr BuildExpressionTree(List<Token> tokens, int start, int end)
     {
         // Handle arrow functions first (they have lowest precedence)
         if (HasArrowFunction(tokens, start, end))
@@ -1037,520 +810,15 @@ public class Parser
     }
     
     // Macro system methods
-    private MacroDefinition ParseMacroDefinition(List<Token> tokens)
-    {
-        // Expected format: :macro (name pattern...) => transformation
-        if (tokens.Count < 6 || tokens[0].Type != TokenType.Macro)
-            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[0].Position);
-        
-        if (tokens[1].Type != TokenType.LParen)
-            throw new ParseException(TreeErrorType.UnclosedParen, tokens[1].Position);
-        
-        if (tokens[2].Type != TokenType.Term)
-            throw new ParseException(TreeErrorType.MissingLetVariable, tokens[2].Position);
-        
-        var macroName = tokens[2].Value!;
-        var patterns = new List<MacroPattern>();
-        
-        // Parse pattern
-        var i = 3;
-        while (i < tokens.Count && tokens[i].Type != TokenType.RParen)
-        {
-            patterns.Add(ParseMacroPattern(tokens, ref i));
-        }
-        
-        if (i >= tokens.Count || tokens[i].Type != TokenType.RParen)
-            throw new ParseException(TreeErrorType.UnclosedParen, tokens[2].Position);
-        
-        i++; // Skip ')'
-
-        // Validate rest pattern position (if any)
-        var restIndexValidate = patterns.FindIndex(p => p is VariablePattern vp && vp.IsRest);
-        if (restIndexValidate >= 0 && restIndexValidate != patterns.Count - 1)
-            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
-        
-        // Optional guard: 'when' <expr>  (we treat 'when' as a Term literal here)
-        Expr? guard = null;
-        if (i < tokens.Count - 1 && tokens[i].Type == TokenType.Term && tokens[i].Value == "when")
-        {
-            i++; // consume 'when'
-            // Parse guard expression up to FatArrow
-            int guardStart = i;
-            int guardEnd = -1;
-            for (int gi = i; gi < tokens.Count; gi++) {
-                if (tokens[gi].Type == TokenType.FatArrow) { guardEnd = gi - 1; break; }
-            }
-            if (guardEnd < guardStart)
-                throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
-            guard = ParseMacroGuardExpression(tokens, guardStart, guardEnd);
-            i = guardEnd + 1;
-        }
-
-        if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
-            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[Math.Max(i - 1,0)].Position);
-
-        i++; // Skip '=>'
-        
-        // Parse transformation
-    var transformation = BuildExpressionTree(tokens, i, tokens.Count - 1);
-        
-    return new MacroDefinition(macroName, patterns, transformation, guard);
-    }
+    // Macro definition parsing delegated
+    private MacroDefinition ParseMacroDefinition(List<Token> tokens) => _macroExpander.ParseMacroDefinition(tokens);
     
-    private MacroPattern ParseMacroPattern(List<Token> tokens, ref int i)
-    {
-        var token = tokens[i];
-        
-        switch (token.Type)
-        {
-            case TokenType.Dollar:
-                i++; // Skip '$'
-                if (i >= tokens.Count || tokens[i].Type != TokenType.Term)
-                    throw new ParseException(TreeErrorType.MissingLetVariable, token.Position);
-                var varName = tokens[i].Value!;
-                i++; // Skip variable name
-                bool isRest = false;
-                if (i < tokens.Count && tokens[i].Type == TokenType.Ellipsis)
-                {
-                    isRest = true;
-                    i++; // consume ellipsis token
-                }
-                return MacroPattern.Variable(varName, isRest);
-                
-            case TokenType.LParen:
-                var nestedPatterns = new List<MacroPattern>();
-                i++; // Skip '('
-                while (i < tokens.Count && tokens[i].Type != TokenType.RParen)
-                {
-                    var nestedPattern = ParseMacroPattern(tokens, ref i);
-                    nestedPatterns.Add(nestedPattern);
-                }
-                if (i >= tokens.Count || tokens[i].Type != TokenType.RParen)
-                    throw new ParseException(TreeErrorType.UnclosedParen, token.Position);
-                i++; // Skip ')'
-                return MacroPattern.List(nestedPatterns);
-                
-            case TokenType.Term:
-                var value = token.Value!;
-                i++; // Skip term
-                return MacroPattern.Literal(value);
-                
-            default:
-                throw new ParseException(TreeErrorType.IllegalAssignment, token.Position);
-        }
-    }
+    private MacroPattern ParseMacroPattern(List<Token> tokens, ref int i) => _macroExpander.ParseMacroPattern(tokens, ref i);
     
-    public Expr ExpandMacros(Expr expr)
-    {
-        return ExpandMacrosRecursive(expr, new Dictionary<string, Expr>(), 0);
-    }
+    public Expr ExpandMacros(Expr expr) => _macroExpander.ExpandMacros(expr);
     
-    private Expr ExpandMacrosRecursive(Expr expr, Dictionary<string, Expr> bindings, int depth)
-    {
-        if (depth > 100) // Prevent infinite recursion
-            return expr;
-            
-        // Try to match against macro patterns
-            foreach (var entry in _macros)
-            {
-                var originalList = entry.Value; // insertion order
-                var ordered = originalList
-                    .Select((m, idx) => (m, idx))
-                    .OrderByDescending(t => t.m.Pattern.Count)
-                    .ThenByDescending(t => t.idx) // newer (higher idx) first among same arity
-                    .Select(t => t.m);
-                foreach (var macro in ordered)
-                {
-                    var result = TryExpandMacro(expr, macro, depth);
-                    if (result.Success)
-                        return result.ExpandedExpr!;
-                }
-            }
-        
-        // Recursively expand subexpressions
-        return expr.Type switch
-        {
-            ExprType.Abs => Expr.Abs(expr.AbsVarName!, ExpandMacrosRecursive(expr.AbsBody!, bindings, depth)),
-            ExprType.App => Expr.App(
-                ExpandMacrosRecursive(expr.AppLeft!, bindings, depth),
-                ExpandMacrosRecursive(expr.AppRight!, bindings, depth)),
-            _ => expr
-        };
-    }
-    
-    private MacroExpansionResult TryExpandMacro(Expr expr, MacroDefinition macro, int depth)
-    {
-        var bindings = new Dictionary<string, Expr>();
-        
-        // Check if expression matches the macro pattern structure
-        if (!MatchesMacroStructure(expr, macro))
-        {
-            return MacroExpansionResult.Failed("Structure mismatch");
-        }
-        
-        // Try to match the pattern
-        if (TryMatchPattern(expr, macro.Pattern, bindings))
-        {
-            // Guard check if present
-            if (macro.Guard is not null)
-            {
-                var guardEvaluated = SubstituteMacroVariables(macro.Guard, bindings);
-                // Basic normalization: if guard reduces to Var("true") proceed, if Var("false") reject.
-                if (guardEvaluated.Type == ExprType.Var && guardEvaluated.VarName == "false")
-                    return MacroExpansionResult.Failed("Guard failed");
-                // For any other value (including true or complex), proceed (full evaluation would require interpreter).
-            }
-            var expandedTransformation = SubstituteMacroVariables(macro.Transformation, bindings);
-            var result = ExpandMacrosRecursive(expandedTransformation, bindings, depth + 1);
-            return MacroExpansionResult.Successful(result);
-        }
-        
-        return MacroExpansionResult.Failed("Pattern match failed");
-    }
-    
-    private bool MatchesMacroStructure(Expr expr, MacroDefinition macro)
-    {
-        // Check if the expression has the right structure to match this macro
-        
-        // The patterns list contains only argument patterns, not the macro name
-    var expectedArgs = macro.Pattern.Count;
-    bool hasRest = macro.Pattern.Any(p => p is VariablePattern vp && vp.IsRest);
-        
-        if (expectedArgs == 0)
-        {
-            // Simple case: macro with no arguments, just check if expr is the macro name
-            var result = expr.Type == ExprType.Var && expr.VarName == macro.Name;
-            return result;
-        }
-        
-        // For macros with arguments, we need to find the macro name at the base of the application chain
-        var current = expr;
-        var actualArgs = 0;
-        
-        // Count how many applications we have by walking down the left side
-        while (current.Type == ExprType.App)
-        {
-            actualArgs++;
-            current = current.AppLeft!;
-        }
-        
-        // Check if we found the macro name at the base and have the right number of arguments
-    var result2 = current.Type == ExprType.Var && current.VarName == macro.Name && (hasRest ? actualArgs >= expectedArgs - 1 : actualArgs == expectedArgs);
-        return result2;
-    }
-    
-    private bool TryMatchPattern(Expr expr, IList<MacroPattern> patterns, Dictionary<string, Expr> bindings)
-    {
-        if (patterns.Count == 0)
-            return true;
-        
-        // Since the macro name is checked separately in MatchesMacroStructure,
-        // we only need to match the argument patterns here.
-        // For (simple 42) matching macro (simple $x), we have:
-        // - expr = App(Var("simple"), Number(42))
-        // - patterns = [VariablePattern{Name="x"}]
-        
-        var current = expr;
-        var args = new List<Expr>();
-        
-        // Extract ALL arguments from right-to-left application chain (don't stop at pattern count yet, needed for rest)
-        while (current.Type == ExprType.App)
-        {
-            args.Insert(0, current.AppRight!);
-            current = current.AppLeft!;
-        }
-
-        // At this point current should be the macro name already validated earlier.
-
-        // If there is a rest variable, patterns.Count - 1 non-rest patterns + rest captures remainder.
-        int restIndex = -1;
-        for (int pi = 0; pi < patterns.Count; pi++)
-            if (patterns[pi] is VariablePattern vp && vp.IsRest) { restIndex = pi; break; }
-
-        if (restIndex >= 0)
-        {
-            // Need at least restIndex args to match fixed prefix
-            if (args.Count < restIndex) return false;
-            // Match prefix
-            for (int pi = 0; pi < restIndex; pi++)
-                if (!MatchSinglePattern(args[pi], patterns[pi], bindings)) return false;
-            // Capture rest
-            var restVar = (VariablePattern)patterns[restIndex];
-            var restArgs = args.Skip(restIndex).ToList();
-            // Represent captured list as nested cons (or nil)
-            Expr listExpr = Expr.Var("nil");
-            for (int j = restArgs.Count - 1; j >= 0; j--)
-                listExpr = Expr.App(Expr.App(Expr.Var("cons"), restArgs[j]), listExpr);
-            bindings[restVar.Name] = listExpr;
-            return true;
-        }
-        else
-        {
-            if (args.Count != patterns.Count) return false;
-        }
-        
-        // Match each argument against its pattern (no rest)
-        for (int i = 0; i < patterns.Count; i++)
-            if (!MatchSinglePattern(args[i], patterns[i], bindings)) return false;
-        
-        return true;
-    }
-    
-    private bool MatchSinglePattern(Expr expr, MacroPattern pattern, Dictionary<string, Expr> bindings)
-    {
-        return pattern switch
-        {
-            LiteralPattern literal => expr.Type == ExprType.Var && expr.VarName == literal.Value,
-            VariablePattern variable when !variable.IsRest => (bindings[variable.Name] = expr) == expr,
-            ListPattern list => TryMatchPattern(expr, list.Patterns, bindings),
-            _ => false
-        };
-    }
-    
-    private Expr SubstituteMacroVariables(Expr transformation, Dictionary<string, Expr> bindings)
-    {
-        return transformation.Type switch
-        {
-            ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_VAR_") =>
-                // Handle special macro variable placeholders
-                ExtractAndSubstituteMacroVariable(transformation.VarName, bindings) ?? transformation,
-            ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_INT_") =>
-                // Handle special macro integer placeholders - convert to Church numeral now
-                ExtractAndConvertMacroInteger(transformation.VarName),
-            ExprType.Var when transformation.VarName != null && bindings.TryGetValue(transformation.VarName, out var value) => value,
-            ExprType.Abs => SubstituteInLambda(transformation, bindings),
-            ExprType.App => Expr.App(
-                SubstituteMacroVariables(transformation.AppLeft!, bindings),
-                SubstituteMacroVariables(transformation.AppRight!, bindings)),
-            _ => transformation
-        };
-    }
-    
-    private Expr SubstituteInLambda(Expr lambdaExpr, Dictionary<string, Expr> bindings)
-    {
-        // Process lambda parameter name - if it's a macro variable, substitute it
-        var paramName = lambdaExpr.AbsVarName!;
-        if (paramName.StartsWith("__MACRO_VAR_"))
-        {
-            var extractedVar = ExtractAndSubstituteMacroVariable(paramName, bindings);
-            if (extractedVar != null && extractedVar.Type == ExprType.Var && extractedVar.VarName != null)
-            {
-                paramName = extractedVar.VarName;
-            }
-        }
-        return Expr.Abs(paramName, SubstituteMacroVariables(lambdaExpr.AbsBody!, bindings));
-    }
-    
-    private Expr? ExtractAndSubstituteMacroVariable(string macroVarName, Dictionary<string, Expr> bindings)
-    {
-        // Extract variable name from "__MACRO_VAR_variablename" format
-        const string prefix = "__MACRO_VAR_";
-        if (macroVarName.StartsWith(prefix))
-        {
-            var varName = macroVarName.Substring(prefix.Length);
-            if (bindings.TryGetValue(varName, out var value))
-            {
-                return value;
-            }
-        }
-        return null;
-    }
-    
-    private Expr ExtractAndConvertMacroInteger(string macroIntName)
-    {
-        // Extract integer value from "__MACRO_INT_123" format and convert to Church numeral
-        const string prefix = "__MACRO_INT_";
-        if (macroIntName.StartsWith(prefix))
-        {
-            var intStr = macroIntName.Substring(prefix.Length);
-            if (int.TryParse(intStr, out var intValue))
-            {
-                return CreateChurchNumeral(intValue);
-            }
-        }
-        // Fallback - shouldn't happen but return identity if parsing fails
-        return Expr.Var(macroIntName);
-    }
-    
-    public string DefineMacro(string name, IList<MacroPattern> pattern, Expr transformation)
-    {
-        try
-        {
-            var macro = new MacroDefinition(name, pattern, transformation);
-            if (!_macros.TryGetValue(name, out var list)) {
-                list = [];
-                _macros[name] = list;
-            }
-            list.Add(macro);
-            return $"Macro '{name}' defined successfully";
-        }
-        catch (Exception ex)
-        {
-            return $"Error defining macro '{name}': {ex.Message}";
-        }
-    }
-    
-    public string ParseAndDefineMacro(string input)
-    {
-        try
-        {
-            var tokens = Tokenize(input);
-            var macro = ParseMacroDefinitionFromInput(tokens);
-            
-            if (!_macros.TryGetValue(macro.Name, out var list)) {
-                list = [];
-                _macros[macro.Name] = list;
-            }
-            list.Add(macro);
-            return $"Macro '{macro.Name}' defined successfully";
-        }
-        catch (Exception ex)
-        {
-            return $"Error defining macro: {ex.Message}";
-        }
-    }
-    
-    private MacroDefinition ParseMacroDefinitionFromInput(List<Token> tokens)
-    {
-        // Expected format: (name pattern...) => transformation
-        if (tokens.Count < 5)
-            throw new ParseException(TreeErrorType.IllegalAssignment, 0);
-        
-        if (tokens[0].Type != TokenType.LParen)
-            throw new ParseException(TreeErrorType.UnclosedParen, tokens[0].Position);
-        
-        if (tokens[1].Type != TokenType.Term)
-            throw new ParseException(TreeErrorType.MissingLetVariable, tokens[1].Position);
-        
-        var macroName = tokens[1].Value!;
-        var patterns = new List<MacroPattern>();
-        
-        // Parse pattern
-        var i = 2;
-        while (i < tokens.Count && tokens[i].Type != TokenType.RParen)
-        {
-            var pattern = ParseMacroPattern(tokens, ref i);
-            patterns.Add(pattern);
-        }
-        
-        if (i >= tokens.Count || tokens[i].Type != TokenType.RParen)
-            throw new ParseException(TreeErrorType.UnclosedParen, tokens[1].Position);
-        
-        i++; // Skip ')'
-
-        // Validate rest pattern position (if any)
-        var restIndexValidate = patterns.FindIndex(p => p is VariablePattern vp && vp.IsRest);
-        if (restIndexValidate >= 0 && restIndexValidate != patterns.Count - 1)
-            throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
-        
-        // Optional guard: when <expr> before =>
-        Expr? guard = null;
-        if (i < tokens.Count - 1 && tokens[i].Type == TokenType.Term && tokens[i].Value == "when")
-        {
-            i++; // consume 'when'
-            int guardStart = i; int guardEnd = -1;
-            for (int gi = i; gi < tokens.Count; gi++)
-                if (tokens[gi].Type == TokenType.FatArrow) { guardEnd = gi - 1; break; }
-            if (guardEnd < guardStart)
-                throw new ParseException(TreeErrorType.IllegalAssignment, tokens[i - 1].Position);
-            guard = ParseMacroGuardExpression(tokens, guardStart, guardEnd);
-            i = guardEnd + 1;
-        }
-        if (i >= tokens.Count || tokens[i].Type != TokenType.FatArrow)
-            throw new ParseException(TreeErrorType.IllegalAssignment, i < tokens.Count ? tokens[i].Position : tokens[^1].Position);
-        i++; // Skip '=>'
-        
-        // Parse transformation
-    var transformation = ParseMacroTransformation(tokens, i, tokens.Count - 1);
-        
-    return new MacroDefinition(macroName, patterns, transformation, guard);
-    }
-    
-    private Expr ParseMacroTransformation(List<Token> tokens, int startIndex, int endIndex)
-    {
-        // Create a special macro transformation expression that preserves integer literals
-        // We need to build the expression tree manually to avoid converting integers to Church numerals
-        // during macro definition parsing - they should only be converted during macro expansion
-        var processedTokens = new List<Token>();
-        
-        for (int i = startIndex; i <= endIndex; i++)
-        {
-            if (tokens[i].Type == TokenType.Lambda && i + 2 <= endIndex && 
-                tokens[i + 1].Type == TokenType.Dollar && tokens[i + 2].Type == TokenType.Term)
-            {
-                // Handle λ$var pattern - convert to λ__MACRO_VAR_var and look for next dot
-                var varName = tokens[i + 2].Value!;
-                processedTokens.Add(tokens[i]); // Add λ
-                processedTokens.Add(new Token(TokenType.Term, tokens[i + 2].Position, $"__MACRO_VAR_{varName}"));
-                
-                // Check if the next token is a dot that should be a lambda body separator
-                if (i + 3 <= endIndex && tokens[i + 3].Type == TokenType.InfixOp && tokens[i + 3].Value == ".")
-                {
-                    processedTokens.Add(new Token(TokenType.Dot, tokens[i + 3].Position, "."));
-                    i += 3; // Skip $, Term, and InfixOp dot
-                }
-                else
-                {
-                    i += 2; // Skip $ and Term
-                }
-            }
-            else if (tokens[i].Type == TokenType.Dollar && i + 1 <= endIndex && tokens[i + 1].Type == TokenType.Term)
-            {
-                // Handle standalone $var
-                var varName = tokens[i + 1].Value!;
-                processedTokens.Add(new Token(TokenType.Term, tokens[i + 1].Position, $"__MACRO_VAR_{varName}"));
-                i++; // Skip the Term token
-            }
-            else if (tokens[i].Type == TokenType.Integer)
-            {
-                // Keep integer literals as terms in macro transformations to delay Church numeral conversion
-                // They will be converted when the macro is expanded and the expression is built normally
-                processedTokens.Add(new Token(TokenType.Term, tokens[i].Position, $"__MACRO_INT_{tokens[i].Value}"));
-            }
-            else
-            {
-                processedTokens.Add(tokens[i]);
-            }
-        }
-        
-        return BuildExpressionTree(processedTokens, 0, processedTokens.Count - 1);
-    }
-
-    private Expr ParseMacroGuardExpression(List<Token> tokens, int startIndex, int endIndex)
-    {
-        // Similar to transformation parsing: allow $var references inside guard
-        var processed = new List<Token>();
-        for (int i = startIndex; i <= endIndex; i++)
-        {
-            if (tokens[i].Type == TokenType.Dollar && i + 1 <= endIndex && tokens[i + 1].Type == TokenType.Term)
-            {
-                var varName = tokens[i + 1].Value!;
-                processed.Add(new Token(TokenType.Term, tokens[i + 1].Position, $"__MACRO_VAR_{varName}"));
-                i++; // skip name
-            }
-            else if (tokens[i].Type == TokenType.Integer)
-            {
-                processed.Add(new Token(TokenType.Term, tokens[i].Position, $"__MACRO_INT_{tokens[i].Value}"));
-            }
-            else
-            {
-                processed.Add(tokens[i]);
-            }
-        }
-        if (processed.Count == 0)
-            throw new ParseException(TreeErrorType.EmptyExprList, startIndex < tokens.Count ? tokens[startIndex].Position : 0);
-        return BuildExpressionTree(processed, 0, processed.Count - 1);
-    }
-    
-    public List<string> ShowMacros()
-    {
-        if (_macros.Count == 0)
-            return [];
-            
-        var result = new List<string>();
-        foreach (var (name, list) in _macros.OrderBy(p => p.Key))
-            foreach (var macro in list)
-                result.Add($"  {macro}");
-        return result;
-    }
+    // Macro API wrappers
+    public string DefineMacro(string name, IList<MacroPattern> pattern, Expr transformation) => _macroExpander.DefineMacro(name, pattern, transformation);
+    public string ParseAndDefineMacro(string input) => _macroExpander.ParseAndDefineMacro(input);
+    public List<string> ShowMacros() => _macroExpander.ShowMacros();
 }
