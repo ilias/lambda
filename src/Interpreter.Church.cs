@@ -14,6 +14,10 @@ public partial class Interpreter
         return Expr.Abs(f, Expr.Abs(x, body));
     }
 
+    private Expr MakeChurchBoolean(bool value) 
+        => value ? Expr.Abs("f", Expr.Abs("x", Expr.Var("f")))
+                : Expr.Abs("f", Expr.Abs("x", Expr.Var("x")));
+
     // Try to extract a Church numeral as int, resolving variables if needed
     private bool TryGetChurchInt(Expr expr, Dictionary<string, Expr> env, out int value)
     {

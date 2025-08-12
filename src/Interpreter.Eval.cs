@@ -116,9 +116,7 @@ public partial class Interpreter
             var rightVal = EvaluateCEK(args[1], env);
             var equal = leftVal.StructuralEquals(rightVal);
             _nativeArithmetic++; // reuse counter for simplicity
-            return equal
-                ? Expr.Abs("f", Expr.Abs("x", Expr.Var("f")))
-                : Expr.Abs("f", Expr.Abs("x", Expr.Var("x")));
+            return MakeChurchBoolean(equal);
         }
 
         if (args.Count < 1 || args.Count > 2)
@@ -176,9 +174,7 @@ public partial class Interpreter
         if (boolResult is not null)
         {
             _nativeArithmetic++;
-            return boolResult.Value
-                ? Expr.Abs("f", Expr.Abs("x", Expr.Var("f")))
-                : Expr.Abs("f", Expr.Abs("x", Expr.Var("x")));
+            return MakeChurchBoolean(boolResult.Value);
         }
 
         return null; // Not a recognized native arithmetic or boolean operation
