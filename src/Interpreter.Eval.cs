@@ -123,8 +123,8 @@ public partial class Interpreter
                 if (rightVal.Type == ExprType.Thunk) rightVal = Force(rightVal);
                 var normLeft = NormalizeExpression(leftVal);
                 var normRight = NormalizeExpression(rightVal);
-                _logger.Log($"Test: {FormatWithNumerals(normLeft)}");
-                _logger.Log($"With: {FormatWithNumerals(normRight)}");
+                _logger.Log($"Test: {FormatWithNumerals(normLeft)}  # result");
+                _logger.Log($"With: {FormatWithNumerals(normRight)}  # expected");
             }
             _nativeArithmetic++; // reuse counter for simplicity
             return MakeChurchBoolean(equal);
