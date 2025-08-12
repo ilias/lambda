@@ -297,7 +297,17 @@ public partial class Interpreter
         {
             Expr result = expr.Type switch
             {
-                ExprType.Var => expr,
+                ExprType.Var =>
+                    // Attempt to inline top-level combinator / function definitions so that
+                    // normalization can perform beta-reduction across variable references.
+                    // This lets (K 42 99) normalize to 42 instead of remaining as K 42 99
+                    // (previously a Var prevented seeing the underlying λ abstraction).
+                    // Only inline simple Abs bodies to avoid expanding large data accidentally.
+                    (expr.VarName is not null
+                        && _context.TryGetValue(expr.VarName, out var bound)
+                        && bound.Type == ExprType.Abs)
+                        ? bound
+                        : expr,
                 ExprType.Abs => Expr.Abs(expr.AbsVarName!, NormalizeWithVisited(expr.AbsBody!, visited, depth + 1, maxDepth)),
                 ExprType.App => NormalizeApplicationWithVisited(expr, visited, depth, maxDepth),
                 ExprType.Thunk => Force(expr), // Force thunks during normalization

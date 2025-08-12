@@ -49,27 +49,29 @@ public record Expr(
         if (maxDepth <= 0) return "...";
         if (visited.Contains(this)) return "<cycle>";
 
-        // Check for Church numeral formatting if enabled
-        if (prettyPrint && churchNumeralExtractor != null)
-        {
-            var number = churchNumeralExtractor(this);
-            if (number.HasValue)
-                return number.Value.ToString();
-        }
-
-        // List pretty-printing: [a, b, c] (only if formatNumerals is enabled)
+        // Pretty-printing helpers (booleans first to avoid printing false as 0)
         if (prettyPrint)
         {
-            // 0. Church booleans
+            // 0. Church booleans (λa.λb.a / λa.λb.b) BEFORE numeral detection so false isn't rendered as 0
             if (TryExtractBoolean(this, out var boolVal))
                 return boolVal ? "true" : "false";
-            // 1. cons/nil lists
+
+            // 1. Church numerals (λf.λx.f^n x)
+            if (churchNumeralExtractor != null)
+            {
+                var number = churchNumeralExtractor(this);
+                if (number.HasValue)
+                    return number.Value.ToString();
+            }
+
+            // 2. cons/nil lists
             if (Expr.TryExtractListElements(this, out var elements))
             {
                 var elemsStr = string.Join(", ", elements.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor)));
                 return "[" + elemsStr + "]";
             }
-            // 2. Church-encoded lists: λf.λz.f a1 (f a2 (... (f an z)...))
+
+            // 3. Church-encoded lists: λf.λz.f a1 (f a2 (... (f an z)...))
             if (Expr.TryExtractChurchListElements(this, out var chElems, churchNumeralExtractor))
             {
                 var elemsStr = string.Join(", ", chElems.Select(e => e.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor)));
@@ -246,6 +248,60 @@ public record Expr(
             }
         }
         return true;
+    }
+
+    // Alpha-equivalence (captures lambda renaming differences). Free variables must match exactly.
+    public static bool AlphaEquivalent(Expr? left, Expr? right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left is null || right is null) return false;
+        var map = new Dictionary<string, string>();      // left bound var -> right bound var
+        var reverse = new Dictionary<string, string>();  // right bound var -> left bound var
+        return AlphaEq(left, right, map, reverse);
+
+        static bool AlphaEq(Expr a, Expr b, Dictionary<string,string> map, Dictionary<string,string> reverse)
+        {
+            if (a.Type != b.Type) return false;
+            switch (a.Type)
+            {
+                case ExprType.Var:
+                    if (a.VarName is null || b.VarName is null) return a.VarName == b.VarName;
+                    if (map.TryGetValue(a.VarName, out var mapped))
+                        return mapped == b.VarName; // bound variable must map
+                    // a not bound: b must also not be mapped by some other left variable
+                    if (reverse.ContainsKey(b.VarName)) return false; // b already bound to different left var
+                    // free variable: must match exactly
+                    return a.VarName == b.VarName;
+                case ExprType.Abs:
+                    if (a.AbsBody is null || b.AbsBody is null) return a.AbsBody is null && b.AbsBody is null;
+                    var aVar = a.AbsVarName!;
+                    var bVar = b.AbsVarName!;
+                    // shadowing support: record previous mapping (if any)
+                    bool hadA = map.TryGetValue(aVar, out var prevB);
+                    bool hadB = reverse.TryGetValue(bVar, out var prevA);
+                    if (hadA && prevB != bVar) return false; // inconsistent mapping reuse
+                    if (hadB && prevA != aVar) return false; // inconsistent reverse
+                    map[aVar] = bVar;
+                    reverse[bVar] = aVar;
+                    var ok = AlphaEq(a.AbsBody!, b.AbsBody!, map, reverse);
+                    // restore prior state
+                    if (hadA) map[aVar] = prevB!; else map.Remove(aVar);
+                    if (hadB) reverse[bVar] = prevA!; else reverse.Remove(bVar);
+                    return ok;
+                case ExprType.App:
+                    if (a.AppLeft is null || a.AppRight is null || b.AppLeft is null || b.AppRight is null) return false;
+                    return AlphaEq(a.AppLeft, b.AppLeft, map, reverse) && AlphaEq(a.AppRight, b.AppRight, map, reverse);
+                case ExprType.Thunk:
+                    if (a.ThunkValue is null || b.ThunkValue is null) return a.ThunkValue is null && b.ThunkValue is null;
+                    var aExpr = a.ThunkValue.IsForced && a.ThunkValue.ForcedValue is not null ? a.ThunkValue.ForcedValue : a.ThunkValue.Expression;
+                    var bExpr = b.ThunkValue.IsForced && b.ThunkValue.ForcedValue is not null ? b.ThunkValue.ForcedValue : b.ThunkValue.Expression;
+                    return AlphaEq(aExpr, bExpr, map, reverse);
+                case ExprType.YCombinator:
+                    return true;
+                default:
+                    return false;
+            }
+        }
     }
     private static bool AreApplicationsEmpty(Expr left, Expr right) =>
         left.AppLeft is null && left.AppRight is null &&

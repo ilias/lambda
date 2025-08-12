@@ -363,21 +363,21 @@ x -> x + 1 + 2                       # should parse as x -> (x + 1 + 2), not (x 
 
 # --- Infix Composition Operator (.) Tests ---
 inc = x -> x + 1
-double = x -> x * 2
+double2 = x -> x * 2   # renamed from 'double' to avoid collision with native arithmetic name 'double'
 square = x -> x * x
-inc . double . 3           # expect 7   (inc (double 3) = 1 + (2*3) = 7)
-double . inc . 3           # expect 8   (double (inc 3) = 2*(3+1) = 8)
-square . inc . 4           # expect 25  (square (inc 4) = (4+1)^2 = 25)
-inc . double . square . 2  # expect 9   (inc (double (square 2)) = inc (double 4) = inc 8 = 9)
-double . inc . square . 2  # expect 10  (double (inc (square 2)) = double (inc 4) = double 5 = 10)
-inc . double . 3 |> square # expect 49  (square (inc (double 3)) = square 7 = 49)
+inc . double2 . 3           # expect 7   (inc (double2 3) = 1 + (2*3) = 7)
+double2 . inc . 3           # expect 8   (double2 (inc 3) = 2*(3+1) = 8)
+square . inc . 4            # expect 25  (square (inc 4) = (4+1)^2 = 25)
+inc . double2 . square . 2  # expect 9   (inc (double2 (square 2)) = inc (double2 4) = inc 8 = 9)
+double2 . inc . square . 2  # expect 10  (double2 (inc (square 2)) = double2 (inc 4) = double2 5 = 10)
+inc . double2 . 3 |> square # expect 49  (square (inc (double2 3)) = square 7 = 49)
 
 
 # --- Advanced Multi-Feature Tests ---
 foldr plus 0 (filter (λx.gt x 2) \
                      (map (λx.mult x x) (range 5)))           # expect 29 (sum of squares > 2)
-let double = x -> x * 2 in \
-    (map double [1,2,3,4]) |> (filter (x -> x > 4))           # expect [6,8]
+let double2 = x -> x * 2 in \
+    (map double2 [1,2,3,4]) |> (filter (x -> x > 4))           # expect [6,8]
 let rec sumEvens = \xs. \
     if (isnil xs) 0 \
        (if (even (head xs)) \
@@ -434,9 +434,9 @@ let h = \_ y . y in h 0 9    # expect 9
 (letbind z 3 (exp 2 z))                                 # expect 8
 
 # Simple replacement macro
-:macro (double $x) => (plus $x $x)
-(double 7)                                              # expect 14
-(double (succ 4))                                       # expect 10
+:macro (dup $x) => (plus $x $x)   # renamed from (double $x)
+(dup 7)                                                 # expect 14
+(dup (succ 4))                                          # expect 10
 
 # Macro with multiple parameters
 :macro (triple $x) => (plus $x (plus $x $x))
@@ -516,7 +516,7 @@ iff true  then 42 else 9                               # expect 42
 
 # Function composition macro
 :macro (compose2 $f $g $x) => ($f ($g $x))
-(compose2 succ double 5)                               # expect 11 (succ (double 5) = succ 10)
+(compose2 succ dup 5)                                  # expect 11 (succ (dup 5) = succ 10)
 
 # Advanced letbind variations
 :macro (let2 $var $val $expr) => ((λ$var.$expr) $val)

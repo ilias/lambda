@@ -57,8 +57,9 @@ public class Logger
         string s when s.StartsWith("Time:") => BLUE,    // Timing info
         string s when s.StartsWith("Name:") => BLUE,    // Final result details
         string s when s.StartsWith("Eval:") => MAGENTA, // Evaluation expression
-        string s when s.StartsWith("Test:") => RED,     // Test expression
-        string s when s.StartsWith("With:") => RED,     // expected test result
+        string s when s.StartsWith("Test: good:") => GREEN,     // Test expression
+        string s when s.StartsWith("Test: expected:") => RED,     // Test expression
+        string s when s.StartsWith("Test: result:") => RED,     // expected test result
         string s when s.Contains("Loading") => CYAN,    // Loading files
         string s when s.Contains("<<") => GRAY,         // Reading file lines
         string s when s.Contains(">>") => GREEN,        // Result of reading file lines

@@ -114,19 +114,33 @@ public partial class Interpreter
             if (args.Count != 2) return null; // need two arguments
             var leftVal = EvaluateCEK(args[0], env);
             var rightVal = EvaluateCEK(args[1], env);
-            // Compute equality first (before optional pretty logging)
-            var equal = leftVal.StructuralEquals(rightVal);
-            // Only log details if pretty printing enabled AND comparison failed
-            if (_prettyPrint && !equal)
-            {
-                if (leftVal.Type == ExprType.Thunk) leftVal = Force(leftVal);
-                if (rightVal.Type == ExprType.Thunk) rightVal = Force(rightVal);
-                var normLeft = NormalizeExpression(leftVal);
-                var normRight = NormalizeExpression(rightVal);
-                _logger.Log($"Test: {FormatWithNumerals(normLeft)}  # result");
-                _logger.Log($"With: {FormatWithNumerals(normRight)}  # expected");
-            }
-            _nativeArithmetic++; // reuse counter for simplicity
+
+            // Force thunks (lightweight) before normalization to avoid comparing wrapper thunks
+            if (leftVal.Type == ExprType.Thunk) leftVal = Force(leftVal);
+            if (rightVal.Type == ExprType.Thunk) rightVal = Force(rightVal);
+
+            // Normalize both sides (beta-reduce) for a more canonical structural shape
+            var normLeft = NormalizeExpression(leftVal);
+            var normRight = NormalizeExpression(rightVal);
+
+            // Alpha-equivalence on normalized forms
+            var equal = Expr.AlphaEquivalent(normLeft, normRight);
+
+            // If still different, optionally fall back to raw structural for diagnostic nuance
+            if (!equal && Expr.AlphaEquivalent(leftVal, rightVal))
+                equal = true; // normalization introduced incidental difference
+
+                if (_prettyPrint)
+                {
+                    if (equal)
+                        _logger.Log($"Test: good: {FormatWithNumerals(normRight)}");
+                    else
+                    {
+                        _logger.Log($"Test: result:   {FormatWithNumerals(normLeft)}");
+                        _logger.Log($"Test: expected: {FormatWithNumerals(normRight)}");
+                    }
+                }
+            _nativeArithmetic++;
             return MakeChurchBoolean(equal);
         }
 
@@ -152,7 +166,7 @@ public partial class Interpreter
 
             ("succ" or "++", 1, _) => a + 1,
             ("pred" or "--", 1, _) => Math.Max(0, a - 1),
-            ("square" or "dbl" or "double", 1, _) => a * a,
+            ("square", 1, _) => a * a,
             ("half", 1, _) => a / 2,
             ("sqrt", 1, _) => (int)Math.Sqrt(a),
             ("random", 1, _) => (_usedRandom = true, new Random().Next(0, a + 1)).Item2, // Random number in range [0, a]
