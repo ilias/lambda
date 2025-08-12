@@ -435,3 +435,159 @@ isStructEqual ((quadratic 2 3 1 4)) 45
 :macro (fact2 $n) => (if (iszero $n) 1 (mult $n (fact2 (pred $n))))  # not structurally testable (recursive macro) left as definition
 
 # Additional macro capability tests already at end of original file (kept as-is or identity comparisons)
+
+# ============================================================================
+# Extended Coverage: Advanced Macro / Variadic / Guards / Ordering / Lazy / Church Lists
+# ============================================================================
+
+# --- Advanced Macro System (Arity & Ordering) ---
+:macro (arityDemo) => 0
+:macro (arityDemo $a) => 1
+:macro (arityDemo $a $b) => 2
+isStructEqual (arityDemo) 0
+isStructEqual (arityDemo 42) 1
+isStructEqual (arityDemo 7 8) 2
+
+# --- Variadic Macros ---
+:macro (listify $xs...) => $xs
+isStructEqual (listify) nil
+isStructEqual (listify 1) [1]
+isStructEqual (listify 1 2 3) [1,2,3]
+
+# Variadic with fixed prefix
+:macro (sumall $x $rest...) => (foldl plus $x $rest)
+isStructEqual (sumall 5) 5
+isStructEqual (sumall 1 2 3 4) 10
+
+# --- Guarded Macros & Recency ---
+:macro (choose $x) when false => 0
+:macro (choose $x) => $x
+isStructEqual (choose 9) 9
+
+:macro (choose2 $x) => $x
+:macro (choose2 $x) when true => 42
+isStructEqual (choose2 7) 42
+
+# Guard depending on variable (literal false only fails)
+:macro (guardVar $flag $x) => 0
+:macro (guardVar $flag $x) when $flag => $x
+isStructEqual (guardVar true 7) 7
+isStructEqual (guardVar false 7) 0
+
+# Higher arity precedence
+:macro (pref $x $y) => (mult $x $y)
+:macro (pref $x) => (succ $x)
+isStructEqual (pref 3 4) 12
+isStructEqual (pref 5) 6
+
+# Recency (shadowing)
+:macro (shadow $x) => (plus $x 1)
+:macro (shadow $x) => (plus $x 2)
+isStructEqual (shadow 3) 5
+
+# Exact match vs rest capture precedence
+:macro (mix $a $b) => (plus $a $b)
+:macro (mix $a $rest...) => (foldl plus $a $rest)
+isStructEqual (mix 2 3) 5
+isStructEqual (mix 2 3 4 5) 14
+
+# --- Pair Equality Helper (uses stdlib pairEq) ---
+isStructEqual (pairEq eq eq (pair 1 2) (pair 1 2)) true
+
+# --- Church List Round Trip ---
+# Build a Church-encoded list and fold it with cons/nil to a concrete list
+isStructEqual (((λf.λz.f 1 (f 2 (f 3 z))) (λh.λt.cons h t)) nil) [1,2,3]
+
+# --- Lazy Evaluation (ensure unused branch not evaluated) ---
+# Ω (diverges if forced) = (λx.x x) (λx.x x); use built inline
+isStructEqual (if true 1 ((λx.x x) (λx.x x))) 1
+
+# --- Variadic / Utility Macro Extensions ---
+:macro (duplicate $x) => (pair $x $x)
+isStructEqual (duplicate 7) (pair 7 7)
+
+# Complex nested macro example for process style (inc (square (dec x)))
+:macro (dec2 $x) => (pred $x)
+:macro (process2 $x) => (inc (square (dec2 $x)))
+isStructEqual (process2 5) 17
+
+# Macro composition ordering (outer/inner)
+:macro (outer $x) => (inner (plus $x 1))
+:macro (inner $y) => (mult $y 2)
+isStructEqual (outer 4) 10
+
+# Apply twice (higher-order macro)
+:macro (apply_twice $f $x) => ($f ($f $x))
+isStructEqual (apply_twice succ 0) 2
+isStructEqual (apply_twice (λx.mult x 2) 3) 12
+
+# Composition macro reuse with new 'dup' macro already defined earlier
+:macro (compose2b $f $g $x) => ($f ($g $x))
+isStructEqual (compose2b succ dup 5) 11
+
+# Final complex macro calculation (mirrors complex_calc)
+:macro (complex_calc $a $b $c) => (letbind x (plus $a $b) (letbind y (mult x $c) (square y)))
+isStructEqual (complex_calc 2 3 4) 400
+
+# Note: Eta-equivalence not tested (λx.f x vs f) – current equality is alpha only.
+
+# ============================================================================
+# Essential Additional Core Law Tests
+# ============================================================================
+
+# Alpha-equivalence (binder renaming) & capture avoidance
+isStructEqual (λx.λy.x) (λa.λb.a)
+isStructEqual ((λx.λy.x) 1) (λz.1)
+isStructEqual (λx.λx.λx.x) (λa.λb.λc.c)
+
+# Combinator Laws
+isStructEqual ((S K K) 5) 5
+isStructEqual ((S K I) 7) 7
+
+# Arithmetic Identity Laws
+isStructEqual (plus 7 0) 7
+isStructEqual (plus 0 9) 9
+isStructEqual (mult 9 1) 9
+isStructEqual (mult 9 0) 0
+isStructEqual (minus 5 0) 5
+
+# List Functor Identity
+isStructEqual (map I [1,2,3]) [1,2,3]
+
+# Lazy Evaluation (false branch)
+isStructEqual (if false ((λx.x x) (λx.x x)) 2) 2
+
+# Nested Pair Equality using pairEq
+# isStructEqual (pairEq eq eq (pair (pair 1 2) (pair 3 4)) (pair (pair 1 2) (pair 3 4))) true
+
+# ============================================================================
+# Additional Positive Law / Property Tests (no negatives)
+# ============================================================================
+
+# Maybe Functor Laws
+isStructEqual (maybeMap I (just 5)) (just 5)                     # identity
+isStructEqual (maybeMap (λx.mult x x) (maybeMap succ (just 3))) (just 16)   # composition exemplar
+
+# Either usage (Right-biased behavior already covered)
+isStructEqual (either succ succ (left 5)) 6
+isStructEqual (either succ succ (right 5)) 6
+
+# Append associativity
+isStructEqual (append (append [1] [2]) [3]) (append [1] (append [2] [3]))
+
+# Reverse distributes over append: reverse (xs ++ ys) = reverse ys ++ reverse xs
+isStructEqual (reverse (append [1,2] [3,4,5])) (append (reverse [3,4,5]) (reverse [1,2]))
+
+# Map length invariant
+isStructEqual (length (map succ [1,2,3,4])) (length [1,2,3,4])
+
+# Sum via fold equivalence
+isStructEqual (sum [1,2,3,4]) (foldl plus 0 [1,2,3,4])
+
+# Maybe bind laws (using bind defined above)
+isStructEqual (bind (just 5) (λx.just (plus x 1))) (just 6)      # left identity exemplar
+isStructEqual (bind (just 7) just) (just 7)                     # right identity exemplar
+
+# Tree: size equals length of inorder traversal
+isStructEqual (treeSize (node 1 (leaf 2) (leaf 3))) (length (inOrder (node 1 (leaf 2) (leaf 3))))
+

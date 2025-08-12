@@ -133,7 +133,7 @@ public partial class Interpreter
                 if (_prettyPrint)
                 {
                     if (equal)
-                        _logger.Log($"Test: good: {FormatWithNumerals(normRight)}");
+                        _logger.Log($"Test: return:   {FormatWithNumerals(normRight)}");
                     else
                     {
                         _logger.Log($"Test: result:   {FormatWithNumerals(normLeft)}");

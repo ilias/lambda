@@ -51,19 +51,19 @@ public class Logger
     private static string GetMessageColor(string message) => message switch
     {
         string s when s.StartsWith("Error:") => RED,
-        string s when s.StartsWith("#") => YELLOW,      // Comments
-        string s when s.StartsWith("->") => GREEN,      // Results/Assignments
-        string s when s.StartsWith("Step") => YELLOW,   // Evaluation steps
-        string s when s.StartsWith("Time:") => BLUE,    // Timing info
-        string s when s.StartsWith("Name:") => BLUE,    // Final result details
-        string s when s.StartsWith("Eval:") => MAGENTA, // Evaluation expression
-        string s when s.StartsWith("Test: good:") => GREEN,     // Test expression
-        string s when s.StartsWith("Test: expected:") => RED,     // Test expression
-        string s when s.StartsWith("Test: result:") => RED,     // expected test result
-        string s when s.Contains("Loading") => CYAN,    // Loading files
-        string s when s.Contains("<<") => GRAY,         // Reading file lines
-        string s when s.Contains(">>") => GREEN,        // Result of reading file lines
-        _ => RESET                                      // Default
+        string s when s.StartsWith("#") => YELLOW,            // Comments
+        string s when s.StartsWith("->") => GREEN,            // Results/Assignments
+        string s when s.StartsWith("Step") => YELLOW,         // Evaluation steps
+        string s when s.StartsWith("Time:") => BLUE,          // Timing info
+        string s when s.StartsWith("Name:") => BLUE,          // Final result details
+        string s when s.StartsWith("Eval:") => MAGENTA,       // Evaluation expression
+        string s when s.StartsWith("Test: return:") => GREEN, // Test expression
+        string s when s.StartsWith("Test: expected:") => RED, // Test expression
+        string s when s.StartsWith("Test: result:") => RED,   // expected test result
+        string s when s.Contains("Loading") => CYAN,          // Loading files
+        string s when s.Contains("<<") => GRAY,               // Reading file lines
+        string s when s.Contains(">>") => GREEN,              // Result of reading file lines
+        _ => RESET                                            // Default
     };
 
     public static void LogToConsole(string message) =>
