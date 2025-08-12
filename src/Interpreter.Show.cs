@@ -6,7 +6,7 @@ public partial class Interpreter
     private string ShowNativeFunctions()
     {
         return """
-                Supported native arithmetic functions/operators (for Church numerals):
+                Supported native arithmetic functions/operators (for Church numerals) and structural helpers:
 
                 Binary (two arguments):
                     plus, +         : addition
@@ -36,9 +36,13 @@ public partial class Interpreter
                     even            : returns true if n is even
                     odd             : returns true if n is odd
 
+                Structural:
+                    isStructEqual   : structural (alpha-sensitive) equality over raw ASTs (forced thunks compare forced bodies)
+
                 Notes:
                     - Boolean results are Church booleans (true = λf.λx.f, false = λf.λx.x)
                     - All arguments must be Church numerals (integers)
+                    - isStructEqual works regardless of numeric status; counts toward native call stats
                     - These functions are only available when native arithmetic is enabled (:native on)
                 """;
     }

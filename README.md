@@ -1134,7 +1134,33 @@ plus, minus, mult, div, mod        # Basic arithmetic
 succ, pred, iszero                 # Successor/predecessor
 lt, leq, eq, geq, gt, neq          # Comparisons
 max, min, sqrt, random             # Additional functions
+isStructEqual                      # Structural (syntactic) equality (non-alpha) for ANY two expressions
 ```
+
+#### Structural Equality (isStructEqual)
+
+`isStructEqual` is a native helper that compares two arbitrary expressions for exact structural equality and returns a Church boolean (`true` or `false`). It is available only when native optimizations are enabled (`:native on`) and counts toward the native call statistics shown in `:stats`.
+
+Characteristics:
+
+- Works on any expressions (not limited to numerals) including lambdas, applications, lists, thunks, and expressions involving the Y combinator.
+- Thunks: If both sides are thunks and both are forced, their forced values are compared; if both are unforced, their underlying expressions are compared; differing force state yields `false`.
+- Variable binder names matter (alpha-sensitive). For example: `isStructEqual (λx.x) (λy.y)` returns `false` because the internal binder symbols differ. This keeps the check fast and purely syntactic.
+- Does NOT normalize or reduce expressions prior to comparison— it compares the raw AST shape (after each side is evaluated once to head normal form for argument extraction inside the native dispatcher).
+- Safe for cyclic / recursive structures represented via the Y combinator: it traverses the explicit syntax graph; it will terminate unless you construct infinitely expanding terms during evaluation.
+
+Usage examples:
+
+```lambda
+isStructEqual (pair 1 (cons 2 nil)) (pair 1 (cons 2 nil))      # true
+isStructEqual [1,2,3] (cons 1 (cons 2 (cons 3 nil)))           # true
+isStructEqual (λx.plus x 1) (λx.plus x 1)                      # true
+isStructEqual (λx.plus x 1) (λy.plus y 1)                      # false (binder name differs)
+isStructEqual [1,2,3] (λf.λz.f 1 (f 2 (f 3 z)))                # false (different list encoding)
+```
+
+When you need semantic or alpha-equivalent comparison (ignoring bound variable names) or deep normalization-based equality, prefer building a higher-level combinator (e.g. convert both sides to a De Bruijn index form, or normalize before comparing) rather than extending `isStructEqual`.
+
 
 ### Caching and Memoization
 

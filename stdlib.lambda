@@ -36,6 +36,9 @@
 #   C minus 3 10  # Returns minus 10 3 = 7 (flipped arguments)
 # -----------------------------------------------------------------------------
 id       = λx.x
+# Secondary identity & constant aliases used in tests
+id2      = id
+const2   = K
 K        = λx y.x
 I        = λx.x
 S        = λx y z.x z (y z)
@@ -73,6 +76,7 @@ C        = λx y z.x z y
 true     = λx y.x
 false    = λx y.y
 if       = λp a b.p a b
+cond     = if
 not      = λp.p false true
 and      = λp q.p q false
 or       = λp q.p true q
@@ -82,7 +86,7 @@ eqBool   = λx y.x y (not y)
 # Conditional application utilities
 when     = λp f x.if p (f x) x              # Apply function conditionally
 unless   = λp f x.if p x (f x)              # Apply function unless condition
-# cond     = λp t e.if p t e                  # Alias for if, commented out for redundancy
+# cond     = λp t e.if p t e                  # (Now provided earlier as alias)
 
 
 # =============================================================================
@@ -131,6 +135,7 @@ plus     = λm n f x.m f (n f x)
 minus    = λm n.n pred m
 mult     = λm n f.m (n f)
 exp      = Y (λf. λb n. if (iszero n) 1 (mult b (f b (pred n))))
+pow      = exp
 iszero   = λn.n (λx.false) true
 
 # -----------------------------------------------------------------------------
@@ -468,7 +473,6 @@ primes     = λn.filter isPrime (enumFromTo 2 n)
 repeat     = λn x.n (λacc.cons x acc) nil
 iota       = range # Alias for range
 replicate  = λn x.n (λacc.cons x acc) nil
-iota       = range # Alias for range
 
 # -----------------------------------------------------------------------------
 # 3.5. Lists - Element Access and Querying
@@ -511,7 +515,6 @@ elem     = λx l.any (eq x) l
 notElem  = λx l.not (elem x l)
 any      = λp l.foldr (λx acc.or (p x) acc) false l
 all      = λp l.foldr (λx acc.and (p x) acc) true l
-find     = λp l.foldr (λx acc.if (and (p x) (isnil acc)) x acc) nil l
 find     = λp l.foldl (λacc x.if (and (isnil acc) (p x)) x acc) nil l
 sum      = λl.foldr plus zero l
 product  = λl.foldr mult 1 l
@@ -712,7 +715,9 @@ curry    = λf x y.f (pair x y)
 uncurry  = λf p.f (first p) (second p)
 partial  = λf x.λy.f x y
 partial2 = λf x y.λz.f x y z
-partial2 = λf x y.λz.f x y z
+# 3-arity curry helpers used in tests
+curry3   = λf x y z.f (pair x (pair y z))
+uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
 
 # -----------------------------------------------------------------------------
 # 4.3. Additional Combinators
@@ -1277,6 +1282,36 @@ force     = λthunk.thunk I
 
 
 # =============================================================================
+# 8.3. STRUCTURAL EQUALITY HELPERS
+#
+# Primitive eq only handles numerals (using order). For composite structures
+# we supply parametric structural equality combinators. They take an element
+# equality (or two, for Either) so callers choose how to compare leaves.
+# We intentionally do NOT redefine eq globally to avoid ambiguity between
+# 0 / nil / nothing, which all share the same Church encoding here.
+#
+# listEq   eqE l1 l2    : deep equality on lists
+# pairEq   eqA eqB p q  : product equality
+# maybeEq  eqA m1 m2    : optional equality
+# eitherEq eqL eqR e1 e2: sum equality
+#
+# Example convenience macros (added later) will allow: test-list, test-pair…
+#
+# NOTE: For nested structures use partial application: (listEq (listEq eq) a b)
+# =============================================================================
+listEq   = Y (λself.λeqE.λl1.λl2.
+                                if (and (isnil l1) (isnil l2)) true (
+                                    if (or (isnil l1) (isnil l2)) false (
+                                        and (eqE (head l1) (head l2)) (self eqE (tail l1) (tail l2)))))
+pairEq   = λeqA.λeqB.λp1.λp2.and (eqA (first p1) (first p2)) (eqB (second p1) (second p2))
+maybeEq  = λeqA.λm1.λm2.if (and (isNothing m1) (isNothing m2)) true (
+                                            if (or (isNothing m1) (isNothing m2)) false (
+                                                eqA (fromJust m1) (fromJust m2)))
+eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft e1) (fromLeft e2)) (
+                                                    if (and (isRight e1) (isRight e2)) (eqR (fromRight e1) (fromRight e2)) false)
+
+
+# =============================================================================
 # SECTION 9: MACRO SYSTEM
 #
 # This section defines a set of macros to provide syntactic sugar and simplify
@@ -1480,6 +1515,21 @@ force     = λthunk.thunk I
 :macro (assert $condition $value) => (if $condition $value error)
 :macro (test $expr $expected) => (eq $expr $expected)
 
+# Structural test macros (list, pair, maybe, either)
+# These dispatch to the structural equality helpers with numeric element eq.
+# For custom element equality supply your own macro or call helpers directly.
+## NOTE: Hyphens in macro names can clash with minus parsing; prefer camelCase.
+:macro (testList $a $b) => (listEq eq $a $b)
+:macro (testPair $a $b) => (pairEq eq eq $a $b)
+:macro (testMaybe $a $b) => (maybeEq eq $a $b)
+:macro (testEither $a $b) => (eitherEq eq eq $a $b)
+
+# Variants allowing custom element equality (supply eq function first)
+:macro (testListBy $eqE $a $b) => (listEq $eqE $a $b)
+:macro (testPairBy $eqA $eqB $a $b) => (pairEq $eqA $eqB $a $b)
+:macro (testMaybeBy $eqA $a $b) => (maybeEq $eqA $a $b)
+:macro (testEitherBy $eqL $eqR $a $b) => (eitherEq $eqL $eqR $a $b)
+
 
 # =============================================================================
 # SECTION 10: INFIX OPERATORS
@@ -1633,7 +1683,7 @@ force     = λthunk.thunk I
 # fibonacci = fib
 # contains = elem
 # indexOf  = elemIndex
-# clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
+clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
 # bounded  = clamp
 # inrange  = between
 # pow2     = λn.exp 2 n

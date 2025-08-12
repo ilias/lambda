@@ -703,3 +703,18 @@ mix 2 3                                             # expect 5          (exact 2
 mix 2 3 4 5                                         # expect 14         (rest clause: 2+3+4+5)
 
 
+# ---------------------------------------------------------------------------
+# Alias & new definition validation (using test macro for automated checking)
+# ---------------------------------------------------------------------------
+test (cond true 1 2) 1
+test (cond false 1 2) 2
+test (id2 42) 42
+test (const2 9 10) 9
+test (pow 2 5) 32
+test (clamp 2 4 1) 2
+test (clamp 2 4 3) 3
+test (clamp 2 4 5) 4
+test (curry3 (λt.plus (first t) (plus (first (second t)) (second (second t)))) 1 2 3) 6
+test (uncurry3 (λx y z.plus x (plus y z)) (pair 1 (pair 2 3))) 6
+
+

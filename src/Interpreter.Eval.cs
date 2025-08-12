@@ -106,6 +106,21 @@ public partial class Interpreter
         if (cur is not { Type: ExprType.Var, VarName: var opName })
             return null;
 
+        // Native structural equality (works for any two expressions)
+        // Pattern: (isStructEqual a b) -> Church true/false based on structural graph equality
+        // We evaluate both operands fully (respecting current lazy/native settings) to compare
+        if (opName == "isStructEqual")
+        {
+            if (args.Count != 2) return null; // need two arguments
+            var leftVal = EvaluateCEK(args[0], env);
+            var rightVal = EvaluateCEK(args[1], env);
+            var equal = leftVal.StructuralEquals(rightVal);
+            _nativeArithmetic++; // reuse counter for simplicity
+            return equal
+                ? Expr.Abs("f", Expr.Abs("x", Expr.Var("f")))
+                : Expr.Abs("f", Expr.Abs("x", Expr.Var("x")));
+        }
+
         if (args.Count < 1 || args.Count > 2)
             return null; // Only support unary or binary operations
 
