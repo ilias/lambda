@@ -71,27 +71,27 @@ double_then_increment 5
 
 The untyped lambda calculus has only three constructs:
 
-```text
-Expression E ::= x          (variable)
-               | λx.E       (abstraction/function definition)
-               | E₁ E₂      (application/function call)
+id 42
 ```
 
-### 2.2 Precedence and Associativity
+---
 
-1. **Application is left-associative**: `f g h` means `(f g) h`
-2. **Abstraction extends to the right**: `λx.λy.x y` means `λx.(λy.(x y))`
-3. **Application has higher precedence than abstraction**
+### Implementation Notes (Interpreter-Specific Semantics)
 
-### 2.3 Free and Bound Variables
+While this document focuses on pure lambda calculus theory, the accompanying interpreter implements pragmatic enhancements and deliberate constraints:
 
-A variable is **free** if it's not bound by any λ, **bound** if it's captured by a λ.
+1. Evaluation Engine: A lazy CEK-style machine with thunk caching. Arguments are wrapped in thunks and only forced when the head position requires a value (e.g., to discriminate a Church boolean or list constructor). An optional eager mode (`:lazy off`) forces arguments immediately.
+2. Normalization: Internal normalization (used by structural equality and some diagnostics) performs bounded beta-reduction plus inlining of top-level named lambda bindings. This allows combinators like `(S K K)` to reduce without requiring explicit user expansion while guarding against infinite unfolding (depth & visited-set limits).
+3. Equality Semantics: The native `isStructEqual` now compares expressions after normalization using alpha-equivalence (binder names ignored). Eta-equivalence is NOT applied: `λx.f x` and `f` are considered distinct unless they normalize to an identical structure through other reductions.
+4. Alpha-Conversion & Capture Avoidance: Substitution routines generate fresh binders as needed to prevent capture. This ensures user macros and recursive definitions remain hygienic at the operational level, even though the macro system itself is not fully hygienic (see below).
+5. Macro System: Multi-clause pattern macros support guards and a single trailing variadic (rest) capture. Clause selection orders by (a) greater arity specificity, then (b) most recent definition (shadowing). Macro expansion occurs pre-evaluation; expanded expressions participate in standard lazy evaluation.
+6. Variadic / Rest Arguments: A rest pattern `$xs ...` in a macro pattern collects zero or more trailing arguments into a Church list which can be consumed by ordinary list folds or maps inside the expansion.
+7. Guards: A clause guard `when (predicate)` is evaluated under the current evaluation mode; only a Church `false` rejects the clause (any other normalized value counts as true).
+8. Pretty Printing: The printer recognizes Church numerals, Church booleans, cons/nil lists, and Church-fold-encoded lists, with booleans detected prior to numeral recognition to disambiguate `false` vs `0` structural overlap.
+9. Performance Protections: Iteration counters and normalization depth limits abort runaway expansion; large or divergent expressions compared with `isStructEqual` may conservatively return `false` rather than hanging.
+10. Extensibility: Adding eta-equivalence, hygienic macros (gensym), or richer pattern forms (nested rests) would require extending the normalization phase or macro matcher, but current design isolates these concerns cleanly in the evaluator and macro dispatcher modules.
 
-#### Mathematical Definition
-
-```text
-FV(x) = {x}                    (free variables in variable)
-FV(λx.M) = FV(M) \ {x}         (free variables in abstraction)  
+These interpreter-specific behaviors ensure practical usability (testing, performance measurement, macro ergonomics) while remaining faithful to lambda calculus core semantics.
 FV(M N) = FV(M) ∪ FV(N)        (free variables in application)
 ```
 
@@ -167,7 +167,25 @@ id4 = λvariable.variable
 # Test they behave identically:
 id1 42
 id2 42
-id3 42
+   ```    
+   ---
+    
+   ### Implementation Notes (Interpreter-Specific Semantics)
+    
+   While this document focuses on pure lambda calculus theory, the accompanying interpreter implements pragmatic enhancements and deliberate constraints:
+    
+   1. Evaluation Engine: A lazy CEK-style machine with thunk caching. Arguments are wrapped in thunks and only forced when the head position requires a value (e.g., to discriminate a Church boolean or list constructor). An optional eager mode (`:lazy off`) forces arguments immediately.
+   2. Normalization: Internal normalization (used by structural equality and some diagnostics) performs bounded beta-reduction plus inlining of top-level named lambda bindings. This allows combinators like `(S K K)` to reduce without requiring explicit user expansion while guarding against infinite unfolding (depth & visited-set limits).
+   3. Equality Semantics: The native `isStructEqual` now compares expressions after normalization using alpha-equivalence (binder names ignored). Eta-equivalence is NOT applied: `λx.f x` and `f` are considered distinct unless they normalize to an identical structure through other reductions.
+   4. Alpha-Conversion & Capture Avoidance: Substitution routines generate fresh binders as needed to prevent capture. This ensures user macros and recursive definitions remain hygienic at the operational level, even though the macro system itself is not fully hygienic (see below).
+   5. Macro System: Multi-clause pattern macros support guards and a single trailing variadic (rest) capture. Clause selection orders by (a) greater arity specificity, then (b) most recent definition (shadowing). Macro expansion occurs pre-evaluation; expanded expressions participate in standard lazy evaluation.
+   6. Variadic / Rest Arguments: A rest pattern `$xs ...` in a macro pattern collects zero or more trailing arguments into a Church list which can be consumed by ordinary list folds or maps inside the expansion.
+   7. Guards: A clause guard `when (predicate)` is evaluated under the current evaluation mode; only a Church `false` rejects the clause (any other normalized value counts as true).
+   8. Pretty Printing: The printer recognizes Church numerals, Church booleans, cons/nil lists, and Church-fold-encoded lists, with booleans detected prior to numeral recognition to disambiguate `false` vs `0` structural overlap.
+   9. Performance Protections: Iteration counters and normalization depth limits abort runaway expansion; large or divergent expressions compared with `isStructEqual` may conservatively return `false` rather than hanging.
+   10. Extensibility: Adding eta-equivalence, hygienic macros (gensym), or richer pattern forms (nested rests) would require extending the normalization phase or macro matcher, but current design isolates these concerns cleanly in the evaluator and macro dispatcher modules.
+    
+   These interpreter-specific behaviors ensure practical usability (testing, performance measurement, macro ergonomics) while remaining faithful to lambda calculus core semantics.
 id4 42
 
 # More complex α-equivalence:

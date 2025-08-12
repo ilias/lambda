@@ -39,6 +39,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 
 - **Infix Operators**: Define custom infix operators with precedence and associativity
 - **Macro System**: Pattern-based macro system for syntactic sugar
+- **Macro System**: Powerful pattern-driven macro system (multi-clause, guards, variadic/rest arguments, precedence & shadowing)
 - **Native Arithmetic**: Optional native arithmetic optimizations for Church numerals
 - **Pretty Printing**: Automatic formatting of Church numerals and lists
 - **Comprehensive Standard Library**: Over 200 predefined functions and utilities
@@ -1139,27 +1140,43 @@ isStructEqual                      # Structural (syntactic) equality (non-alpha)
 
 #### Structural Equality (isStructEqual)
 
-`isStructEqual` is a native helper that compares two arbitrary expressions for exact structural equality and returns a Church boolean (`true` or `false`). It is available only when native optimizations are enabled (`:native on`) and counts toward the native call statistics shown in `:stats`.
+`isStructEqual` is a native helper that returns a Church boolean (`true` / `false`) indicating whether two expressions are *semantically equal up to normalization and alpha-equivalence*.
+
+Current pipeline (implementation detail, but useful to know):
+
+1. Force thunks on both sides (only as far as needed to expose head constructors).
+2. Normalize both expressions (bounded beta-reduction with:
+    - Inlining of top-level named lambda bindings for deeper combinator simplification (e.g. `K`, `S`, etc.).
+    - Memoization & depth / cycle guards to avoid runaway expansion.)
+3. Perform alpha-equivalence comparison (binder names are ignored; structure & binding topology must match).
+4. If alpha-equivalent normalized forms fail, a fallback direct structural check on original (pre-normalized) forms may be used for diagnostics.
 
 Characteristics:
 
-- Works on any expressions (not limited to numerals) including lambdas, applications, lists, thunks, and expressions involving the Y combinator.
-- Thunks: If both sides are thunks and both are forced, their forced values are compared; if both are unforced, their underlying expressions are compared; differing force state yields `false`.
-- Variable binder names matter (alpha-sensitive). For example: `isStructEqual (λx.x) (λy.y)` returns `false` because the internal binder symbols differ. This keeps the check fast and purely syntactic.
-- Does NOT normalize or reduce expressions prior to comparison— it compares the raw AST shape (after each side is evaluated once to head normal form for argument extraction inside the native dispatcher).
-- Safe for cyclic / recursive structures represented via the Y combinator: it traverses the explicit syntax graph; it will terminate unless you construct infinitely expanding terms during evaluation.
+- Ignores superficial binder name differences: `isStructEqual (λx.x) (λy.y)` → `true`.
+- Distinguishes genuinely different structure (no eta-reduction: `λx.f x` ≠ `f`).
+- Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
+- Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
+- Safe for recursive definitions via Y so long as expansion reaches a stable normalized comparison within the configured limits.
 
-Usage examples:
+Practical examples:
 
 ```lambda
-isStructEqual (pair 1 (cons 2 nil)) (pair 1 (cons 2 nil))      # true
-isStructEqual [1,2,3] (cons 1 (cons 2 (cons 3 nil)))           # true
-isStructEqual (λx.plus x 1) (λx.plus x 1)                      # true
-isStructEqual (λx.plus x 1) (λy.plus y 1)                      # false (binder name differs)
-isStructEqual [1,2,3] (λf.λz.f 1 (f 2 (f 3 z)))                # false (different list encoding)
+isStructEqual (pair 1 (cons 2 nil)) (pair 1 (cons 2 nil))          # true
+isStructEqual [1,2,3] (cons 1 (cons 2 (cons 3 nil)))               # true
+isStructEqual (λx.plus x 1) (λy.plus y 1)                          # true (alpha-insensitive)
+isStructEqual (λx.plus x 1) (λy.plus y (succ 0))                   # false (different body after norm)
+isStructEqual ((S K K) 5) 5                                        # true (combinator reduces)
+isStructEqual (λx.f x) f                                          # false (no eta)
 ```
 
-When you need semantic or alpha-equivalent comparison (ignoring bound variable names) or deep normalization-based equality, prefer building a higher-level combinator (e.g. convert both sides to a De Bruijn index form, or normalize before comparing) rather than extending `isStructEqual`.
+Notes & Limits:
+
+- Not an extensional (eta-complete) equality: add your own eta rule if needed.
+- Normalization is bounded; extremely large self-expanding macros may yield a conservative `false` if forms cannot be fully reduced within limits.
+- Designed for test/regression usage rather than user-facing proof of equivalence.
+
+If you require different equivalence semantics (e.g. eta-equivalence or observational equivalence), layer a custom checker on top of normalized forms.
 
 
 ### Caching and Memoization
