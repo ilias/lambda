@@ -114,7 +114,18 @@ public partial class Interpreter
             if (args.Count != 2) return null; // need two arguments
             var leftVal = EvaluateCEK(args[0], env);
             var rightVal = EvaluateCEK(args[1], env);
+            // Compute equality first (before optional pretty logging)
             var equal = leftVal.StructuralEquals(rightVal);
+            // Only log details if pretty printing enabled AND comparison failed
+            if (_prettyPrint && !equal)
+            {
+                if (leftVal.Type == ExprType.Thunk) leftVal = Force(leftVal);
+                if (rightVal.Type == ExprType.Thunk) rightVal = Force(rightVal);
+                var normLeft = NormalizeExpression(leftVal);
+                var normRight = NormalizeExpression(rightVal);
+                _logger.Log($"Test: {FormatWithNumerals(normLeft)}");
+                _logger.Log($"With: {FormatWithNumerals(normRight)}");
+            }
             _nativeArithmetic++; // reuse counter for simplicity
             return MakeChurchBoolean(equal);
         }
