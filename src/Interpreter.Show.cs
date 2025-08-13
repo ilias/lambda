@@ -178,6 +178,7 @@ public partial class Interpreter
           :clear                 Clear the current environment and caches
           :depth [n]             Set/show max recursion depth (default: 100, range: 10-10000)
           :env                   Show current environment definitions
+          :exit, :quit           Exit the interpreter
           :help                  Show this help message
           :infix [op prec assoc] Define/show infix operators (e.g., :infix + 6 left)
           :lazy on|off           Toggle lazy evaluation (default: on) or (eager evaluation)
@@ -194,7 +195,7 @@ public partial class Interpreter
           :save <file>           Save current environment to file (e.g., :save myenv.lambda)
           :stats                 Show detailed performance and environment statistics
           :step on|off           Toggle step-by-step evaluation logging
-          :exit, :quit           Exit the interpreter
+          :test clear/result     Reset or show counts of the structural equality test counters 
 
         -- Macro System --
           :macro (name $var1 $var2) => transformation
@@ -216,6 +217,7 @@ public partial class Interpreter
             - Type ':cancel' or ':abort' to discard current multi-line input
             - Type ':show' to display current multi-line input buffer
             - Press Enter on empty line to attempt completion of current input
+
           • Comments: Lines starting with '#' are ignored, or any text after '#' in a line is ignored
           • Command line arguments: Treated as files to load at startup
           • Infix operators: Define custom operators with precedence (1-10) and associativity (left/right)

@@ -156,6 +156,11 @@ safeMaximum (cons 3 (cons 1 (cons 2 nil))) # expect just 3
 clamp 2 4 1                    # expect 2
 clamp 2 4 3                    # expect 3
 clamp 2 4 5                    # expect 4
+safeDiv 10 2                   # expect just 5
+safeDiv 10 0                   # expect nothing
+safeInitMaybe nil              # expect nothing
+safeInitMaybe (cons 1 nil)     # expect nothing
+safeInitMaybe (cons 1 (cons 2 nil)) # expect just [1]
 
 # --- Miscellaneous ---
 compose succ succ 1             # expect 3

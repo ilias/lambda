@@ -939,10 +939,21 @@ either    = λf g e.if (isLeft e) (f (fromLeft e)) (g (fromRight e))
 safehead = λl.if (isnil l) nothing (just (head l))
 safetail = λl.if (isnil l) nothing (just (tail l))
 safenth  = λn l.if (gt n (pred (length l))) nothing (just (nth n l))
+# safediv: legacy lowercase naming kept for backward compatibility.
+# Prefer using safeDiv (alias) for consistency with other safe* functions.
 safediv  = λa b.if (iszero b) nothing (just (div a b))
+# Alias with preferred casing
+safeDiv  = safediv
 safeMinimum = λl.if (isnil l) nothing (just (minimum l))
 safeMaximum = λl.if (isnil l) nothing (just (maximum l))
-safeInit = λl.if (isnil l) nil (reverse (tail (reverse l)))
+# safeInit
+# Returns the list without its last element (or nil if empty/singleton).
+# NOTE: Unlike other safe* functions this returns a plain list, NOT a Maybe.
+# Use safeInitMaybe if you need a Maybe-encoded result.
+safeInit = λl.if (or (isnil l) (isnil (tail l))) nil (reverse (tail (reverse l)))
+
+# Maybe-encoded variant for consistency with safehead/safetail/etc.
+safeInitMaybe = λl.if (or (isnil l) (isnil (tail l))) nothing (just (reverse (tail (reverse l))))
 maybeMap = λf m.if (isNothing m) nothing (just (f (fromJust m)))
 
 
@@ -1302,6 +1313,16 @@ force     = λthunk.thunk I
 #
 # NOTE: For nested structures use partial application: (listEq (listEq eq) a b)
 # =============================================================================
+# Equality Guide
+# eq            : primitive / numeric equality on Church numerals, booleans, chars
+# isStructEqual : full structural + alpha equivalence (normalizes expressions)
+# listEq/...Eq  : deep equality for specific encodings using a provided element eq
+#
+# Use hierarchy:
+#  1. For user data structures (lists/pairs/maybe/either): use listEq etc. with element eq.
+#  2. For general lambda expressions where structure matters: isStructEqual.
+#  3. For numerals/booleans/chars inside algorithms: eq.
+# listEq et al do NOT normalize arbitrary expressions; element eq should align with eq semantics.
 listEq   = Y (λself.λeqE.λl1.λl2.
                                 if (and (isnil l1) (isnil l2)) true (
                                     if (or (isnil l1) (isnil l2)) false (

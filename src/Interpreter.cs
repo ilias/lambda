@@ -205,6 +205,8 @@ public partial class Interpreter
         var arg = parts.Length > 1 ? parts[1].Trim() : "";
         return command switch
         {
+            ":test" when arg.Equals("clear", StringComparison.OrdinalIgnoreCase) => TestClear(),
+            ":test" when arg.Equals("result", StringComparison.OrdinalIgnoreCase) => TestResult(),
             ":log" => await _logger.HandleLogCommandAsync(arg),
             ":load" => await LoadFileAsync(arg),
             ":save" => await SaveFileAsync(arg),
@@ -270,6 +272,18 @@ public partial class Interpreter
         MemoClear(); // Reuse cache clearing logic
         _stats.Reset();
         return "Environment cleared.";
+    }
+
+    private string TestClear()
+    {
+        _stats.StructEqCalls = 0;
+        _stats.StructEqSuccesses = 0;
+        return "Test counters cleared (structural equality).";
+    }
+
+    private string TestResult()
+    {
+        return $"Test results: structural equality calls={_stats.StructEqCalls}, successes={_stats.StructEqSuccesses}, success rate={( _stats.StructEqCalls==0 ? 0 : (100.0*_stats.StructEqSuccesses/_stats.StructEqCalls)):F1}%";
     }
 
     

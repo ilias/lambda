@@ -184,6 +184,14 @@ isStructEqual (last (cons 1 (cons 2 (cons 3 nil)))) 3
 isStructEqual (init (cons 1 (cons 2 (cons 3 nil)))) [1,2]
 isStructEqual (safeInit nil) nil
 isStructEqual (safeInit (cons 1 nil)) nil
+isStructEqual (safeDiv 10 2) (just 5)
+isStructEqual (safeDiv 10 0) nothing
+isStructEqual (safeInitMaybe nil) nothing
+isStructEqual (safeInitMaybe (cons 1 nil)) nothing
+isStructEqual (safeInitMaybe (cons 1 (cons 2 nil))) (just [1])
+isStructEqual (safeInit (cons 1 (cons 2 nil))) [1]
+isStructEqual (safeInitMaybe (cons 1 (cons 2 (cons 3 nil)))) (just [1,2])
+isStructEqual (safeDiv 10 2) (safediv 10 2)
 
 # --- Enumeration and Range Functions ---
 isStructEqual (enumFromTo 3 7) [3,4,5,6,7]

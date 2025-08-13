@@ -141,6 +141,8 @@ public partial class Interpreter
                     }
                 }
             _nativeArithmetic++;
+            _stats.StructEqCalls++;
+            if (equal) _stats.StructEqSuccesses++;
             return MakeChurchBoolean(equal);
         }
 

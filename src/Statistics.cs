@@ -16,6 +16,8 @@ public class Statistics
     public int ThunkForceCount { get; set; }
     public int VarCounter { get; set; }
     public int MaxRecursionDepth { get; set; } = 20;
+    public int StructEqCalls { get; set; }
+    public int StructEqSuccesses { get; set; }
     public void Reset()
     {
         TimeInCacheLookup = 0;
@@ -30,5 +32,7 @@ public class Statistics
         SubstitutionExprCount = 0;
         ThunkForceCount = 0;
         VarCounter = 0;
+        StructEqCalls = 0;
+        StructEqSuccesses = 0;
     }
 }
