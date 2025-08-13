@@ -202,6 +202,8 @@ The interpreter provides numerous commands for managing your session:
 
 ```shell
 :stats                   # Show detailed performance statistics
+:test clear              # Reset structural equality test counters
+:test result             # Show structural equality test counters (calls/successes)
 :memo                    # Clear all caches
 :log <file|off>          # Enable/disable logging to file
 ```
@@ -684,6 +686,12 @@ safehead [1, 2, 3]                # just 1
 safehead []                       # nothing
 safediv 10 2                      # just 5
 safediv 10 0                      # nothing
+safeDiv 10 2                      # alias (preferred casing)
+
+# List tail safe variants
+safeInit [1,2,3]                  # [1,2]
+safeInitMaybe [1,2,3]             # just [1,2]
+safeInitMaybe [1]                 # nothing
 
 # Maybe operations
 fromMaybe 0 (just 42)             # 42
@@ -1158,6 +1166,12 @@ Characteristics:
 - Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
 - Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
 - Safe for recursive definitions via Y so long as expansion reaches a stable normalized comparison within the configured limits.
+
+Instrumentation:
+
+- Every `isStructEqual` invocation increments counters (`StructEqCalls`, `StructEqSuccesses`).
+- View with `:test result`, reset with `:test clear`.
+- Useful for tracking test coverage density in large spec suites.
 
 Practical examples:
 

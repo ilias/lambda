@@ -110,6 +110,7 @@ public partial class Interpreter
         Total iterations:         {_stats.TotalIterations:#,##0}
         Hash code calls:          {Expr.HashCodeCount:#,##0}
         Native arithmetic:        {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}, {_nativeArithmetic:#,##0} calls
+        Structural equality:      {_stats.StructEqCalls:#,##0} calls, {_stats.StructEqSuccesses:#,##0} successes ({(_stats.StructEqCalls==0 ? 0 : _stats.StructEqSuccesses*100.0/_stats.StructEqCalls):F1}%) (use :test result / :test clear)
 
         -- Memoization/Caching --
         Cache sizes:              {cacheStats}
