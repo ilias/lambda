@@ -396,11 +396,10 @@ let f = x -> x * 3 in \
     (map f (filter (x -> x > 2) (range 7))) |> (foldl plus 0) # expect 54
 
 
-# Example Church-encoded Maybe
-
-just = λx.λj.λn. j x
-nothing = λj.λn. n
-bind = λm.λf. m f nothing
+# Maybe monad laws / examples (using stdlib pair-based Maybe encoding)
+# stdlib: nothing = nil, just x = pair true x, isNothing = isnil, fromJust = second
+# Provide bind compatible with that encoding (do NOT redefine just/nothing to avoid conflicts)
+bind = λm f. if (isNothing m) nothing (f (fromJust m))
 
 bind (just 3) (λx. just (x + 1))    # yields just 4
 bind nothing (λx. just (x + 1))     # yields nothing

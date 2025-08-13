@@ -425,7 +425,10 @@ tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil ni
 # -----------------------------------------------------------------------------
 map      = λf l.l (λx rest.cons (f x) rest) nil
 filter   = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
-foldl    = λf z l.l (λx acc.f acc x) z
+# NOTE: Original foldl was effectively a right-to-left fold (processing elements in reverse),
+# which made reverse become the identity. Correct left fold via CPS:
+# foldl f z [x1,x2,..,xn] = f (... (f (f z x1) x2) ...) xn
+foldl    = λf z l.(l (λx k. λacc. k (f acc x)) (λacc.acc)) z
 foldr    = λf z l.l f z
 
 # -----------------------------------------------------------------------------
