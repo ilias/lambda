@@ -716,8 +716,8 @@ times    = λn.λf.λx.n f x
 # -----------------------------------------------------------------------------
 curry    = λf x y.f (pair x y)
 uncurry  = λf p.f (first p) (second p)
-partial  = λf x y.f x y
-partial2 = λf x y z.f x y z
+partial  = λf x.λy.f x y
+partial2 = λf x y.λz.f x y z
 # 3-arity curry helpers used in tests
 curry3   = λf x y z.f (pair x (pair y z))
 uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
