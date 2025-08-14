@@ -1346,3 +1346,84 @@ Disable with `:pretty off` when:
 - Teaching / demonstrations where raw encodings are pedagogically important.
 
 Re‑enable with `:pretty on` once finished.
+
+---
+
+## Project Overview
+
+This project is a high-performance, feature-rich lambda calculus interpreter implemented in C#. It is designed for students, researchers, and enthusiasts interested in functional programming, language theory, and interpreter implementation. The interpreter is based on the CEK (Control, Environment, Kontinuation) machine model, supporting both lazy and eager evaluation, a macro system, infix operators, and a comprehensive standard library.
+
+**Goals:**
+- Provide a practical and educational tool for exploring lambda calculus and functional programming concepts.
+- Offer a modern, extensible playground for experimenting with language features, macros, and evaluation strategies.
+- Achieve high performance through native optimizations and intelligent caching.
+
+## How It Works
+
+**Evaluation Engine:**
+- The interpreter uses a CEK machine, which models computation as a stack of states (control, environment, continuation). This enables efficient evaluation, supports both strict and lazy semantics, and makes it easy to implement advanced features like thunks and continuations.
+
+**Lazy vs. Eager Evaluation:**
+- By default, the interpreter uses lazy evaluation (thunks), only computing values when needed. You can switch to eager evaluation with `:lazy off`.
+
+**Macros and Infix Operators:**
+- Macros are expanded at parse time, allowing for powerful syntactic abstractions and domain-specific language features. Infix operators are user-definable with custom precedence and associativity, parsed using a Pratt parser.
+
+**Standard Library:**
+- The standard library (`stdlib.lambda`) is loaded automatically and provides a rich set of combinators, arithmetic, list operations, and more.
+
+For more theoretical background, see `THEORY.md`.
+
+## Contributing
+
+Contributions are welcome! To get started:
+
+1. **Clone the repository and build:**
+    ```bash
+    git clone <repo-url>
+    cd lambda-cek-Y
+    dotnet build
+    ```
+2. **Run tests:**
+    - (Add instructions here if you have a test suite, e.g., `dotnet test`)
+3. **Style guidelines:**
+    - Use clear, descriptive names and add comments for new features.
+    - Keep code modular; new primitives or macros should be added in their respective files.
+4. **Adding features:**
+    - To add new primitives, see `Interpreter.Eval.cs`.
+    - For new macros or infix operators, update `stdlib.lambda` or use the REPL.
+5. **Pull requests:**
+    - Please describe your changes and reference any related issues.
+
+## Troubleshooting & FAQ
+
+**Q: I get an 'Evaluation exceeded maximum iterations' error.**
+A: This usually means your code has an infinite loop or non-terminating recursion. Check for missing base cases or undefined variables.
+
+**Q: Why do I get a parse error about semicolons or commas?**
+A: Semicolons are only allowed at the top level. Commas must separate parameters or list elements, not appear at the end or in the wrong context.
+
+**Q: How do I debug my code?**
+A: Use `:step on` for step-by-step evaluation, `:stats` for performance info, and `:log <file>` to log output. Disable pretty printing with `:pretty off` to see raw structures.
+
+**Q: How do I add new native functions?**
+A: Extend the `TryNativeArithmetic` method in `Interpreter.Eval.cs`.
+
+**Q: How do I reset the environment?**
+A: Use `:clear` to reset all definitions and caches.
+
+## Design Decisions
+
+- **CEK Machine:** Chosen for its clarity and efficiency in modeling lambda calculus evaluation, supporting both strict and lazy semantics.
+- **Church Encoding:** Used for numbers, booleans, and lists to stay true to pure lambda calculus, with pretty-printing for usability.
+- **C# Implementation:** Leverages .NET performance, strong typing, and modern tooling.
+- **Extensibility:** Macro and infix systems allow users to extend the language without modifying the core interpreter.
+- **Limitations:**
+  - No floating-point or complex data types (yet).
+  - No user-defined native functions (planned for future).
+  - Environment is flat; closures and lexical scoping are limited.
+  - Error messages are improving but may lack detail in some cases.
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
