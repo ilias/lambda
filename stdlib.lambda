@@ -322,7 +322,7 @@ ackermann  = \p.(p (\a.\q.(a (q a 1))) succ)
 # educational purposes to demonstrate recursion with the Y combinator.
 # -----------------------------------------------------------------------------
 factRec    = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
-fibRec     = Y (\f.\n. if (iszero n) 1 (plus (f (pred n)) (f (pred (pred n)))))
+fibRec     = Y (\f.\n. if (leq n 2) 1 (plus (f (pred n)) (f (pred (pred n)))))
 sumUptoRec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n))))
 
 
@@ -682,7 +682,7 @@ compose  = B
 flip     = C
 on       = λop f x y.op (f x) (f y)
 iterate  = λf n x.n f x
-times    = λn f.n f I
+times    = λn.λf.λx.n f x
 
 # -----------------------------------------------------------------------------
 # 4.2. Currying and Partial Application
@@ -716,8 +716,8 @@ times    = λn f.n f I
 # -----------------------------------------------------------------------------
 curry    = λf x y.f (pair x y)
 uncurry  = λf p.f (first p) (second p)
-partial  = λf x.λy.f x y
-partial2 = λf x y.λz.f x y z
+partial  = λf x y.f x y
+partial2 = λf x y z.f x y z
 # 3-arity curry helpers used in tests
 curry3   = λf x y z.f (pair x (pair y z))
 uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
@@ -1466,8 +1466,7 @@ eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft
 # -----------------------------------------------------------------------------
 :macro (nand $a $b) => (not (and $a $b))
 :macro (nor $a $b) => (not (or $a $b))
-:macro (empty? $list) => (isnil $list)
-:macro (first $list) => (head $list)
+:macro (empty? $list) => (isnil $list) 
 :macro (rest $list) => (tail $list)
 
 # -----------------------------------------------------------------------------
@@ -1731,7 +1730,7 @@ clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
 # safeInit = λl.if (isnil l) nil (reverse (tail (reverse l)))
 
 # --- Recursive examples using Y-combinator and infix operators (less efficient) ---
-fibY       = Y (\f. \n. if (n == 0) 1 ((f (n - 1)) + (f (n - 2))))
+fibY       = Y (\f. \n. if (n <= 2) 1 ((f (n - 1)) + (f (n - 2))))
 factY      = Y (\f. \n. if (n == 0) 1 (n * (f (n - 1))))
 sumUptoY   = Y (\f. \n. if (n == 0) 0 (n + (f (n - 1))))
 expY       = Y (\f. \b n. if (n == 0) 1 (b * (f b (n - 1))))

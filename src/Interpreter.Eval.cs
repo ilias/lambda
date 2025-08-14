@@ -130,16 +130,10 @@ public partial class Interpreter
             if (!equal && Expr.AlphaEquivalent(leftVal, rightVal))
                 equal = true; // normalization introduced incidental difference
 
-                if (_prettyPrint)
-                {
-                    if (equal)
-                        _logger.Log($"Test: return:   {FormatWithNumerals(normRight)}");
-                    else
-                    {
-                        _logger.Log($"Test: result:   {FormatWithNumerals(normLeft)}");
-                        _logger.Log($"Test: expected: {FormatWithNumerals(normRight)}");
-                    }
-                }
+            _logger.Log($"Test: left:  {FormatWithNumerals(normLeft)}");
+            _logger.Log($"Test: right: {FormatWithNumerals(normRight)}");
+            _logger.Log($"Test: {(equal ? "passed" : "failed")}");
+
             _nativeArithmetic++;
             _stats.StructEqCalls++;
             if (equal) _stats.StructEqSuccesses++;
