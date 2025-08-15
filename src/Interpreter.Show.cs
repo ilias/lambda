@@ -47,7 +47,23 @@ public partial class Interpreter
                 """;
     }
 
-    private async Task<string> ShowEnv() => await SaveFileAsync("console");
+    // Display user-defined native primitives
+    private string ShowUserPrimitives()
+    {
+        if (_nativeFunctions.Count == 0)
+            return "# No user-defined native primitives registered.";
+        var lines = new List<string> { "# User-defined native primitives:" };
+        foreach (var kv in _nativeFunctions)
+            lines.Add($"  {kv.Key}");
+        return string.Join("\n", lines);
+    }
+
+    private async Task<string> ShowEnv()
+    {
+        var envResult = await SaveFileAsync("console");
+        var userPrims = ShowUserPrimitives();
+        return envResult + "\n" + userPrims;
+    }
     
     private string ShowMacros()
     {

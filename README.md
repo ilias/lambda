@@ -40,7 +40,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - **Infix Operators**: Define custom infix operators with precedence and associativity
 - **Macro System**: Pattern-based macro system for syntactic sugar
 - **Macro System**: Powerful pattern-driven macro system (multi-clause, guards, variadic/rest arguments, precedence & shadowing)
-- **Native Arithmetic**: Optional native arithmetic optimizations for Church numerals
+- **Native Arithmetic & User Primitives**: Optional native arithmetic optimizations for Church numerals, plus support for user-defined native primitives (see below)
 - **Pretty Printing**: Automatic formatting of Church numerals and lists
 - **Comprehensive Standard Library**: Over 200 predefined functions and utilities
 - **General & Stepped Ranges**: Rich list range syntax `[a .. b]`, `[a, b .. c]` with lazy dynamic expansion
@@ -53,6 +53,31 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - **Thunk Forcing**: Lazy evaluation with intelligent thunk management
 
 ## Getting Started
+
+## User-Defined Native Primitives
+
+You can extend the interpreter with your own native (host language) primitives. This is useful for adding custom arithmetic, logic, or interop functions.
+
+### Registering a Native Primitive (C# Example)
+
+In your host C# code:
+
+```csharp
+interpreter.RegisterNativeFunction("inc", (args, env) =>
+{
+    if (args.Count == 1 && interpreter.TryGetChurchInt(args[0], env, out var n))
+        return interpreter.MakeChurchNumeral(n + 1);
+    return null;
+});
+```
+
+This makes `inc` available as a function in your lambda calculus code:
+
+```
+inc 2   # returns 3 (as a Church numeral)
+```
+
+You can register, override, or remove any primitive at runtime. All user-defined primitives are listed in the environment display (see `:env` command).
 
 ### Running the Interpreter
 
@@ -222,6 +247,7 @@ The interpreter provides numerous commands for managing your session:
 :help                    # Show comprehensive help
 :multiline               # Show multi-line input help
 :native show             # Show all native arithmetic functions
+:env                     # Show current environment, including user-defined primitives
 ```
 
 ## Command / Expression Chaining
