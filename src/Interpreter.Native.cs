@@ -77,5 +77,22 @@ public partial class Interpreter
             _ => null
         };
 
+    private void RegisterNativeFunctions()
+    {
+        RegisterNativeFunction("inc", (args, env) =>
+        {
+            if (args.Count == 1 && TryGetChurchInt(args[0], env, out var n))
+                return MakeChurchNumeral(n + 1);
+            return null;
+        });
 
+        RegisterNativeFunction("dec", (args, env) =>
+        {
+            if (args.Count == 1 && TryGetChurchInt(args[0], env, out var n))
+                return MakeChurchNumeral(n - 1);
+            return null;
+        });
+
+        RegisterNativeFunction("isStructEqual", IsStructEqual);
+    }
 }

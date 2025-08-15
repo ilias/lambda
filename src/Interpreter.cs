@@ -26,7 +26,8 @@ public partial class Interpreter
     {
         _logger = logger;
         _stats = stats ?? new Statistics();
-    _evaluator = new CEKEvaluator(this); // default strategy
+        _evaluator = new CEKEvaluator(this); // default strategy
+        RegisterNativeFunctions();
     }
 
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)

@@ -1,7 +1,20 @@
 namespace LambdaCalculus;
-
 public partial class Interpreter
 {
+    // Delegate for native functions
+    public delegate Expr? NativeFunction(List<Expr> args, Dictionary<string, Expr> env);
+
+    // Registry for native functions
+    private readonly Dictionary<string, NativeFunction> _nativeFunctions = new(StringComparer.Ordinal);
+
+    // Register a native function
+    public void RegisterNativeFunction(string name, NativeFunction function)
+    => _nativeFunctions[name] = function;
+
+    // Unregister a native function
+    public void UnregisterNativeFunction(string name)
+        => _nativeFunctions.Remove(name);
+
     // CEK machine state record (evaluation concern)
     public record CEKState(Expr Control, Dictionary<string, Expr> Environment, Kontinuation Kontinuation);
 
@@ -106,14 +119,19 @@ public partial class Interpreter
         if (cur is not { Type: ExprType.Var, VarName: var opName })
             return null;
 
-        if (args.Count < 1 || args.Count > 2)
-            return null; // Only support unary or binary operations
+        // Check extensible native function registry first
+        if (opName != null && _nativeFunctions.TryGetValue(opName, out var nativeFunc))
+        {
+            _nativeArithmetic++;
+            return nativeFunc(args, env);
+        }
 
-        if (opName == "isStructEqual") return IsStructEqual(args, env);
+        // Fallback to built-in primitives for backward compatibility
+        // if (opName == "isStructEqual") return IsStructEqual(args, env);
 
         if (!TryGetChurchInt(args[0], env, out var a))
             return null; // First argument must be a Church numeral
-        var b = 0; // Default value for second argument if avaiable
+        var b = 0; // Default value for second argument if available
         var isArg2Number = args.Count == 2 && TryGetChurchInt(args[1], env, out b);
 
         int? intResult = ArithmeticPrimitives(opName, a, b, args, isArg2Number);
@@ -255,3 +273,5 @@ public partial class Interpreter
         return expr;
     }
 }
+
+
