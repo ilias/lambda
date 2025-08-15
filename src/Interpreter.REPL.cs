@@ -396,24 +396,44 @@ public partial class Interpreter
                 lines.Add("");
             }
 
-            // Add footer with loading instructions
-            lines.Add("");
-            lines.Add("# =============================================================================");
-            lines.Add("# END OF EXPORT");
-            lines.Add("# =============================================================================");
-            lines.Add("# To load this environment, use: :load " + Path.GetFileName(path));
-            lines.Add("# Note: This will add to your current environment. Use :clear first for a clean state.");
+            // Save user defined native functions
+            if (_nativeFunctions.Count > 0)
+            {
+                lines.Add("# =============================================================================");
+                lines.Add("# NATIVE FUNCTION DEFINITIONS");
+                lines.Add("# =============================================================================");
+                lines.Add("");
 
+                foreach (var kv in _nativeFunctions)
+                {
+                    lines.Add($"  {kv.Key} = {kv.Value}");
+                }
+                lines.Add("");
+
+                lines.AddRange(ShowNativeFunctions());
+            }
+
+            // Add footer with loading instructions
+            if (path != "console")
+            {
+                lines.Add("# =============================================================================");
+                lines.Add("# END OF EXPORT");
+                lines.Add("# =============================================================================");
+                lines.Add("# To load this environment, use: :load " + Path.GetFileName(path));
+                lines.Add("# Note: This will add to your current environment. Use :clear first for a clean state.");
+            }
+
+            var _totals = $"# Total definitions: {definitionCount}, Infix operators: {infixCount}, Macros: {macroCount}, Native functions: {_nativeFunctions.Count}";
             if (path == "console")
             {
                 // Write the lines to the console instead of a file
                 foreach (var line in lines)
                     _logger.Log(line);
-                return $"Environment displayed in console ({definitionCount} definitions, {infixCount} infix operators, {macroCount} macros)";
+                return _totals;
             }
             await File.WriteAllLinesAsync(path, lines);
 
-            return $"Environment saved to '{path}' ({definitionCount} definitions, {infixCount} infix operators, {macroCount} macros)";
+            return $"Environment saved to '{path}' {_totals}";
         }
         catch (Exception ex)
         {
