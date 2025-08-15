@@ -1361,15 +1361,19 @@ This project is a high-performance, feature-rich lambda calculus interpreter imp
 ## How It Works
 
 **Evaluation Engine:**
+
 - The interpreter uses a CEK machine, which models computation as a stack of states (control, environment, continuation). This enables efficient evaluation, supports both strict and lazy semantics, and makes it easy to implement advanced features like thunks and continuations.
 
 **Lazy vs. Eager Evaluation:**
+
 - By default, the interpreter uses lazy evaluation (thunks), only computing values when needed. You can switch to eager evaluation with `:lazy off`.
 
 **Macros and Infix Operators:**
+
 - Macros are expanded at parse time, allowing for powerful syntactic abstractions and domain-specific language features. Infix operators are user-definable with custom precedence and associativity, parsed using a Pratt parser.
 
 **Standard Library:**
+
 - The standard library (`stdlib.lambda`) is loaded automatically and provides a rich set of combinators, arithmetic, list operations, and more.
 
 For more theoretical background, see `THEORY.md`.
