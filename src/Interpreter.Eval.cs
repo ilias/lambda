@@ -123,6 +123,7 @@ public partial class Interpreter
         if (opName != null && _nativeFunctions.TryGetValue(opName, out var nativeFunc))
         {
             _nativeArithmetic++;
+            _stats.NativeUsage[opName] = _stats.NativeUsage.GetValueOrDefault(opName) + 1;
             return nativeFunc(args, env);
         }
 
@@ -138,6 +139,7 @@ public partial class Interpreter
         if (intResult is not null)
         {
             _nativeArithmetic++;
+            _stats.NativeUsage[opName!] = _stats.NativeUsage.GetValueOrDefault(opName!) + 1;
             return MakeChurchNumeral(intResult.Value);
         }
 
@@ -145,6 +147,7 @@ public partial class Interpreter
         if (boolResult is not null)
         {
             _nativeArithmetic++;
+            _stats.NativeUsage[opName!] = _stats.NativeUsage.GetValueOrDefault(opName!) + 1;
             return MakeChurchBoolean(boolResult.Value);
         }
 

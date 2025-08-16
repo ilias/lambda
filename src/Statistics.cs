@@ -18,6 +18,8 @@ public class Statistics
     public int MaxRecursionDepth { get; set; } = 20;
     public int StructEqCalls { get; set; }
     public int StructEqSuccesses { get; set; }
+    public Dictionary<string, int> MacroUsage { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, int> NativeUsage { get; } = new(StringComparer.Ordinal);
     public void Reset()
     {
         TimeInCacheLookup = 0;

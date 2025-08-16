@@ -57,7 +57,7 @@ internal sealed class MacroExpander
     private static void ValidateRest(List<MacroPattern> patterns, List<Token> tokens, int pos)
     { var idx = patterns.FindIndex(p => p is VariablePattern vp && vp.IsRest); if (idx >= 0 && idx != patterns.Count -1) throw new ParseException(TreeErrorType.IllegalAssignment, tokens[pos].Position); }
 
-    List<(string name, int depth, string line)> macroUsages = new List<(string name, int depth, string line)>();
+    List<(string name, int depth, bool isOutput, string line)> macroUsages = [];
     public Expr ExpandMacros(Expr expr) {
         macroUsages.Clear();
         var result = ExpandRecursive(expr, 0);
@@ -66,12 +66,12 @@ internal sealed class MacroExpander
             var maxDepth = macroUsages.Max(p => p.depth);
             var maxLength = macroUsages.Max(p => p.name.Length);
             string nameFormat = $"{{0,-{maxLength}}}";
-            foreach (var (name, depth, line) in macroUsages)
+            foreach (var (name, depth, isOutput, line) in macroUsages)
             {
-                var macroName = string.Format(nameFormat, name).Replace(" ", ".");
+                var macroName = string.Format(nameFormat, isOutput ? "" : name);
                 var namePadding = new string('.', depth);
-                var depthSpaces = new string('.', maxDepth - depth);
-                _logger?.Log($"Macro {namePadding}{macroName}{depthSpaces} {line}");
+                var depthPadding = new string(' ', maxDepth - depth);
+                _logger?.Log($"Macro {depth,2} {namePadding}{macroName}{depthPadding} {line}");
             }
         }
         return result;
@@ -114,11 +114,12 @@ internal sealed class MacroExpander
                     return MacroExpansionResult.Failed("Guard failed");
             }
             var expanded = SubstituteMacroVariables(macro.Transformation, bindings);
-            macroUsages.Add((macro.Name, depth, $"<- {_interpreter!.FormatWithNumerals(expr)}"));
-            macroUsages.Add((macro.Name, depth, $"-> {_interpreter!.FormatWithNumerals(expanded)}"));
+            macroUsages.Add((macro.Name, depth, false, $"in   {_interpreter!.FormatWithNumerals(expr)}"));
+            macroUsages.Add((macro.Name, depth, true, $"out  {_interpreter!.FormatWithNumerals(expanded)}"));
+            _interpreter._stats.MacroUsage[macro.Name] = _interpreter!._stats.MacroUsage.GetValueOrDefault(macro.Name) + 1;
             var recur = ExpandRecursive(expanded, depth + 1);
             // Log macro expansion: before, after (expanded), and final (after all macro expansion)
-            macroUsages.Add((macro.Name, depth, $"== {_interpreter!.FormatWithNumerals(recur)}"));
+            macroUsages.Add((macro.Name, depth, false, $"done {_interpreter!.FormatWithNumerals(recur)}"));
             return MacroExpansionResult.Successful(recur);
         }
         return MacroExpansionResult.Failed("Pattern match failed");

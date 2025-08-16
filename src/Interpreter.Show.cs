@@ -94,6 +94,16 @@ public partial class Interpreter
         var evalMode = _lazyEvaluation ? "Lazy" : "Eager";
         var cacheHitRate = PerOfTotal(_stats.CacheHits, _stats.CacheHits + _stats.CacheMisses);
         var cacheStats = $"Subst: {_substitutionCache.Count}, Eval: {_evaluationCache.Count}, FreeVar: {_freeVarCache.Count}, Var: {_expressionPool.Count}, ContainsVar: {_containsVarCache.Count}, Norm: {_normalizationCache.Count}";
+
+        foreach (var (macro, count) in _stats.MacroUsage.OrderByDescending(kvp => kvp.Value))
+        {
+            _logger.Log($"Macro '{macro}': {count:#,##0} uses");
+        }
+        foreach (var (native, count) in _stats.NativeUsage.OrderByDescending(kvp => kvp.Value))
+        {
+            _logger.Log($"Native '{native}': {count:#,##0} uses");
+        }
+        
         return $"""
         === Lambda Interpreter Statistics ===
         
@@ -112,7 +122,7 @@ public partial class Interpreter
         Total iterations:         {_stats.TotalIterations:#,##0}
         Hash code calls:          {Expr.HashCodeCount:#,##0}
         Native arithmetic:        {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}, {_nativeArithmetic:#,##0} calls
-        Structural equality:      {_stats.StructEqCalls:#,##0} calls, {_stats.StructEqSuccesses:#,##0} successes ({(_stats.StructEqCalls==0 ? 0 : _stats.StructEqSuccesses*100.0/_stats.StructEqCalls):F1}%) (use :test result / :test clear)
+        Structural equality:      {_stats.StructEqCalls:#,##0} calls, {_stats.StructEqSuccesses:#,##0} successes ({(_stats.StructEqCalls == 0 ? 0 : _stats.StructEqSuccesses * 100.0 / _stats.StructEqCalls):F1}%) (use :test result / :test clear)
 
         -- Memoization/Caching --
         Cache sizes:              {cacheStats}

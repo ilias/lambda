@@ -11,8 +11,8 @@ public partial class Interpreter
     private readonly Dictionary<Expr, Expr> _normalizationCache = new(4096, new ExprEqualityComparer());
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
     private readonly Logger _logger;
-    private readonly Statistics _stats;
-    private readonly Parser _parser;
+    public readonly Statistics _stats;
+    public readonly Parser _parser;
     private IEvaluator _evaluator; // strategy
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
