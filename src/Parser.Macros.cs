@@ -6,7 +6,14 @@ namespace LambdaCalculus;
 internal sealed class MacroExpander
 {
     private readonly Parser _parser;
-    public MacroExpander(Parser parser) => _parser = parser;
+    private readonly Logger? _logger;
+    private readonly Interpreter? _interpreter;
+    public MacroExpander(Parser parser, Logger? logger = null, Interpreter? interpreter = null)
+    {
+        _parser = parser;
+        _logger = logger;
+        _interpreter = interpreter;
+    }
 
     public void ParseAndStoreMacroDefinition(List<Token> slice)
     {
@@ -61,7 +68,10 @@ internal sealed class MacroExpander
             foreach (var macro in ordered)
             {
                 var attempt = TryExpandMacro(expr, macro, depth);
-                if (attempt.Success) return attempt.ExpandedExpr!;
+                if (attempt.Success)
+                {
+                    return attempt.ExpandedExpr!;
+                }
             }
         }
         return expr.Type switch
@@ -75,15 +85,20 @@ internal sealed class MacroExpander
     private MacroExpansionResult TryExpandMacro(Expr expr, MacroDefinition macro, int depth)
     {
         var bindings = new Dictionary<string, Expr>();
-        if (!MatchesStructure(expr, macro)) return MacroExpansionResult.Failed("Structure mismatch");
+        if (!MatchesStructure(expr, macro))
+            return MacroExpansionResult.Failed("Structure mismatch");
         if (TryMatchPattern(expr, macro.Pattern, bindings))
         {
             if (macro.Guard is not null)
             {
                 var guardEval = SubstituteMacroVariables(macro.Guard, bindings);
-                if (guardEval.Type == ExprType.Var && guardEval.VarName == "false") return MacroExpansionResult.Failed("Guard failed");
+                if (guardEval.Type == ExprType.Var && guardEval.VarName == "false")
+                    return MacroExpansionResult.Failed("Guard failed");
             }
             var expanded = SubstituteMacroVariables(macro.Transformation, bindings);
+            // Log macro expansion
+            _logger?.Log($"Macro {macro.Name} in:  {_interpreter!.FormatWithNumerals(expr)}");
+            _logger?.Log($"Macro {macro.Name} out: {_interpreter!.FormatWithNumerals(expanded)}");
             var recur = ExpandRecursive(expanded, depth + 1);
             return MacroExpansionResult.Successful(recur);
         }

@@ -12,7 +12,7 @@ public partial class Interpreter
     private readonly Dictionary<string, Expr> _variableCache = new(1024);
     private readonly Logger _logger;
     private readonly Statistics _stats;
-    private readonly Parser _parser = new();
+    private readonly Parser _parser;
     private IEvaluator _evaluator; // strategy
     private readonly System.Diagnostics.Stopwatch _perfStopwatch = new();
     private bool _showStep = false;
@@ -26,6 +26,7 @@ public partial class Interpreter
     {
         _logger = logger;
         _stats = stats ?? new Statistics();
+        _parser = new Parser(logger, this); // Pass logger to parser
         _evaluator = new CEKEvaluator(this); // default strategy
         RegisterNativeFunctions();
     }
@@ -232,7 +233,7 @@ public partial class Interpreter
     
 
     // Consolidated formatting method that uses the enhanced Expr.ToString()
-    private string FormatWithNumerals(Expr expr) => 
+    public string FormatWithNumerals(Expr expr) => 
         expr.ToString(_prettyPrint, _prettyPrint ? new System.Func<Expr,int?>(ExtractChurchNumeralValue) : null);
 
     

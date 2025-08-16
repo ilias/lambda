@@ -4,9 +4,8 @@ public partial class Interpreter
 {
     // Display all supported native arithmetic functions/operators
     private string ShowNativeFunctions()
-    {
-        return """
-                    Supported native arithmetic functions/operators (for Church numerals) and structural helpers:
+        => """  
+                  Supported native arithmetic functions/operators (for Church numerals) and structural helpers:
 
                     Binary (two arguments):
                         plus, +         : addition
@@ -45,7 +44,6 @@ public partial class Interpreter
                         - isStructEqual works regardless of numeric status; counts toward native call stats
                         - These functions are only available when native arithmetic is enabled (:native on)
                 """;
-    }
 
     private async Task<string> ShowEnv()
     {

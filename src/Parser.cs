@@ -61,13 +61,24 @@ public partial class Parser
     public readonly Dictionary<string, List<MacroDefinition>> _macros = new(StringComparer.Ordinal);
     private readonly Tokenizer _tokenizer;
     private readonly MacroExpander _macroExpander;
+    private readonly Logger? _logger;
 
     public Parser()
     {
+        _logger = null;
         DefineInfixOperator("|>", 1, "left");
         DefineInfixOperator(".", 9, "right");
         _tokenizer = new Tokenizer(this);
-        _macroExpander = new MacroExpander(this);
+        _macroExpander = new MacroExpander(this, null);
+    }
+
+    public Parser(Logger logger, Interpreter interpreter)
+    {
+        _logger = logger;
+        DefineInfixOperator("|>", 1, "left");
+        DefineInfixOperator(".", 9, "right");
+        _tokenizer = new Tokenizer(this);
+        _macroExpander = new MacroExpander(this, logger, interpreter);
     }
 
     // Expression / application parsing helpers moved to Parser.Partials.Expressions.cs
