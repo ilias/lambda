@@ -63,13 +63,15 @@ internal sealed class MacroExpander
         var result = ExpandRecursive(expr, 0);
         if (macroUsages.Count > 0)
         {
+            var maxDepth = macroUsages.Max(p => p.depth);
             var maxLength = macroUsages.Max(p => p.name.Length);
-            string format = $"{{0,-{maxLength}}}";
+            string nameFormat = $"{{0,-{maxLength}}}";
             foreach (var (name, depth, line) in macroUsages)
             {
-                var macroName = string.Format(format, name);
-                var spaces = new string('.', depth);
-                _logger?.Log($"Macro {spaces}{macroName} {line}");
+                var macroName = string.Format(nameFormat, name).Replace(" ", ".");
+                var namePadding = new string('.', depth);
+                var depthSpaces = new string('.', maxDepth - depth);
+                _logger?.Log($"Macro {namePadding}{macroName}{depthSpaces} {line}");
             }
         }
         return result;
@@ -112,15 +114,11 @@ internal sealed class MacroExpander
                     return MacroExpansionResult.Failed("Guard failed");
             }
             var expanded = SubstituteMacroVariables(macro.Transformation, bindings);
-            var spaces = new string('.', macro.Name.Length);
-            macroUsages.Add((macro.Name, depth, $"in:    {_interpreter!.FormatWithNumerals(expr)}"));
-            macroUsages.Add((macro.Name, depth, $"out:   {_interpreter!.FormatWithNumerals(expanded)}"));
-            // _logger?.Log($"Macro {macro.Name} in:   {_interpreter!.FormatWithNumerals(expr)}");
-            // _logger?.Log($"Macro {spaces} out:  {_interpreter!.FormatWithNumerals(expanded)}");
+            macroUsages.Add((macro.Name, depth, $"<- {_interpreter!.FormatWithNumerals(expr)}"));
+            macroUsages.Add((macro.Name, depth, $"-> {_interpreter!.FormatWithNumerals(expanded)}"));
             var recur = ExpandRecursive(expanded, depth + 1);
             // Log macro expansion: before, after (expanded), and final (after all macro expansion)
-            macroUsages.Add((macro.Name, depth, $"final: {_interpreter!.FormatWithNumerals(recur)}"));
-            // _logger?.Log($"Macro {macro.Name} final: {_interpreter!.FormatWithNumerals(recur)}");
+            macroUsages.Add((macro.Name, depth, $"== {_interpreter!.FormatWithNumerals(recur)}"));
             return MacroExpansionResult.Successful(recur);
         }
         return MacroExpansionResult.Failed("Pattern match failed");
