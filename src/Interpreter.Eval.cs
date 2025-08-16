@@ -40,7 +40,8 @@ public partial class Interpreter
                 continue;
             }
 
-            // Native arithmetic shortcut for Church numerals
+
+            // Try native arithmetic for every application node before further evaluation
             if (control.Type == ExprType.App)
             {
                 var nativeResult = TryNativeArithmetic(control, env);
@@ -118,6 +119,28 @@ public partial class Interpreter
         }
         if (cur is not { Type: ExprType.Var, VarName: var opName })
             return null;
+
+        // Recursively evaluate each argument to normal form for native arithmetic
+        for (int i = 0; i < args.Count; i++)
+        {
+            args[i] = EvaluateToNormalForm(args[i], env);
+        }
+
+    // Helper: Recursively evaluate an expression to normal form (for native arithmetic only)
+    Expr EvaluateToNormalForm(Expr expr, Dictionary<string, Expr> env)
+    {
+        // Force thunks
+        if (expr.Type == ExprType.Thunk)
+            expr = Force(expr);
+        // If it's an application, try to reduce it
+        if (expr.Type == ExprType.App)
+        {
+            var reduced = TryNativeArithmetic(expr, env);
+            if (reduced != null)
+                return EvaluateToNormalForm(reduced, env);
+        }
+        return expr;
+    }
 
         // Check extensible native function registry first
         if (opName != null && _nativeFunctions.TryGetValue(opName, out var nativeFunc))
@@ -237,7 +260,16 @@ public partial class Interpreter
                     // Not a function - create application and continue with next continuation
                     // This prevents infinite loops with undefined variables
                     var app = Expr.App(funcToApply, argument);
-                    ApplyContinuation(app, env, next!, stateStack, ref finalResult);
+                    // Try native arithmetic at every application node
+                    var nativeResult = TryNativeArithmetic(app, env);
+                    if (nativeResult != null)
+                    {
+                        ApplyContinuation(nativeResult, env, next!, stateStack, ref finalResult);
+                    }
+                    else
+                    {
+                        ApplyContinuation(app, env, next!, stateStack, ref finalResult);
+                    }
                 }
                 break;
 
