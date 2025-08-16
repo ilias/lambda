@@ -97,8 +97,9 @@ internal sealed class MacroExpander
             }
             var expanded = SubstituteMacroVariables(macro.Transformation, bindings);
             // Log macro expansion
+            var spaces = new string('.', macro.Name.Length);
             _logger?.Log($"Macro {macro.Name} in:  {_interpreter!.FormatWithNumerals(expr)}");
-            _logger?.Log($"Macro {macro.Name} out: {_interpreter!.FormatWithNumerals(expanded)}");
+            _logger?.Log($"Macro {spaces} out: {_interpreter!.FormatWithNumerals(expanded)}");
             var recur = ExpandRecursive(expanded, depth + 1);
             return MacroExpansionResult.Successful(recur);
         }
