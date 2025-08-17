@@ -5,7 +5,7 @@ public partial class Interpreter
     // Native structural equality (works for any two expressions)
     // Pattern: (isStructEqual a b) -> Church true/false based on structural graph equality
     // We evaluate both operands fully (respecting current lazy/native settings) to compare
-    internal Expr? IsStructEqual(List<Expr> args, Dictionary<string, Expr> env)
+    internal Expr? IsStructEqual(string op, List<Expr> args, Dictionary<string, Expr> env)
     {
         if (args.Count != 2) return null; // Need exactly two arguments
 
@@ -37,6 +37,20 @@ public partial class Interpreter
         return MakeChurchBoolean(equal);
     }
 
+    internal Expr? IsRandom(string op, List<Expr> args, Dictionary<string, Expr> env)
+    {
+            int min, max;
+            if (args.Count == 1 && TryGetChurchInt(args[0], env, out max))
+                min = 0;
+            else if (args.Count == 2 && TryGetChurchInt(args[0], env, out min) && TryGetChurchInt(args[1], env, out max))
+                (min, max) = (Math.Min(min, max), Math.Max(min, max));
+            else
+                return null;
+
+            _usedRandom = true; // Mark that random has been used and prevent saving values 
+            return MakeChurchNumeral(new Random().Next(min, max + 1));
+    }
+
     // Intercept known arithmetic primitives
     internal static int? ArithmeticPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
         => (opName, args.Count, isArg2Number) switch
@@ -50,8 +64,8 @@ public partial class Interpreter
             ("max", 2, true) => Math.Max(a, b),
             ("min", 2, true) => Math.Min(a, b),
 
-            ("succ" or "++", 1, _) => a + 1,
-            ("pred" or "--", 1, _) => Math.Max(0, a - 1),
+            ("succ" or "++" or "inc", 1, _) => a + 1,
+            ("pred" or "--" or "decr", 1, _) => Math.Max(0, a - 1),
             ("square", 1, _) => a * a,
             ("half", 1, _) => a / 2,
             ("sqrt", 1, _) => (int)Math.Sqrt(a),
@@ -76,36 +90,10 @@ public partial class Interpreter
             _ => null
         };
 
+    
     private void RegisterNativeFunctions()
     {
-        RegisterNativeFunction("inc", (args, env) =>
-        {
-            if (args.Count == 1 && TryGetChurchInt(args[0], env, out var n))
-                return MakeChurchNumeral(n + 1);
-            return null;
-        });
-
-        RegisterNativeFunction("dec", (args, env) =>
-        {
-            if (args.Count == 1 && TryGetChurchInt(args[0], env, out var n))
-                return MakeChurchNumeral(n - 1);
-            return null;
-        });
-
-        RegisterNativeFunction("random", (args, env) =>
-        {
-            if (args.Count == 1 && TryGetChurchInt(args[0], env, out var n))
-            {
-                _usedRandom = true;
-                return MakeChurchNumeral(new Random().Next(0, n + 1));
-            }
-            if (args.Count == 2 && TryGetChurchInt(args[0], env, out var n1) && TryGetChurchInt(args[1], env, out var n2))
-            {
-                _usedRandom = true;
-                return MakeChurchNumeral(new Random().Next(n1, n2 + 1));
-            }
-            return null;
-        });
+        RegisterNativeFunction("random", IsRandom);
 
         RegisterNativeFunction("isStructEqual", IsStructEqual);
     }

@@ -2,7 +2,7 @@ namespace LambdaCalculus;
 public partial class Interpreter
 {
     // Delegate for native functions
-    public delegate Expr? NativeFunction(List<Expr> args, Dictionary<string, Expr> env);
+    public delegate Expr? NativeFunction(string name, List<Expr> args, Dictionary<string, Expr> env);
 
     // Registry for native functions
     private readonly Dictionary<string, NativeFunction> _nativeFunctions = new(StringComparer.Ordinal);
@@ -147,7 +147,7 @@ public partial class Interpreter
         {
             _nativeArithmetic++;
             _stats.NativeUsage[opName] = _stats.NativeUsage.GetValueOrDefault(opName) + 1;
-            return nativeFunc(args, env);
+            return nativeFunc(opName, args, env);
         }
 
         // Fallback to built-in primitives for backward compatibility
