@@ -299,7 +299,7 @@ public partial class Interpreter
 
             // Add file header with timestamp and stats
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var definitionCount = _context.Count;
+            var definitionCount = _contextUnevaluated.Count;
             var infixCount = _parser._infixOperators.Count;
             var macroCount = _parser._macros.Count;
 
@@ -311,7 +311,7 @@ public partial class Interpreter
             lines.Add("");
 
             // Save variable definitions/assignments
-            if (_context.Count > 0)
+            if (_contextUnevaluated.Count > 0)
             {
                 lines.Add("# =============================================================================");
                 lines.Add("# VARIABLE DEFINITIONS");
@@ -323,7 +323,7 @@ public partial class Interpreter
                 var functionVars = new List<(string, Expr)>();
                 var complexVars = new List<(string, Expr)>();
 
-                foreach (var (key, value) in _context.OrderBy(kv => kv.Key))
+                foreach (var (key, value) in _contextUnevaluated.OrderBy(kv => kv.Key))
                 {
                     // Categorize by expression type for better file organization
                     if (value.Type == ExprType.Abs)

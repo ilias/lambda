@@ -3,6 +3,7 @@ namespace LambdaCalculus;
 public partial class Interpreter
 {
     private readonly Dictionary<string, Expr> _context = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Expr> _contextUnevaluated = new(StringComparer.Ordinal);
     private readonly Dictionary<SubstitutionCacheKey, Expr> _substitutionCache = new(8192);
     private readonly Dictionary<Expr, Expr> _evaluationCache = new(8192, new ExprEqualityComparer());
     private readonly Dictionary<Expr, HashSet<string>> _freeVarCache = new(4096, new ExprEqualityComparer());
@@ -75,6 +76,7 @@ public partial class Interpreter
                 {
                     if (st.Type == StatementType.Assignment)
                     {
+                        _contextUnevaluated[st.VarName!] = st.Expression;
                         var val = _evaluator.Evaluate(st.Expression);
                         _context[st.VarName!] = val;
                         sb.AppendLine($"-> {st.VarName} = {FormatWithNumerals(val)}");

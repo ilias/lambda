@@ -128,7 +128,7 @@ public partial class Interpreter
           a + b                  Infix operations (when operators are defined) desugar to plus a b
           a . b . c              composition operator desugar to a (b c)
           a |> f |> g            Pipeline operator desugar to g (f a)
-          \\_ . expr              Use '_' as a placeholder/ignored parameter in lambdas
+          \\_ . expr             Use '_' as a placeholder/ignored parameter in lambdas
           (x, _, _ -> x) 42 9 8  Multiple '_'s are allowed; each is treated as a unique, ignorable variable
           expr1; expr2; expr3    Multiple expressions / assignments on one line separated by ';'
 
@@ -142,7 +142,7 @@ public partial class Interpreter
           InfixExpr     ::= Application (InfixOp Application)*
           Application   ::= Atom+
           Atom          ::= Integer | Identifier | Lambda | List | '(' Expression ')'
-          Lambda        ::= (λ|\\) Param+ '.' Expression
+          Lambda        ::= (λ | \) Param+ '.' Expression
 
         -- Commands (prefix with ':') --
           :clear                 Clear the current environment and caches
