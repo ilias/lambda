@@ -223,7 +223,7 @@ public partial class Interpreter
             ":depth" => HandleRecursionDepth(arg),
             ":infix" => HandleInfixCommand(arg),
             ":native" => HandleNativeArithmetic(arg),
-            ":pretty" => HandlePrettyPrint(arg),
+            ":pretty" or ":pp"=> HandlePrettyPrint(arg),
             ":macros" => ShowMacros(),
             ":macro" => HandleMacroDefinition(arg),
             ":multiline" => ShowMultiLineHelp(),

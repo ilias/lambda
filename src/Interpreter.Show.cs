@@ -103,7 +103,7 @@ public partial class Interpreter
         {
             _logger.Log($"Native '{native}': {count:#,##0} uses");
         }
-        
+
         return $"""
         === Lambda Interpreter Statistics ===
         
@@ -204,7 +204,7 @@ public partial class Interpreter
           :multiline             Show detailed multi-line input help and examples
           :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
           :native show           Show all supported native arithmetic functions/operators
-          :pretty on|off         Toggle pretty printing (default: on) - numerals and lists
+          :pretty on|off, :pp    Toggle pretty printing (default: on) - numerals and lists
           :save <file>           Save current environment to file (e.g., :save myenv.lambda)
           :stats                 Show detailed performance and environment statistics
           :step on|off           Toggle step-by-step evaluation logging

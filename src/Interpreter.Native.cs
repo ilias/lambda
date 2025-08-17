@@ -51,6 +51,29 @@ public partial class Interpreter
             return MakeChurchNumeral(new Random().Next(min, max + 1));
     }
 
+    internal Expr? IsArithmeticPrimitive(string opName, List<Expr> args, Dictionary<string, Expr> env)
+    {
+        if (args.Count < 1 || args.Count > 2) return null; // Invalid number of arguments
+
+        // Try to get the first argument as a Church numeral
+        if (!TryGetChurchInt(args[0], env, out int a)) return null;
+
+        // If there's a second argument, try to get it as well
+        int b = 0;
+        bool isArg2Number = false;
+        if (args.Count == 2 && TryGetChurchInt(args[1], env, out b))
+            isArg2Number = true;
+
+        // Check for known arithmetic primitives
+        var result = ArithmeticPrimitives(opName, a, b, args, isArg2Number);
+        if (result.HasValue) return MakeChurchNumeral(result.Value);
+
+        // Check for known comparison primitives
+        var comparisonResult = ComparisonPrimitives(opName, a, b, args, isArg2Number);
+        if (comparisonResult.HasValue) return MakeChurchBoolean(comparisonResult.Value);
+
+        return null; // Not an arithmetic or comparison primitive
+    }
     // Intercept known arithmetic primitives
     internal static int? ArithmeticPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
         => (opName, args.Count, isArg2Number) switch
@@ -90,11 +113,12 @@ public partial class Interpreter
             _ => null
         };
 
-    
+
     private void RegisterNativeFunctions()
     {
         RegisterNativeFunction("random", IsRandom);
 
         RegisterNativeFunction("isStructEqual", IsStructEqual);
+
     }
 }
