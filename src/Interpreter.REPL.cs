@@ -293,30 +293,37 @@ public partial class Interpreter
         if (string.IsNullOrWhiteSpace(path))
             return "Error: Please specify a filename. Usage: :save <filename>";
 
+        var lines = new List<string>();
+
+        void AddTitle(string title)
+        {
+            lines.Add("# =============================================================================");
+            lines.Add($"# {title}");
+            lines.Add("# =============================================================================");
+            lines.Add("");
+        }
+
         try
         {
-            var lines = new List<string>();
-
             // Add file header with timestamp and stats
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             var definitionCount = _contextUnevaluated.Count;
             var infixCount = _parser._infixOperators.Count;
             var macroCount = _parser._macros.Count;
+            var nativeCount = _nativeFunctions.Count;
+            var totals = $"# Definitions: {definitionCount}, Infix Operators: {infixCount}, Macros: {macroCount}, Native: {nativeCount}";
 
             lines.Add($"# ============================================================================");
             lines.Add($"# Lambda Calculus Environment Export");
             lines.Add($"# Generated: {timestamp}");
-            lines.Add($"# Definitions: {definitionCount}, Infix Operators: {infixCount}, Macros: {macroCount}");
+            lines.Add(totals);
             lines.Add($"# ============================================================================");
             lines.Add("");
 
             // Save variable definitions/assignments
             if (_contextUnevaluated.Count > 0)
             {
-                lines.Add("# =============================================================================");
-                lines.Add("# VARIABLE DEFINITIONS");
-                lines.Add("# =============================================================================");
-                lines.Add("");
+                AddTitle("VARIABLE DEFINITIONS");
 
                 // Group definitions by type for better organization
                 var simpleVars = new List<(string, Expr)>();
@@ -334,13 +341,13 @@ public partial class Interpreter
                     else
                         complexVars.Add((key, value));
                 }
-                
+
                 // Write simple variables first
                 if (simpleVars.Count > 0)
                 {
                     lines.Add("# Simple definitions and constants");
                     foreach (var (key, value) in simpleVars)
-                        lines.Add($"{key} = {FormatWithNumerals(value)}");
+                        lines.Add($"  {key} = {FormatWithNumerals(value)}");
                     lines.Add("");
                 }
 
@@ -349,7 +356,7 @@ public partial class Interpreter
                 {
                     lines.Add("# Function definitions");
                     foreach (var (key, value) in functionVars)
-                        lines.Add($"{key} = {FormatWithNumerals(value)}");
+                        lines.Add($"  {key} = {FormatWithNumerals(value)}");
                     lines.Add("");
                 }
 
@@ -358,7 +365,7 @@ public partial class Interpreter
                 {
                     lines.Add("# Complex expressions");
                     foreach (var (key, value) in complexVars)
-                        lines.Add($"{key} = {FormatWithNumerals(value)}");
+                        lines.Add($"  {key} = {FormatWithNumerals(value)}");
                     lines.Add("");
                 }
             }
@@ -366,73 +373,51 @@ public partial class Interpreter
             // Save infix operators first (they need to be defined before use)
             if (_parser._infixOperators.Count > 0)
             {
-                lines.Add("# =============================================================================");
-                lines.Add("# INFIX OPERATORS");
-                lines.Add("# =============================================================================");
-                lines.Add("");
+                AddTitle("INFIX OPERATORS");
 
                 var operators = _parser._infixOperators.Values
                     .OrderByDescending(op => op.Precedence)
                     .ThenBy(op => op.Symbol);
 
                 foreach (var op in operators)
-                    lines.Add($":infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()}");
+                    lines.Add($"  :infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()}");
                 lines.Add("");
             }
 
             // Save macro definitions (they should be defined before variable assignments that might use them)
             if (_parser._macros.Count > 0)
             {
-                lines.Add("# =============================================================================");
-                lines.Add("# MACRO DEFINITIONS");
-                lines.Add("# =============================================================================");
-                lines.Add("");
-
+                AddTitle("MACROS");
                 foreach (var macro in _parser.ShowMacros())
-                {
-                    // Use the macro's ToString method which formats it properly
                     lines.Add(macro);
-                }
                 lines.Add("");
             }
 
             // Save user defined native functions
             if (_nativeFunctions.Count > 0)
             {
-                lines.Add("# =============================================================================");
-                lines.Add("# NATIVE FUNCTION DEFINITIONS");
-                lines.Add("# =============================================================================");
+                AddTitle("NATIVE FUNCTIONS");
+                foreach (var kv in _nativeFunctions.OrderBy(kv => kv.Key))
+                    lines.Add($"  # {kv.Key}");
                 lines.Add("");
-
-                foreach (var kv in _nativeFunctions)
-                {
-                    lines.Add($"  {kv.Key} = {kv.Value}");
-                }
-                lines.Add("");
-
             }
 
-            // Add footer with loading instructions
-            if (path != "console")
-            {
-                lines.Add("# =============================================================================");
-                lines.Add("# END OF EXPORT");
-                lines.Add("# =============================================================================");
-                lines.Add("# To load this environment, use: :load " + Path.GetFileName(path));
-                lines.Add("# Note: This will add to your current environment. Use :clear first for a clean state.");
-            }
-
-            var _totals = $"# Total definitions: {definitionCount}, Infix operators: {infixCount}, Macros: {macroCount}, Native functions: {_nativeFunctions.Count}";
             if (path == "console")
             {
                 // Write the lines to the console instead of a file
                 foreach (var line in lines)
                     _logger.Log(line);
-                return _totals;
+                return totals;
             }
+
+            // Add footer with loading instructions
+            AddTitle("END OF EXPORT");
+            lines.Add("# To load this environment, use: :load " + Path.GetFileName(path));
+            lines.Add("# Note: This will add to your current environment. Use :clear first for a clean state.");
+
             await File.WriteAllLinesAsync(path, lines);
 
-            return $"Environment saved to '{path}' {_totals}";
+            return $"Environment saved to '{path}' {totals}";
         }
         catch (Exception ex)
         {
