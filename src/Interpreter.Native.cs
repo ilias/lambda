@@ -113,12 +113,37 @@ public partial class Interpreter
             _ => null
         };
 
-
     private void RegisterNativeFunctions()
     {
         RegisterNativeFunction("random", IsRandom);
-
         RegisterNativeFunction("isStructEqual", IsStructEqual);
 
+        List<string> nativeArithmeticOps =
+        [
+            "plus", "+",
+            "minus", "-",
+            "mult", "*",
+            "div", "/",
+            "mod", "%",
+            "exp", "pow", "^",
+            "max", "min",
+            "succ", "++", "inc",
+            "pred", "--", "decr",
+            "square", "half", "sqrt",
+
+            "lt", "<",
+            "leq", "<=",
+            "eq", "==",
+            "geq", ">=",
+            "gt", ">",
+            "neq", "!=",
+            "iszero", "even", "odd"
+        ];
+        // Arithmetic primitives
+        foreach (var op in nativeArithmeticOps)
+            RegisterNativeFunction(op, IsArithmeticPrimitive);
+
     }
+
+
 }

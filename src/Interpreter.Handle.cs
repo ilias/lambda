@@ -5,7 +5,6 @@ public partial class Interpreter
     // Command handling helpers extracted from Interpreter
     private string HandleNativeArithmetic(string arg)
     {
-        if (arg == "show") return ShowNativeFunctions();
         _useNativeArithmetic = arg == "on";
         return "Native arithmetic " + (_useNativeArithmetic ? "enabled" : "disabled");
     }

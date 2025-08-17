@@ -1,4 +1,5 @@
 namespace LambdaCalculus;
+
 public partial class Interpreter
 {
     // Delegate for native functions
@@ -126,52 +127,28 @@ public partial class Interpreter
             args[i] = EvaluateToNormalForm(args[i], env);
         }
 
-    // Helper: Recursively evaluate an expression to normal form (for native arithmetic only)
-    Expr EvaluateToNormalForm(Expr expr, Dictionary<string, Expr> env)
-    {
-        // Force thunks
-        if (expr.Type == ExprType.Thunk)
-            expr = Force(expr);
-        // If it's an application, try to reduce it
-        if (expr.Type == ExprType.App)
+        // Helper: Recursively evaluate an expression to normal form (for native arithmetic only)
+        Expr EvaluateToNormalForm(Expr expr, Dictionary<string, Expr> env)
         {
-            var reduced = TryNativeArithmetic(expr, env);
-            if (reduced != null)
-                return EvaluateToNormalForm(reduced, env);
+            // Force thunks
+            if (expr.Type == ExprType.Thunk)
+                expr = Force(expr);
+            // If it's an application, try to reduce it
+            if (expr.Type == ExprType.App)
+            {
+                var reduced = TryNativeArithmetic(expr, env);
+                if (reduced != null)
+                    return EvaluateToNormalForm(reduced, env);
+            }
+            return expr;
         }
-        return expr;
-    }
 
         // Check extensible native function registry first
-        if (opName != null && _nativeFunctions.TryGetValue(opName, out var nativeFunc))
+        if (opName != null && _useNativeArithmetic && _nativeFunctions.TryGetValue(opName, out var nativeFunc))
         {
             _nativeArithmetic++;
             _stats.NativeUsage[opName] = _stats.NativeUsage.GetValueOrDefault(opName) + 1;
             return nativeFunc(opName, args, env);
-        }
-
-        // Fallback to built-in primitives for backward compatibility
-        // if (opName == "isStructEqual") return IsStructEqual(args, env);
-
-        if (!TryGetChurchInt(args[0], env, out var a))
-            return null; // First argument must be a Church numeral
-        var b = 0; // Default value for second argument if available
-        var isArg2Number = args.Count == 2 && TryGetChurchInt(args[1], env, out b);
-
-        int? intResult = ArithmeticPrimitives(opName, a, b, args, isArg2Number);
-        if (intResult is not null)
-        {
-            _nativeArithmetic++;
-            _stats.NativeUsage[opName!] = _stats.NativeUsage.GetValueOrDefault(opName!) + 1;
-            return MakeChurchNumeral(intResult.Value);
-        }
-
-        bool? boolResult = ComparisonPrimitives(opName, a, b, args, isArg2Number);
-        if (boolResult is not null)
-        {
-            _nativeArithmetic++;
-            _stats.NativeUsage[opName!] = _stats.NativeUsage.GetValueOrDefault(opName!) + 1;
-            return MakeChurchBoolean(boolResult.Value);
         }
 
         return null; // Not a recognized native arithmetic or boolean operation
@@ -288,13 +265,13 @@ public partial class Interpreter
         // Extract: App(App(App(if, condition), then_branch), else_branch)
         var outerApp = control; // App(App(App(if, condition), then_branch), else_branch)
         var elseExpr = outerApp.AppRight!;
-        
+
         var middleApp = outerApp.AppLeft!; // App(App(if, condition), then_branch)
         var thenExpr = middleApp.AppRight!;
-        
+
         var innerApp = middleApp.AppLeft!; // App(if, condition)
         var conditionExpr = innerApp.AppRight!;
-        
+
         // Evaluate the condition first
         var conditionalKont = Kontinuation.Conditional(thenExpr, elseExpr, env, kont);
         stateStack.Push(new CEKState(conditionExpr, env, conditionalKont));

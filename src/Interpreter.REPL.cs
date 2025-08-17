@@ -410,7 +410,6 @@ public partial class Interpreter
                 }
                 lines.Add("");
 
-                lines.AddRange(ShowNativeFunctions());
             }
 
             // Add footer with loading instructions

@@ -2,49 +2,6 @@ namespace LambdaCalculus;
 
 public partial class Interpreter
 {
-    // Display all supported native arithmetic functions/operators
-    private string ShowNativeFunctions()
-        => """  
-                  Supported native arithmetic functions/operators (for Church numerals) and structural helpers:
-
-                    Binary (two arguments):
-                        plus, +         : addition
-                        minus, -        : subtraction (clamped to 0)
-                        mult, *         : multiplication
-                        div, /          : integer division (0 if divisor is 0)
-                        mod, %          : modulo (0 if divisor is 0)
-                        exp, pow, ^     : exponentiation
-                        max             : maximum
-                        min             : minimum
-                        lt, <           : less than (returns true/false)
-                        leq, <=         : less than or equal (returns true/false)
-                        eq, ==          : equal (returns true/false)
-                        geq, >=         : greater than or equal (returns true/false)
-                        gt, >           : greater than (returns true/false)
-                        neq, !=         : not equal (returns true/false)
-
-                    Unary (one argument):
-                        succ, ++        : successor (n+1)
-                        pred, --        : predecessor (clamped to 0)
-                        square          : n*n
-                        double          : n*2
-                        half            : n/2
-                        sqrt            : integer square root
-                        random          : random integer in [0, n]
-                        iszero          : returns true if n==0, else false
-                        even            : returns true if n is even
-                        odd             : returns true if n is odd
-
-                    Structural:
-                        isStructEqual   : structural (alpha-sensitive) equality over raw ASTs (forced thunks compare forced bodies)
-
-                    Notes:
-                        - Boolean results are Church booleans (true = λf.λx.f, false = λf.λx.x)
-                        - All arguments must be Church numerals (integers)
-                        - isStructEqual works regardless of numeric status; counts toward native call stats
-                        - These functions are only available when native arithmetic is enabled (:native on)
-                """;
-
     private async Task<string> ShowEnv()
     {
         var envResult = await SaveFileAsync("console");
@@ -203,7 +160,6 @@ public partial class Interpreter
           :memo                  Clear all memoization/caches
           :multiline             Show detailed multi-line input help and examples
           :native on|off         Enable/disable native arithmetic for Church numerals (default: on)
-          :native show           Show all supported native arithmetic functions/operators
           :pretty on|off, :pp    Toggle pretty printing (default: on) - numerals and lists
           :save <file>           Save current environment to file (e.g., :save myenv.lambda)
           :stats                 Show detailed performance and environment statistics
