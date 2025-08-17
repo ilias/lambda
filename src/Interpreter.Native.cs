@@ -38,7 +38,7 @@ public partial class Interpreter
     }
 
     // Intercept known arithmetic primitives
-    internal int? ArithmeticPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
+    internal static int? ArithmeticPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
         => (opName, args.Count, isArg2Number) switch
         {
             ("plus" or "+", 2, true) => a + b,
@@ -55,12 +55,11 @@ public partial class Interpreter
             ("square", 1, _) => a * a,
             ("half", 1, _) => a / 2,
             ("sqrt", 1, _) => (int)Math.Sqrt(a),
-            ("random", 1, _) => (_usedRandom = true, new Random().Next(0, a + 1)).Item2, // Random number in range [0, a]
 
             _ => null
         };
 
-    internal bool? ComparisonPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
+    internal static bool? ComparisonPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
         => (opName, args.Count, isArg2Number) switch
         {
             ("lt" or "<", 2, true) => a < b,
@@ -90,6 +89,21 @@ public partial class Interpreter
         {
             if (args.Count == 1 && TryGetChurchInt(args[0], env, out var n))
                 return MakeChurchNumeral(n - 1);
+            return null;
+        });
+
+        RegisterNativeFunction("random", (args, env) =>
+        {
+            if (args.Count == 1 && TryGetChurchInt(args[0], env, out var n))
+            {
+                _usedRandom = true;
+                return MakeChurchNumeral(new Random().Next(0, n + 1));
+            }
+            if (args.Count == 2 && TryGetChurchInt(args[0], env, out var n1) && TryGetChurchInt(args[1], env, out var n2))
+            {
+                _usedRandom = true;
+                return MakeChurchNumeral(new Random().Next(n1, n2 + 1));
+            }
             return null;
         });
 
