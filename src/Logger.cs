@@ -48,7 +48,7 @@ public class Logger
         _logWriter = null;
     }
 
-    private static string GetMessageColor(string message) => message switch
+    private static string GetColor(string message) => message switch
     {
         string s when s.StartsWith("Error:") => RED,
         string s when s.StartsWith("#") => YELLOW,            // Comments
@@ -70,15 +70,11 @@ public class Logger
 
     public static void LogToConsole(string message)
     {
-        var color = GetMessageColor(message);
+        var color = GetColor(message);
         int hashIndex = message.IndexOf('#');
-        string text = message;
-        if (hashIndex >= 0)
-        {
-            text = message[..hashIndex]
-                + GetMessageColor("#") + "#"
-                + message[(hashIndex + 1)..];
-        }
+        string text = hashIndex >= 0
+            ? message[..hashIndex] + GetColor("#") + message[hashIndex..] + RESET
+            : message;
         Console.WriteLine($"{color}{text}{RESET}");
     }
 
