@@ -68,8 +68,19 @@ public class Logger
         _ => RESET                                            // Default
     };
 
-    public static void LogToConsole(string message) =>
-        Console.WriteLine($"{GetMessageColor(message)}{message.Replace("\t", RESET)}{RESET}");
+    public static void LogToConsole(string message)
+    {
+        var color = GetMessageColor(message);
+        int hashIndex = message.IndexOf('#');
+        string text = message;
+        if (hashIndex >= 0)
+        {
+            text = message[..hashIndex]
+                + GetMessageColor("#") + "#"
+                + message[(hashIndex + 1)..];
+        }
+        Console.WriteLine($"{color}{text}{RESET}");
+    }
 
     public async Task LogAsync(string message, bool toConsole = true)
     {

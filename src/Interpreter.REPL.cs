@@ -320,6 +320,8 @@ public partial class Interpreter
             lines.Add($"# ============================================================================");
             lines.Add("");
 
+            string IsNativeFunction(string key) => _nativeFunctions.ContainsKey(key) ? " # native " : "";
+
             // Save variable definitions/assignments
             if (_contextUnevaluated.Count > 0)
             {
@@ -347,7 +349,7 @@ public partial class Interpreter
                 {
                     lines.Add("# Simple definitions and constants");
                     foreach (var (key, value) in simpleVars)
-                        lines.Add($"  {key} = {FormatWithNumerals(value)}");
+                        lines.Add($"  {key} = {FormatWithNumerals(value)} {IsNativeFunction(key)}");
                     lines.Add("");
                 }
 
@@ -356,7 +358,7 @@ public partial class Interpreter
                 {
                     lines.Add("# Function definitions");
                     foreach (var (key, value) in functionVars)
-                        lines.Add($"  {key} = {FormatWithNumerals(value)}");
+                        lines.Add($"  {key} = {FormatWithNumerals(value)} {IsNativeFunction(key)}");
                     lines.Add("");
                 }
 
@@ -365,7 +367,7 @@ public partial class Interpreter
                 {
                     lines.Add("# Complex expressions");
                     foreach (var (key, value) in complexVars)
-                        lines.Add($"  {key} = {FormatWithNumerals(value)}");
+                        lines.Add($"  {key} = {FormatWithNumerals(value)} {IsNativeFunction(key)}");
                     lines.Add("");
                 }
             }
@@ -380,7 +382,7 @@ public partial class Interpreter
                     .ThenBy(op => op.Symbol);
 
                 foreach (var op in operators)
-                    lines.Add($"  :infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()}");
+                    lines.Add($"  :infix {op.Symbol} {op.Precedence} {op.Associativity.ToString().ToLower()} {IsNativeFunction(op.Symbol)}");
                 lines.Add("");
             }
 
