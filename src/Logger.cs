@@ -77,21 +77,23 @@ public class Logger
     public static void LogToConsole(string message)
     {
         var color = GetColor(message);
-        var text = message.Replace(";", "\n").Replace("\n", $"{RED};{color}");
+
+        var text = message.Replace(";", $"{RED};{color}");
+
         int commentIndex = text.IndexOf('#');
-        text = commentIndex >= 0
-            ? text[..commentIndex] + GetColor("#") + text[commentIndex..] + RESET
-            : text;
-        string[] commands = [":macro ", ":infix ", ":load ", ":test "];
-        var hasIndex = 0;
-        foreach (var command in commands)
+        if (commentIndex >= 0)
+            text = text[..commentIndex] + GetColor("#") + text[commentIndex..] + RESET;
+
+        foreach (var command in new[] { ":macro ", ":infix ", ":load ", ":test " })
         {
-            hasIndex = text.IndexOf(command);
-            if (hasIndex >= 0)
+            int idx = text.IndexOf(command);
+            if (idx >= 0)
+            {
+                text = text[..idx] + PINK + text[idx..] + RESET;
                 break;
+            }
         }
-        if (hasIndex >= 0)
-            text = text[..hasIndex] + PINK + text[hasIndex..] + RESET;
+
         Console.WriteLine($"{color}{text}{RESET}");
     }
 
