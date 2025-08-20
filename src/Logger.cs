@@ -1,3 +1,6 @@
+using System.Drawing;
+using System.Text.RegularExpressions;
+
 namespace LambdaCalculus;
 
 public class Logger
@@ -11,9 +14,12 @@ public class Logger
     private const string YELLOW = "\u001b[33m";
     private const string BLUE = "\u001b[34m";
     private const string MAGENTA = "\u001b[35m";
+    private const string BLACK = "\u001b[30m";
     private const string CYAN = "\u001b[36m";
     private const string WHITE = "\u001b[37m";
     private const string GRAY = "\u001b[90m";
+    private const string ORANGE = "\u001b[38;5;214m";
+    private const string PINK = "\u001b[38;5;205m";
 
     private const string RESET = "\u001b[0m";
 
@@ -71,10 +77,21 @@ public class Logger
     public static void LogToConsole(string message)
     {
         var color = GetColor(message);
-        int hashIndex = message.IndexOf('#');
-        string text = hashIndex >= 0
-            ? message[..hashIndex] + GetColor("#") + message[hashIndex..] + RESET
-            : message;
+        var text = message.Replace(";", "\n").Replace("\n", $"{RED};{color}");
+        int commentIndex = text.IndexOf('#');
+        text = commentIndex >= 0
+            ? text[..commentIndex] + GetColor("#") + text[commentIndex..] + RESET
+            : text;
+        string[] commands = [":macro ", ":infix ", ":load ", ":test "];
+        var hasIndex = 0;
+        foreach (var command in commands)
+        {
+            hasIndex = text.IndexOf(command);
+            if (hasIndex >= 0)
+                break;
+        }
+        if (hasIndex >= 0)
+            text = text[..hasIndex] + PINK + text[hasIndex..] + RESET;
         Console.WriteLine($"{color}{text}{RESET}");
     }
 
