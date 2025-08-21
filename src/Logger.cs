@@ -80,7 +80,7 @@ public class Logger
 
     static readonly List<string> commands =
     [
-        "#", ":clear ", ":infix ", ":lazy ", ":load ", ":log ",
+        ":clear ", ":infix ", ":lazy ", ":load ", ":log ",
         ":macro ", ":memo ", ":native ", "pretty ", ":stats ", ":test "
     ];
 
@@ -92,12 +92,15 @@ public class Logger
             .Split(';', StringSplitOptions.RemoveEmptyEntries)
             .Select(section =>
             {
+                var cInd = section.IndexOf('#');
                 var match = commands
                     .Select(cmd => (cmd, idx: section.IndexOf(cmd)))
-                    .FirstOrDefault(t => t.idx >= 0);
+                    .FirstOrDefault(t => t.idx >= 0 && (cInd < 0 || t.idx < cInd));
                 var txt = match.cmd != null
                     ? section[..match.idx] + GetColor(match.cmd) + section[match.idx..] + RESET
                     : section;
+                if (cInd >= 0)
+                    txt = txt[..cInd] + YELLOW + txt[cInd..] + RESET;
                 return $"{color}{txt}{RESET}";
             });
 

@@ -1323,15 +1323,15 @@ force     = λthunk.thunk I
 #  2. For general lambda expressions where structure matters: isStructEqual.
 #  3. For numerals/booleans/chars inside algorithms: eq.
 # listEq et al do NOT normalize arbitrary expressions; element eq should align with eq semantics.
-listEq   = Y (λself.λeqE.λl1.λl2.
-                                if (and (isnil l1) (isnil l2)) true (
-                                    if (or (isnil l1) (isnil l2)) false (
+listEq   = Y (λself.λeqE.λl1.λl2. \
+                                if (and (isnil l1) (isnil l2)) true ( \
+                                    if (or (isnil l1) (isnil l2)) false ( \
                                         and (eqE (head l1) (head l2)) (self eqE (tail l1) (tail l2)))))
 pairEq   = λeqA.λeqB.λp1.λp2.and (eqA (first p1) (first p2)) (eqB (second p1) (second p2))
-maybeEq  = λeqA.λm1.λm2.if (and (isNothing m1) (isNothing m2)) true (
-                                            if (or (isNothing m1) (isNothing m2)) false (
+maybeEq  = λeqA.λm1.λm2.if (and (isNothing m1) (isNothing m2)) true ( \
+                                            if (or (isNothing m1) (isNothing m2)) false ( \
                                                 eqA (fromJust m1) (fromJust m2)))
-eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft e1) (fromLeft e2)) (
+eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft e1) (fromLeft e2)) ( \
                                                     if (and (isRight e1) (isRight e2)) (eqR (fromRight e1) (fromRight e2)) false)
 
 
