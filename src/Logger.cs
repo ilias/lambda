@@ -1,5 +1,8 @@
+using System.ComponentModel.Design;
 using System.Drawing;
 using System.Text.RegularExpressions;
+using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace LambdaCalculus;
 
@@ -68,33 +71,38 @@ public class Logger
         string s when s.StartsWith("Test: right") => MAGENTA, // Test expression
         string s when s.StartsWith("Test: passed") => GREEN,  // expected test result
         string s when s.StartsWith("Test: failed") => RED,    // expected test result
+        string s when s.StartsWith(":") => PINK,              // General command
         string s when s.Contains("Loading") => CYAN,          // Loading files
         string s when s.Contains("<<") => GRAY,               // Reading file lines
         string s when s.Contains(">>") => GREEN,              // Result of reading file lines
         _ => RESET                                            // Default
     };
 
-    public static void LogToConsole(string message)
+    static readonly List<string> commands =
+    [
+        "#", ":clear ", ":infix ", ":lazy ", ":load ", ":log ",
+        ":macro ", ":memo ", ":native ", "pretty ", ":stats ", ":test "
+    ];
+
+    public static void LogToConsole(string msg)
     {
-        var color = GetColor(message);
+        var color = GetColor(msg);
 
-        var text = message.Replace(";", $"{RED};{color}");
-
-        int commentIndex = text.IndexOf('#');
-        if (commentIndex >= 0)
-            text = text[..commentIndex] + GetColor("#") + text[commentIndex..] + RESET;
-
-        foreach (var command in new[] { ":macro ", ":infix ", ":load ", ":test " })
-        {
-            int idx = text.IndexOf(command);
-            if (idx >= 0)
+        var sectionTexts = msg
+            .Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Select(section =>
             {
-                text = text[..idx] + PINK + text[idx..] + RESET;
-                break;
-            }
-        }
+                var match = commands
+                    .Select(cmd => (cmd, idx: section.IndexOf(cmd)))
+                    .FirstOrDefault(t => t.idx >= 0);
+                var txt = match.cmd != null
+                    ? section[..match.idx] + GetColor(match.cmd) + section[match.idx..] + RESET
+                    : section;
+                return $"{color}{txt}{RESET}";
+            });
 
-        Console.WriteLine($"{color}{text}{RESET}");
+        var text = string.Join($"{GREEN};{RESET}", sectionTexts);
+        Console.WriteLine($"{text}");
     }
 
     public async Task LogAsync(string message, bool toConsole = true)
