@@ -290,8 +290,6 @@ public partial class Interpreter
         return $"Test results: structural equality calls={_stats.StructEqCalls}, successes={_stats.StructEqSuccesses}, success rate={( _stats.StructEqCalls==0 ? 0 : (100.0*_stats.StructEqSuccesses/_stats.StructEqCalls)):F1}%";
     }
 
-    
-
     private Expr NormalizeExpression(Expr expr)
     {
         if (_normalizationCache.TryGetValue(expr, out var cached))

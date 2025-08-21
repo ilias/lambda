@@ -187,22 +187,18 @@ public record Expr(
     public static bool TryExtractBoolean(Expr expr, out bool value)
     {
         value = false;
-        if (expr.Type != ExprType.Abs || expr.AbsBody is null) return false;
-        var a = expr.AbsVarName;
-        var body = expr.AbsBody;
-        if (body.Type != ExprType.Abs || body.AbsBody is null) return false;
-        var b = body.AbsVarName;
-        var inner = body.AbsBody;
-        if (inner.Type != ExprType.Var || inner.VarName is null) return false;
-        if (inner.VarName == a)
+        if (expr.Type == ExprType.Abs && expr.AbsBody is { Type: ExprType.Abs, AbsBody: { Type: ExprType.Var } inner })
         {
-            value = true; // λa.λb.a
-            return true;
-        }
-        if (inner.VarName == b)
-        {
-            value = false; // λa.λb.b
-            return true;
+            if (inner.VarName == expr.AbsVarName)
+            {
+                value = true;
+                return true;
+            }
+            if (inner.VarName == expr.AbsBody.AbsVarName)
+            {
+                value = false;
+                return true;
+            }
         }
         return false;
     }
