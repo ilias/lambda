@@ -41,6 +41,7 @@ label { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spac
       <button id="runBtn">Evaluate (Ctrl+Enter)</button>
       <button class="secondary" id="clearBtn" type="button">Clear Output</button>
       <button class="secondary" id="loadStdBtn" type="button">Reload stdlib</button>
+  <button class="secondary" id="streamToggle" type="button" data-on="0">Streaming: Off</button>
     </div>
     <div class="small">Multiple expressions separated by semicolons are processed sequentially.</div>
     <label style="margin-top:1rem;" for="output">Result / Log</label>
@@ -53,6 +54,9 @@ label { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spac
       <button id="loadBtn" type="button">Load</button>
     </div>
     <div id="fileStatus" class="status" style="margin-top:.5rem;">Idle</div>
+      <div id="fileProgress" style="margin-top:.4rem;height:6px;background:#222;border:1px solid var(--border);border-radius:4px;overflow:hidden;display:none;">
+        <div id="fileProgressBar" style="height:100%;width:0;background:var(--accent);transition:width .25s;"></div>
+      </div>
     <hr style="margin:1rem 0; border:0; border-top:1px solid var(--border);" />
     <h3 style="margin-top:0;">Quick Examples</h3>
     <ul style="margin:.25rem 0 0 1.1rem; padding:0; font-size:.8rem; line-height:1.4;">
@@ -77,11 +81,38 @@ const outEl = document.getElementById('output');
 const runBtn = document.getElementById('runBtn');
 const clearBtn = document.getElementById('clearBtn');
 const loadStdBtn = document.getElementById('loadStdBtn');
+const streamToggle = document.getElementById('streamToggle');
 const loadBtn = document.getElementById('loadBtn');
 const filePathEl = document.getElementById('filePath');
 const fileStatus = document.getElementById('fileStatus');
+const fileProgress = document.getElementById('fileProgress');
+const fileProgressBar = document.getElementById('fileProgressBar');
 
 function append(text){ outEl.textContent += text + '\n'; outEl.scrollTop = outEl.scrollHeight; }
+let es=null; let streaming=false;
+function ensureStream(){
+  if(!streaming) return;
+  if(es) return;
+  es = new EventSource('/api/stream');
+  es.onmessage = e=>{ if(e.data && e.data!=='.') append(e.data); };
+    es.addEventListener('message', e=>{
+      if(!e.data) return;
+      if(e.data.startsWith('PROGRESS::')){
+        const pct = parseInt(e.data.split('::')[1]||'0',10);
+        fileProgress.style.display='block';
+        fileProgressBar.style.width=pct+'%';
+        if(pct>=100) setTimeout(()=>{ fileProgress.style.display='none'; fileProgressBar.style.width='0%'; },1200);
+      }
+    });
+  es.onerror = ()=>{ es.close(); es=null; if(streaming) setTimeout(ensureStream,1500); };
+}
+streamToggle.addEventListener('click',()=>{
+  streaming = !streaming;
+  streamToggle.dataset.on = streaming ? '1':'0';
+  streamToggle.textContent = 'Streaming: '+ (streaming?'On':'Off');
+  if(streaming){ ensureStream(); append('[streaming enabled]'); }
+  else { if(es){ es.close(); es=null; append('[streaming disabled]'); } }
+});
 
 async function doEval(){
   const raw = exprEl.value.trim();
@@ -90,15 +121,17 @@ async function doEval(){
   try {
     const res = await evalExpr(raw);
     append(`> ${raw}`);
-    // Show logs first (if any)
-    if(Array.isArray(res.logs) && res.logs.length){
-      res.logs.forEach(l=> append(l));
+    if(!streaming){
+      if(Array.isArray(res.logs) && res.logs.length){ res.logs.forEach(l=> append(l)); }
+      const primary = res.output || res.normalized || '(no output)';
+      if(!res.logs || !res.logs.includes(primary)) append(primary);
+      if(res.normalized && res.normalized !== primary && (!res.logs || !res.logs.includes(res.normalized))) append(res.normalized);
+    } else {
+      // In streaming mode, only append final outputs (logs already streamed)
+      const primary = res.output || res.normalized || '(no output)';
+      append(primary);
+      if(res.normalized && res.normalized !== primary) append(res.normalized);
     }
-    // Show primary output (avoid duplicating if already present in logs)
-    const primary = res.output || res.normalized || '(no output)';
-    if(!res.logs || !res.logs.includes(primary)) append(primary);
-    // If normalized differs and not already shown, display it
-    if(res.normalized && res.normalized !== primary && (!res.logs || !res.logs.includes(res.normalized))) append(res.normalized);
     append('');
   } catch(e){ append(`ERR: ${e.message}`); }
   finally { runBtn.disabled=false; }
@@ -111,12 +144,15 @@ loadStdBtn.addEventListener('click',()=>{ filePathEl.value='stdlib.lambda'; load
 loadBtn.addEventListener('click',async()=>{
   const p=filePathEl.value.trim(); if(!p) return;
   fileStatus.textContent='Loading...';
-  try { const r=await loadFile(p); fileStatus.textContent='Loaded: '+ r.message; if(r.logs && Array.isArray(r.logs) && r.logs.length){ r.logs.forEach(l=>append(l)); append(''); } }
+  if(streaming){ fileProgress.style.display='block'; fileProgressBar.style.width='0%'; }
+  try { const r=await loadFile(p); fileStatus.textContent='Loaded: '+ r.message; if(!streaming && r.logs && Array.isArray(r.logs) && r.logs.length){ r.logs.forEach(l=>append(l)); append(''); } }
   catch(e){ fileStatus.textContent='Error: '+ e.message; }
 });
 
 // Health ping
 fetch('/api/health').then(r=>r.ok?document.getElementById('health').textContent='ready':null).catch(()=>{});
+// Auto-init streaming if hash contains #stream
+if(location.hash.includes('stream')){ streamToggle.click(); }
 </script>
 </body>
 </html>

@@ -2,10 +2,12 @@ namespace LambdaCalculus;
 
 public partial class Interpreter
 {
+    /// <summary>Runs the interactive REPL loop reading from the console.</summary>
     public async Task RunInteractiveLoopAsync()
         => await InputLoopAsync(async input => await ProcessAndDisplayInputAsync(input!));
 
     // Helper method to safely load a file if it exists
+    /// <summary>Loads a file if it exists, returning a status string.</summary>
     public async Task<string> LoadFileIfExistsAsync(string path)
     {
         if (!File.Exists(path))
@@ -14,16 +16,35 @@ public partial class Interpreter
         catch (Exception ex) { return $"Error loading {path}: {ex.Message}"; }
     }
 
+    /// <summary>
+    /// Loads a .lambda file, processing commands with multiline / continuation support.
+    /// Emits PROGRESS::NN lines (5% increments) and a final load summary for streaming UIs.
+    /// </summary>
     public async Task<string> LoadFileAsync(string path)
     {
         int lineCount = 0;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         _logger.Log($"Loading commands from '{path}'");
         var lines = await File.ReadAllLinesAsync(path);
+        var total = lines.Length;
         var currentInput = new System.Text.StringBuilder();
+        int lastProgress = -1;
         foreach (var line in lines)
+        {
             await ProcessLineWithContinuation(line, currentInput, ProcessAndDisplayInputAsync, true, lineCount++);
+            var pct = (int)((long)lineCount * 100 / total);
+            if (pct != lastProgress && (pct == 100 || pct - lastProgress >= 5)) // every 5% + final
+            {
+                _logger.Log($"PROGRESS::{pct}");
+                lastProgress = pct;
+            }
+        }
         if (currentInput.Length > 0)
             await ProcessAndDisplayInputAsync(currentInput.ToString());
+        if (lastProgress < 100)
+            _logger.Log("PROGRESS::100");
+        sw.Stop();
+        _logger.Log($"Loaded file '{path}' lines={total} time={sw.Elapsed.TotalMilliseconds:F1} ms");
         return $"Loaded {path}";
     }
 

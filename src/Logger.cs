@@ -6,6 +6,10 @@ using System.Runtime.InteropServices;
 
 namespace LambdaCalculus;
 
+/// <summary>
+/// Central logging utility supporting colored console output, optional file logging,
+/// in-memory buffering, and reactive subscriptions for streaming to external clients.
+/// </summary>
 public class Logger
 {
     private string _logFile = "";
@@ -13,6 +17,8 @@ public class Logger
     private readonly SemaphoreSlim _logFileLock = new(1);
     private readonly object _bufferLock = new();
     private readonly List<string> _buffer = new();
+    private readonly List<Action<string>> _subscribers = new();
+    private readonly object _subLock = new();
 
     /// <summary>
     /// When true, all log messages (plain text, without ANSI colors) are also captured in memory.
@@ -38,9 +44,12 @@ public class Logger
 
     private const string RESET = "\u001b[0m";
 
+    /// <summary>Formats a prompt string with ANSI color (if console supports it).</summary>
     public static string Prompt(string txt) => $"{CYAN}{txt}{RESET} ";
+    /// <summary>Returns current log file path or DISABLED.</summary>
     public string LogStatus => _logFile == "" ? "DISABLED" : _logFile;
 
+    /// <summary>Handles :log command arguments (off|clear|filename).</summary>
     public async Task<string> HandleLogCommandAsync(string arg) => arg switch
     {
         "off" or "" => (_logFile = "", "Logging is disabled.").Item2,
@@ -48,6 +57,7 @@ public class Logger
         _ => (_logFile = arg, $"Logging is enabled to '{arg}'").Item2
     };
 
+    /// <summary>Clears current log file contents.</summary>
     public async Task<string> ClearLogFileAsync()
     {
         try
@@ -62,6 +72,7 @@ public class Logger
         }
     }
 
+    /// <summary>Closes the open log file writer (if any).</summary>
     public async Task CloseLogFileAsync()
     {
         if (_logWriter is null) return;
@@ -96,6 +107,7 @@ public class Logger
         ":macro ", ":memo ", ":native ", "pretty ", ":stats ", ":test "
     ];
 
+    /// <summary>Writes a single colored line to the console.</summary>
     public static void LogToConsole(string msg)
     {
         var color = GetColor(msg);
@@ -120,21 +132,31 @@ public class Logger
         Console.WriteLine($"{text}");
     }
 
+    /// <summary>Clears the in-memory buffer of captured log lines.</summary>
     public void ClearBuffer()
     {
         lock (_bufferLock) _buffer.Clear();
     }
 
+    /// <summary>Returns a snapshot copy of buffered log lines.</summary>
     public IReadOnlyList<string> GetBufferSnapshot()
     {
         lock (_bufferLock) return _buffer.ToArray();
     }
 
+    /// <summary>Logs a message asynchronously (buffer, console, file as configured).</summary>
     public async Task LogAsync(string message, bool toConsole = true)
     {
         if (EnableBuffering)
         {
             lock (_bufferLock) _buffer.Add(message);
+        }
+        // Notify subscribers (non-blocking best-effort)
+        Action<string>[] subs;
+        lock (_subLock) subs = _subscribers.ToArray();
+        foreach (var s in subs)
+        {
+            try { s(message); } catch { /* ignore subscriber errors */ }
         }
         if (toConsole && ConsoleOutputEnabled) LogToConsole(message);
         if (string.IsNullOrWhiteSpace(_logFile)) return;
@@ -152,10 +174,36 @@ public class Logger
         _logFileLock.Release();
     }
 
+    /// <summary>Synchronous wrapper for <see cref="LogAsync"/>.</summary>
     public void Log(string message, bool toConsole = true)
     {
         LogAsync(message, toConsole)
             .GetAwaiter()
             .GetResult();
+    }
+
+    /// <summary>
+    /// Subscribes to log messages. Returns an IDisposable that, when disposed, unsubscribes.
+    /// </summary>
+    public IDisposable Subscribe(Action<string> handler)
+    {
+        lock (_subLock) _subscribers.Add(handler);
+        return new Unsubscriber(_subscribers, handler, _subLock);
+    }
+
+    private sealed class Unsubscriber : IDisposable
+    {
+        private readonly List<Action<string>> _list;
+        private readonly Action<string> _handler;
+        private readonly object _lock;
+        private bool _disposed;
+        public Unsubscriber(List<Action<string>> list, Action<string> handler, object l)
+        { _list = list; _handler = handler; _lock = l; }
+        public void Dispose()
+        {
+            if (_disposed) return;
+            lock (_lock) _list.Remove(_handler);
+            _disposed = true;
+        }
     }
 }

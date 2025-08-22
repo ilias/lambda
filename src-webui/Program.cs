@@ -1,5 +1,10 @@
 using LambdaCalculus;
 using System.IO;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using System.Collections.Concurrent;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -31,6 +36,43 @@ services.AddSingleton<Interpreter>(_ =>
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// SSE endpoint
+app.MapGet("/api/stream", async (HttpContext ctx, Interpreter interp) =>
+{
+    ctx.Response.Headers.CacheControl = "no-cache";
+    ctx.Response.Headers.Connection = "keep-alive";
+    ctx.Response.Headers["X-Accel-Buffering"] = "no"; // for nginx proxies (no buffering)
+    ctx.Response.ContentType = "text/event-stream";
+    var response = ctx.Response;
+    var logger = interp.Logger;
+    var cancelled = ctx.RequestAborted;
+    await response.Body.FlushAsync();
+    var queue = new ConcurrentQueue<string>();
+    using var sub = logger.Subscribe(line => queue.Enqueue(line));
+    var pingBytes = System.Text.Encoding.UTF8.GetBytes("event: ping\ndata: .\n\n");
+    while (!cancelled.IsCancellationRequested)
+    {
+        // Drain queue
+        while (queue.TryDequeue(out var line))
+        {
+            try
+            {
+                var data = $"data: {line.Replace("\r", " ").Replace("\n", " ")}\n\n";
+                var bytes = System.Text.Encoding.UTF8.GetBytes(data);
+                await response.Body.WriteAsync(bytes, 0, bytes.Length, cancelled);
+            }
+            catch { cancelled = new System.Threading.CancellationToken(true); break; }
+        }
+        try
+        {
+            await response.Body.WriteAsync(pingBytes, 0, pingBytes.Length, cancelled);
+            await response.Body.FlushAsync(cancelled);
+        }
+        catch { break; }
+        await Task.Delay(1000, cancelled).ContinueWith(_ => { });
+    }
+});
 
 app.MapGet("/api/eval", async (string expr, Interpreter interp) =>
 {
