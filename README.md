@@ -18,6 +18,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
 - [Building and Running](#building-and-running)
+ - [Web UI & Streaming Logs](#web-ui--streaming-logs)
 - [Range Syntax Extensions](#range-syntax-extensions)
 - [Parser Errors & Diagnostics](#parser-errors--diagnostics)
 - [Unary Minus / Negative Literals](#unary-minus--negative-literals)
@@ -130,6 +131,84 @@ dotnet run --project src-webui
 ```
 
 Then open http://localhost:5000 (or the shown port) in your browser. Health status appears in the footer.
+
+## Web UI & Streaming Logs
+
+The Web UI (`src-webui`) provides a browser-based REPL with real-time log streaming and colored output mirroring the CLI.
+
+### Transports
+
+Two streaming transports are available for incremental log delivery:
+
+| Transport | Endpoint | Notes |
+|-----------|----------|-------|
+| Server-Sent Events (SSE) | `/api/stream` | Default; simple, auto‑reconnect logic implemented |
+| WebSocket | `/ws` | Optional; toggle with the UI button ("WS: On/Off") |
+
+Toggle streaming via the "Streaming" button. When disabled, evaluation responses include a buffered copy of the logs (`logs` array) in the JSON payload (gathered from the interpreter's in‑memory log buffer). When enabled, logs are pushed line-by-line; the final JSON response only supplies the canonical result(s).
+
+### Progress Feedback
+
+While loading `.lambda` files the interpreter emits progress pseudo‑log lines in the form:
+
+```text
+PROGRESS::<percent>
+```
+
+The UI converts these into a progress bar; when 100% is reached the bar auto-hides after a short delay. A final timing / summary line is also streamed (e.g. `Loaded stdlib.lambda (N lines in X ms)`).
+
+### Colored Log Classification
+
+Incoming log lines are classified on the client (prefix / pattern heuristics) and assigned CSS classes:
+
+| Class | Meaning (examples) |
+|-------|--------------------|
+| `log-error` | Error diagnostics (`Error:` …) |
+| `log-result` | Result marker lines starting with `->` |
+| `log-step` | Step-by-step evaluation traces (when `:step on`) |
+| `log-time` / `log-name` | Timing / named expression metadata |
+| `log-eval` | Evaluation summaries (`Eval:`) |
+| `log-macro` | Macro expansion info |
+| `log-test`, `log-test-pass`, `log-test-fail` | Structural test counters / outcomes |
+| `log-command` | Echoed colon commands (lines beginning with `:`) |
+| `log-loading` | File loading lines (contain `Loading`) |
+| `log-fileline` / `log-fileresult` | Per-line file load traces / outcomes |
+| `log-progress` | Progress pseudo-lines |
+
+The classification is intentionally lightweight; adding new patterns only requires editing `classify()` inside `wwwroot/index.html`.
+
+### Log Retention
+
+To prevent the browser DOM from growing unbounded during long step traces, the UI caps the number of displayed log lines (default 2000). Older nodes are trimmed once the cap is exceeded. Adjust `MAX_LOG_LINES` in `index.html` if needed.
+
+### Typical Workflow
+
+1. Start the UI: `dotnet run --project src-webui`
+2. (Optional) Click `Streaming: On` (or append `#stream` to the URL for auto-enable)
+3. (Optional) Enable WebSocket transport (`WS: On`) if desired
+4. Enter expressions or colon commands (e.g. `:stats`, `succ 41`, `let x = 5 in x*x`)
+5. Load additional files via the right-hand panel (`stdlib.lambda` is preloaded if found)
+
+### API Summary (Web UI Namespace)
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| GET | `/api/eval?expr=...` | Evaluate a single expression (returns JSON with `output`, `normalized`, and `logs` when not streaming) |
+| POST | `/api/load` (JSON `{ path }`) | Load a `.lambda` file; returns `message` + `logs` |
+| GET | `/api/stream` | SSE endpoint for real-time log push (one `data:` line per log) |
+| GET | `/api/health` | Health/liveness check |
+| WS | `/ws` | WebSocket log stream (one text frame per log line) |
+
+The interpreter instance is shared; stateful definitions/macros persist across requests and streams. For multi-user deployment, isolate interpreters (per session) or introduce workspace scoping.
+
+### Disabling Streaming / Fallback
+
+If streaming is off, interactive operations rely solely on the buffered log snapshot captured between `Logger.ClearBuffer()` and evaluation completion. This ensures feature parity for environments where SSE / WebSockets are blocked.
+
+### Extensibility
+
+You can instrument additional events by invoking `Logger.Log("...")` within interpreter code paths—those lines will appear uniformly across CLI and Web transports. Keep emitted lines single-line (newlines are flattened in SSE) for predictable streaming.
+
 
 
 ## User-Defined Native Primitives

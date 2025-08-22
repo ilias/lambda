@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Collections.Concurrent;
+using System.Threading.Channels;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -36,6 +37,7 @@ services.AddSingleton<Interpreter>(_ =>
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseWebSockets();
 
 // SSE endpoint
 app.MapGet("/api/stream", async (HttpContext ctx, Interpreter interp) =>
@@ -72,6 +74,44 @@ app.MapGet("/api/stream", async (HttpContext ctx, Interpreter interp) =>
         catch { break; }
         await Task.Delay(1000, cancelled).ContinueWith(_ => { });
     }
+});
+
+// WebSocket endpoint for log streaming
+app.Map("/ws", async ctx =>
+{
+    if (!ctx.WebSockets.IsWebSocketRequest)
+    {
+        ctx.Response.StatusCode = 400;
+        await ctx.Response.WriteAsync("WebSocket connection expected");
+        return;
+    }
+    using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
+    var logger = ctx.RequestServices.GetRequiredService<Interpreter>().Logger;
+    var queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+    using var sub = logger.Subscribe(line =>
+    {
+        // Try enqueue; ignore if channel closed
+        queue.Writer.TryWrite(line);
+    });
+    var cancel = ctx.RequestAborted;
+    // Consumer loop
+    try
+    {
+        while (!cancel.IsCancellationRequested && socket.State == System.Net.WebSockets.WebSocketState.Open)
+        {
+            while (await queue.Reader.WaitToReadAsync(cancel))
+            {
+                while (queue.Reader.TryRead(out var line))
+                {
+                    var msg = System.Text.Encoding.UTF8.GetBytes(line);
+                    await socket.SendAsync(msg, System.Net.WebSockets.WebSocketMessageType.Text, true, cancel);
+                }
+                break; // yield to check socket state / cancellation
+            }
+            await Task.Delay(100, cancel).ContinueWith(_ => { });
+        }
+    }
+    catch { /* ignore connection errors */ }
 });
 
 app.MapGet("/api/eval", async (string expr, Interpreter interp) =>
