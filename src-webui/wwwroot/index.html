@@ -8,7 +8,7 @@
     :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --accent:#58a6ff; --text:#c9d1d9; --bad:#ff6b6b; --good:#3fb950; }
     body { font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); margin:0; }
     header { padding:1rem 1.5rem; background:var(--panel); border-bottom:1px solid var(--border); }
-    main { max-width:1200px; margin:0 auto; padding:1.25rem; display:grid; gap:1rem; grid-template-columns: 1fr 1fr; }
+  main { max-width:1400px; margin:0 auto; padding:1.25rem; display:grid; gap:1rem; grid-template-columns: 1fr 1fr; }
     section { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem; display:flex; flex-direction:column; }
     h1 { margin:0; font-size:1.25rem; }
     textarea, input[type=text] { background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.6rem .7rem; font-family:ui-monospace,Consolas,monospace; font-size:.95rem; resize:vertical; }
@@ -26,7 +26,9 @@
     .status { font-size:.75rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; }
     .bad { color:var(--bad); }
     .good { color:var(--good); }
-    @media (max-width: 960px) { main { grid-template-columns:1fr; } }
+  .full-span { grid-column:1 / -1; }
+  #output { width:100%; max-width:100%; box-sizing:border-box; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
+  @media (max-width: 960px) { main { grid-template-columns:1fr; } #output { width:100%; } }
     /* Log color classes */
     .log-error{color:#ff6b6b;}
     .log-comment{color:#e3b341;}
@@ -59,9 +61,7 @@
         <button class="secondary" id="streamToggle" type="button" data-on="0">Streaming: Off</button>
         <button class="secondary" id="wsToggle" type="button" data-on="0">WS: Off</button>
       </div>
-      <div class="small">Multiple expressions separated by semicolons are processed sequentially.</div>
-      <label style="margin-top:1rem;" for="output">Result / Log</label>
-      <pre id="output" aria-live="polite"></pre>
+  <div class="small">Multiple expressions separated by semicolons are processed sequentially. Each line is evaluated independently.</div>
     </section>
     <section>
       <label for="filePath">Load .lambda File</label>
@@ -78,6 +78,10 @@
       <ul style="margin:.25rem 0 0 1.1rem; padding:0; font-size:.8rem; line-height:1.4;">
         <li>succ 5</li><li>let inc = x -> succ x in inc 41</li><li>[1,2,3]</li><li>let rec fact = n -> if (iszero n) 1 (mult n (fact (pred n))) in fact 5</li>
       </ul>
+    </section>
+    <section class="full-span" aria-label="Result Log">
+      <label for="output" style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;opacity:.85;">Result / Log</label>
+      <pre id="output" aria-live="polite"></pre>
     </section>
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
@@ -192,24 +196,26 @@
 
     // ---- Evaluation ----
     async function doEval(){
-      const raw = exprEl.value.trim();
-      if(!raw) return;
+      const lines = exprEl.value.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if(lines.length === 0) return;
       runBtn.disabled = true;
       try {
-        const res = await evalExpr(raw);
-        append(`> ${raw}`);
-        if(!streaming){
-          if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
-          const primary = res.output || res.normalized || '(no output)';
-          if(!res.logs || !res.logs.includes(primary)) append(primary);
-          if(res.normalized && res.normalized !== primary && (!res.logs || !res.logs.includes(res.normalized))) append(res.normalized);
-        } else {
-          // streaming: only final outputs (logs already streamed)
-          const primary = res.output || res.normalized || '(no output)';
-          append(primary);
-          if(res.normalized && res.normalized !== primary) append(res.normalized);
+        for(const raw of lines) {
+          const res = await evalExpr(raw);
+          append(`> ${raw}`);
+          if(!streaming){
+            if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
+            const primary = res.output || res.normalized || '(no output)';
+            if(!res.logs || !res.logs.includes(primary)) append(primary);
+            if(res.normalized && res.normalized !== primary && (!res.logs || !res.logs.includes(res.normalized))) append(res.normalized);
+          } else {
+            // streaming: only final outputs (logs already streamed)
+            const primary = res.output || res.normalized || '(no output)';
+            append(primary);
+            if(res.normalized && res.normalized !== primary) append(res.normalized);
+          }
+          append('');
         }
-        append('');
       } catch(e){ append(`ERR: ${e.message}`); }
       finally { runBtn.disabled=false; }
     }
