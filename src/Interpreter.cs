@@ -32,6 +32,19 @@ public partial class Interpreter
         RegisterNativeFunctions();
     }
 
+    /// <summary>
+    /// Public read-only access to the internal <see cref="Logger"/> instance. Exposed to allow
+    /// hosting layers (CLI / Web) to adjust buffering or retrieve captured logs without reflection.
+    /// </summary>
+    public Logger Logger => _logger;
+
+    /// <summary>
+    /// Processes a raw REPL input line which may contain multiple semicolon-separated statements
+    /// (commands, assignments, or expressions) and returns the last evaluated expression (if any)
+    /// plus the aggregated textual output produced during processing.
+    /// </summary>
+    /// <param name="input">User supplied input line.</param>
+    /// <returns>Tuple of the last resulting expression (or null) and a formatted output string.</returns>
     public async Task<(Expr? exp, string str)> ProcessInputAsync(string input)
     {
         try
@@ -137,6 +150,10 @@ public partial class Interpreter
     }
 
     // Ensure built-in range and range2 functions exist (lazy, stepped ranges)
+    /// <summary>
+    /// Ensures built-in range producing functions (range / range2) are present. They are defined lazily
+    /// only if not already in the environment so user overrides are respected.
+    /// </summary>
     public async Task EnsureRangeBuiltinsAsync()
     {
         bool needRange = !_context.ContainsKey("range");
@@ -151,7 +168,11 @@ public partial class Interpreter
         await ProcessInputAsync(joined);
     }
 
-    private async Task DisplayOutput((Expr? expr, string str) result, TimeSpan elapsed)
+    /// <summary>
+    /// Emits the standard CLI-style output lines (Name / Time / result lines) into the logger buffer.
+    /// Exposed so hosting layers (e.g., web UI) can reproduce identical output formatting.
+    /// </summary>
+    public async Task DisplayOutput((Expr? expr, string str) result, TimeSpan elapsed)
     {   
         if (result.expr is not null)
         {
@@ -235,6 +256,9 @@ public partial class Interpreter
     
 
     // Consolidated formatting method that uses the enhanced Expr.ToString()
+    /// <summary>
+    /// Formats an expression, optionally pretty-printing and displaying decoded Church numerals.
+    /// </summary>
     public string FormatWithNumerals(Expr expr) => 
         expr.ToString(_prettyPrint, _prettyPrint ? new System.Func<Expr,int?>(ExtractChurchNumeralValue) : null);
 

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Lambda Calculus Interpreter UI</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+:root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --accent:#58a6ff; --text:#c9d1d9; --bad:#ff6b6b; --good:#3fb950; }
+body { font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); margin:0; }
+header { padding:1rem 1.5rem; background:var(--panel); border-bottom:1px solid var(--border); }
+main { max-width:1200px; margin:0 auto; padding:1.25rem; display:grid; gap:1rem; grid-template-columns: 1fr 1fr; }
+section { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem; display:flex; flex-direction:column; }
+h1 { margin:0; font-size:1.25rem; }
+textarea, input[type=text] { background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.6rem .7rem; font-family:ui-monospace,Consolas,monospace; font-size:.95rem; resize:vertical; }
+textarea:focus, input:focus { outline:1px solid var(--accent); }
+button { cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:.55rem .9rem; font-size:.9rem; font-weight:600; display:inline-flex; gap:.4rem; align-items:center; }
+button.secondary { background:transparent; color:var(--accent); }
+button:disabled { opacity:.5; cursor:default; }
+pre { background:#0f141a; border:1px solid var(--border); border-radius:6px; padding:.75rem; overflow:auto; font-size:.85rem; line-height:1.3; }
+code { font-family:ui-monospace,Consolas,monospace; }
+.status { font-size:.75rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; }
+.bad { color:var(--bad); }
+.good { color:var(--good); }
+footer { text-align:center; padding:1rem; font-size:.75rem; opacity:.7; }
+.actions { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
+label { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.25rem; opacity:.85; }
+.small { font-size:.7rem; opacity:.7; }
+.split { display:flex; gap:.75rem; }
+@media (max-width: 960px) { main { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lambda Calculus Interpreter</h1>
+</header>
+<main>
+  <section id="repl">
+    <label for="expr">Expression / Commands</label>
+    <textarea id="expr" rows="8" placeholder=":help or succ 41 or let add = x,y -> x + y in add 2 3"></textarea>
+    <div class="actions">
+      <button id="runBtn">Evaluate (Ctrl+Enter)</button>
+      <button class="secondary" id="clearBtn" type="button">Clear Output</button>
+      <button class="secondary" id="loadStdBtn" type="button">Reload stdlib</button>
+    </div>
+    <div class="small">Multiple expressions separated by semicolons are processed sequentially.</div>
+    <label style="margin-top:1rem;" for="output">Result / Log</label>
+    <pre id="output" aria-live="polite"></pre>
+  </section>
+  <section>
+    <label for="filePath">Load .lambda File</label>
+    <div class="split">
+      <input type="text" id="filePath" placeholder="path e.g. stdlib.lambda" />
+      <button id="loadBtn" type="button">Load</button>
+    </div>
+    <div id="fileStatus" class="status" style="margin-top:.5rem;">Idle</div>
+    <hr style="margin:1rem 0; border:0; border-top:1px solid var(--border);" />
+    <h3 style="margin-top:0;">Quick Examples</h3>
+    <ul style="margin:.25rem 0 0 1.1rem; padding:0; font-size:.8rem; line-height:1.4;">
+      <li>succ 5</li><li>let inc = x -> succ x in inc 41</li><li>[1,2,3]</li><li>let rec fact = n -> if (iszero n) 1 (mult n (fact (pred n))) in fact 5</li>
+    </ul>
+  </section>
+</main>
+<footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
+<script>
+async function evalExpr(expr){
+  const r = await fetch(`/api/eval?expr=${encodeURIComponent(expr)}`);
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  return await r.json();
+}
+async function loadFile(p){
+  const r = await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:p})});
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  return await r.json();
+}
+const exprEl = document.getElementById('expr');
+const outEl = document.getElementById('output');
+const runBtn = document.getElementById('runBtn');
+const clearBtn = document.getElementById('clearBtn');
+const loadStdBtn = document.getElementById('loadStdBtn');
+const loadBtn = document.getElementById('loadBtn');
+const filePathEl = document.getElementById('filePath');
+const fileStatus = document.getElementById('fileStatus');
+
+function append(text){ outEl.textContent += text + '\n'; outEl.scrollTop = outEl.scrollHeight; }
+
+async function doEval(){
+  const raw = exprEl.value.trim();
+  if(!raw) return;
+  runBtn.disabled=true;
+  try {
+    const res = await evalExpr(raw);
+    append(`> ${raw}`);
+    // Show logs first (if any)
+    if(Array.isArray(res.logs) && res.logs.length){
+      res.logs.forEach(l=> append(l));
+    }
+    // Show primary output (avoid duplicating if already present in logs)
+    const primary = res.output || res.normalized || '(no output)';
+    if(!res.logs || !res.logs.includes(primary)) append(primary);
+    // If normalized differs and not already shown, display it
+    if(res.normalized && res.normalized !== primary && (!res.logs || !res.logs.includes(res.normalized))) append(res.normalized);
+    append('');
+  } catch(e){ append(`ERR: ${e.message}`); }
+  finally { runBtn.disabled=false; }
+}
+
+runBtn.addEventListener('click',doEval);
+exprEl.addEventListener('keydown',e=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); doEval(); }});
+clearBtn.addEventListener('click',()=>{ outEl.textContent=''; });
+loadStdBtn.addEventListener('click',()=>{ filePathEl.value='stdlib.lambda'; loadBtn.click(); });
+loadBtn.addEventListener('click',async()=>{
+  const p=filePathEl.value.trim(); if(!p) return;
+  fileStatus.textContent='Loading...';
+  try { const r=await loadFile(p); fileStatus.textContent='Loaded: '+ r.message; if(r.logs && Array.isArray(r.logs) && r.logs.length){ r.logs.forEach(l=>append(l)); append(''); } }
+  catch(e){ fileStatus.textContent='Error: '+ e.message; }
+});
+
+// Health ping
+fetch('/api/health').then(r=>r.ok?document.getElementById('health').textContent='ready':null).catch(()=>{});
+</script>
+</body>
+</html>

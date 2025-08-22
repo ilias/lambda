@@ -54,6 +54,84 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 
 ## Getting Started
 
+### Project Layout (Library + CLI + Web)
+
+The repository now consists of three projects:
+
+| Project | Type | Path | Purpose |
+|---------|------|------|---------|
+| `lambda-cek` | Class Library (multi-target `net8.0; net9.0`) | `src/` | Core interpreter engine (parsing, evaluation, macros, etc.) |
+| `lambda-cek.cli` | Console App (`net8.0`) | `src-cli/` | Interactive REPL and file runner built on the library |
+| `lambda-cek.web` | Minimal ASP.NET Core Web API (`net8.0`) | `src-web/` | Simple HTTP interface to evaluate expressions & load files |
+| `lambda-cek.webui` | ASP.NET Core static + API (`net8.0`) | `src-webui/` | Browser UI (HTML/JS) plus namespaced API (`/api/*`) |
+
+### Build Everything
+
+```
+dotnet build
+```
+
+### Run CLI (REPL)
+
+```
+dotnet run --project src-cli -- [optional .lambda files]
+```
+
+Examples:
+
+```
+dotnet run --project src-cli
+dotnet run --project src-cli -- examples.lambda tests.lambda
+```
+
+### Run Web API
+
+```
+dotnet run --project src-web
+```
+
+Default endpoints (no auth, for local/dev use):
+
+| Method | Route | Description | Example |
+|--------|-------|-------------|---------|
+| GET | `/api/health` | Liveness check (new) | curl http://localhost:5000/api/health |
+| GET | `/health` | (Legacy) liveness check | curl http://localhost:5000/health |
+| GET | `/eval?expr=EXPR` | Evaluate a single expression | curl "http://localhost:5000/eval?expr=succ%2041" |
+| POST | `/load` (JSON `{ "path": "file.lambda" }`) | Load a file into the global environment | curl -X POST -H "Content-Type: application/json" -d '{"path":"stdlib.lambda"}' http://localhost:5000/load |
+
+Returns JSON like:
+
+```json
+{ "input": "succ 1", "output": "2", "normalized": "2" }
+```
+
+### Use as a Library
+
+Reference `src/lambda-cek.csproj` from another project and instantiate:
+
+```csharp
+var interp = new LambdaCalculus.Interpreter(logger: new LambdaCalculus.Logger());
+await interp.LoadFileIfExistsAsync("stdlib.lambda");
+var (expr, result) = await interp.ProcessInputAsync("succ 41");
+Console.WriteLine(result); // 42
+```
+
+### Notes
+
+- Warnings (XML docs) are expected; enable / suppress as needed.
+- The web API keeps a single in-memory interpreter instance; scale-out would need state strategy (e.g., per-session or stateless evaluation model).
+- For production hosting harden the endpoints (validation, timeouts, resource limits).
+- The Web UI project exposes `/api/eval`, `/api/load`, and `/api/health` (preferred liveness endpoint). It also serves a single-page interface from `wwwroot`.
+
+### Run Web UI
+
+```
+dotnet run --project src-webui
+```
+
+Then open http://localhost:5000 (or the shown port) in your browser. Health status appears in the footer.
+
+
 ## User-Defined Native Primitives
 
 You can extend the interpreter with your own native (host language) primitives. This is useful for adding custom arithmetic, logic, or interop functions.

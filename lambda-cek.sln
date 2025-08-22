@@ -2,7 +2,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lambda-cek", "lambda-cek.csproj", "{3119AE5C-9E0C-3A5E-40EF-0BED56BAA386}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lambda-cek", "src\\lambda-cek.csproj", "{3119AE5C-9E0C-3A5E-40EF-0BED56BAA386}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lambda-cek.cli", "src-cli\\lambda-cek.cli.csproj", "{A2C6E5C2-6B2B-4B79-9A44-0B4A1E3D9E11}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lambda-cek.web", "src-web\\lambda-cek.web.csproj", "{5E1123F8-9E6B-4F7C-8C9F-0B7F6D2F1A55}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lambda-cek.webui", "src-webui\\lambda-cek.webui.csproj", "{C7B4E9D2-4FA5-4C53-9D13-9F6B4C2E7A21}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,6 +20,18 @@ Global
 		{3119AE5C-9E0C-3A5E-40EF-0BED56BAA386}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3119AE5C-9E0C-3A5E-40EF-0BED56BAA386}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3119AE5C-9E0C-3A5E-40EF-0BED56BAA386}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2C6E5C2-6B2B-4B79-9A44-0B4A1E3D9E11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2C6E5C2-6B2B-4B79-9A44-0B4A1E3D9E11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2C6E5C2-6B2B-4B79-9A44-0B4A1E3D9E11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2C6E5C2-6B2B-4B79-9A44-0B4A1E3D9E11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E1123F8-9E6B-4F7C-8C9F-0B7F6D2F1A55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E1123F8-9E6B-4F7C-8C9F-0B7F6D2F1A55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E1123F8-9E6B-4F7C-8C9F-0B7F6D2F1A55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E1123F8-9E6B-4F7C-8C9F-0B7F6D2F1A55}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7B4E9D2-4FA5-4C53-9D13-9F6B4C2E7A21}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7B4E9D2-4FA5-4C53-9D13-9F6B4C2E7A21}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7B4E9D2-4FA5-4C53-9D13-9F6B4C2E7A21}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7B4E9D2-4FA5-4C53-9D13-9F6B4C2E7A21}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

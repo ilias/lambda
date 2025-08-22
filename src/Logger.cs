@@ -11,6 +11,18 @@ public class Logger
     private string _logFile = "";
     private StreamWriter? _logWriter;
     private readonly SemaphoreSlim _logFileLock = new(1);
+    private readonly object _bufferLock = new();
+    private readonly List<string> _buffer = new();
+
+    /// <summary>
+    /// When true, all log messages (plain text, without ANSI colors) are also captured in memory.
+    /// </summary>
+    public bool EnableBuffering { get; set; } = false;
+
+    /// <summary>
+    /// If false, console output is suppressed (still written to file / buffer if enabled).
+    /// </summary>
+    public bool ConsoleOutputEnabled { get; set; } = true;
 
     private const string RED = "\u001b[31m";
     private const string GREEN = "\u001b[32m";
@@ -108,9 +120,23 @@ public class Logger
         Console.WriteLine($"{text}");
     }
 
+    public void ClearBuffer()
+    {
+        lock (_bufferLock) _buffer.Clear();
+    }
+
+    public IReadOnlyList<string> GetBufferSnapshot()
+    {
+        lock (_bufferLock) return _buffer.ToArray();
+    }
+
     public async Task LogAsync(string message, bool toConsole = true)
     {
-        if (toConsole) LogToConsole(message);
+        if (EnableBuffering)
+        {
+            lock (_bufferLock) _buffer.Add(message);
+        }
+        if (toConsole && ConsoleOutputEnabled) LogToConsole(message);
         if (string.IsNullOrWhiteSpace(_logFile)) return;
 
         await _logFileLock.WaitAsync();
@@ -126,8 +152,10 @@ public class Logger
         _logFileLock.Release();
     }
 
-    public void Log(string message, bool toConsole = true) =>
+    public void Log(string message, bool toConsole = true)
+    {
         LogAsync(message, toConsole)
             .GetAwaiter()
-            .GetResult(); // Synchronous version for compatibility with existing code
+            .GetResult();
+    }
 }
