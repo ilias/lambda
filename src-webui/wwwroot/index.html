@@ -196,7 +196,26 @@
 
     // ---- Evaluation ----
     async function doEval(){
-      const lines = exprEl.value.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      // Split into raw lines, then merge lines ending with an unescaped backslash (\\) as continuations
+      const rawLines = exprEl.value.split(/\r?\n/);
+      const merged = [];
+      let buffer = '';
+      for(let i=0;i<rawLines.length;i++){
+        let line = rawLines[i];
+        const continued = /(^|[^\\])\\$/.test(line); // backslash at end not escaped by another backslash
+        if(continued){
+          line = line.replace(/\\$/,'');
+          buffer += line;
+          continue; // accumulate
+        } else {
+          buffer += line;
+          const finalLine = buffer.trim();
+          if(finalLine.length) merged.push(finalLine);
+          buffer='';
+        }
+      }
+      if(buffer.trim().length){ merged.push(buffer.trim()); }
+      const lines = merged.filter(l=>l.length>0);
       if(lines.length === 0) return;
       runBtn.disabled = true;
       try {
