@@ -18,7 +18,8 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
 - [Building and Running](#building-and-running)
- - [Web UI & Streaming Logs](#web-ui--streaming-logs)
+    - [Web UI & Streaming Logs](#web-ui--streaming-logs)
+    - [Docker (Web UI)](#docker-web-ui)
 - [Range Syntax Extensions](#range-syntax-extensions)
 - [Parser Errors & Diagnostics](#parser-errors--diagnostics)
 - [Unary Minus / Negative Literals](#unary-minus--negative-literals)
@@ -209,6 +210,55 @@ If streaming is off, interactive operations rely solely on the buffered log snap
 
 You can instrument additional events by invoking `Logger.Log("...")` within interpreter code paths—those lines will appear uniformly across CLI and Web transports. Keep emitted lines single-line (newlines are flattened in SSE) for predictable streaming.
 
+## Docker (Web UI)
+
+Container support is provided for the Web UI project (`src-webui`). The Dockerfile builds only the `net8.0` target (temporarily rewriting the multi-target library to avoid requiring a .NET 9 SDK inside the image).
+
+### Build Image
+
+```bash
+docker build -t lambda-cek-webui -f src-webui/Dockerfile .
+```
+
+### Run Container
+
+```bash
+docker run --rm -p 8080:8080 --name lambda-cek lambda-cek-webui
+```
+
+Then open <http://localhost:8080>.
+
+### Bind Mount Files
+
+Mount the repo to allow loading `stdlib.lambda` or custom files (PowerShell / CMD on Windows, replace `%CD%` appropriately for Linux/macOS):
+
+```bash
+docker run --rm -p 8080:8080 -v %CD%:/data:ro --name lambda-cek lambda-cek-webui
+```
+
+The app looks for `stdlib.lambda` in the working directory, its parent, or the base directory. Adjust with `-w` or copy files into the image for immutable deployments.
+
+### Change Port
+
+```bash
+docker run --rm -e ASPNETCORE_URLS=http://0.0.0.0:5005 -p 5005:5005 lambda-cek-webui
+```
+
+### Multi-Arch Build (Optional)
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t yourrepo/lambda-cek-webui:latest .
+```
+
+### Updating for .NET 9
+
+Remove the `sed` line in the Dockerfile and use a .NET SDK image that supports `net9.0`. Keep multi-targeting only if needed for consumers.
+
+### Security Notes
+
+- No authentication / sandboxing by default.
+- Long or CPU-heavy expressions can monopolize the single interpreter instance.
+- Add resource limits (CPU, memory) and reverse proxy restrictions for shared environments.
 
 
 ## User-Defined Native Primitives
