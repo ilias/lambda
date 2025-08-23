@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "lambda-cek.web": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:57072;http://localhost:57073"
+    }
+  }
+}
