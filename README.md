@@ -20,11 +20,16 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Building and Running](#building-and-running)
     - [Web UI & Streaming Logs](#web-ui--streaming-logs)
     - [Docker (Web UI)](#docker-web-ui)
+    - [Streaming Modes (Comparison)](#streaming-modes-comparison)
 - [Range Syntax Extensions](#range-syntax-extensions)
 - [Parser Errors & Diagnostics](#parser-errors--diagnostics)
 - [Unary Minus / Negative Literals](#unary-minus--negative-literals)
 - [Either monad for detailed error reporting](#either-monad-for-detailed-error-reporting)
 - [Pretty Printing](#pretty-printing)
+- [Step Tracing & Debugging](#step-tracing--debugging)
+- [Performance Cookbook](#performance-cookbook)
+- [Embedding & Programmatic API](#embedding--programmatic-api)
+- [Multi-user & Deployment Strategies](#multi-user--deployment-strategies)
 
 ## Features
 
@@ -208,6 +213,21 @@ If streaming is off, interactive operations rely solely on the buffered log snap
 ### Extensibility
 
 You can instrument additional events by invoking `Logger.Log("...")` within interpreter code paths—those lines will appear uniformly across CLI and Web transports. Keep emitted lines single-line (newlines are flattened in SSE) for predictable streaming.
+
+### Streaming Modes (Comparison)
+
+| Mode | Enable | Transport | Log Delivery | Response JSON | Best For |
+|------|--------|-----------|--------------|---------------|---------|
+| Buffered | Streaming Off | none | After completion (batched) | `{ output, normalized, logs[] }` | Simplicity, copy full log |
+| SSE | Streaming On | `/api/stream` | Incremental (auto-reconnect) | `{ output, normalized }` | Progressive feedback, long loads |
+| WebSocket | Streaming On + WS On | `/ws` | Incremental (manual reconnect logic) | `{ output, normalized }` | Future interactive extensions |
+
+Notes:
+ 
+1. Toggling streaming clears the UI log to visually separate sessions.
+2. SSE auto-reconnect delay is capped; repeated disconnects are surfaced with a status banner.
+3. WebSocket mode is optional; fallback to SSE if handshake fails.
+4. All modes share the same underlying `Logger`; difference is purely transport serialization.
 
 ## Docker (Web UI)
 
@@ -1442,6 +1462,100 @@ Use `:stats` to view detailed performance information:
 :stats
 # Shows cache hit rates, evaluation counts, memory usage, etc.
 ```
+
+## Step Tracing & Debugging
+
+Enable detailed CEK reductions with:
+
+```shell
+:step on
+```
+
+You will see `Step` lines (green/yellow in CLI, class `log-step` in Web UI) for each continuation application or reduction. Combine with `:pretty off` for raw lambda forms.
+
+| Technique | Command(s) | Purpose |
+|-----------|-----------|---------|
+| Enable tracing | `:step on` | Show each evaluation step |
+| Disable tracing | `:step off` | Return to concise mode |
+| Inspect environment | `:env` | Verify bindings contributing to steps |
+| Abort multi-line input | `:cancel` | Prevent accidental huge traces |
+
+Common pattern to isolate a problematic expansion:
+
+```shell
+:clear; :load stdlib.lambda; :step on; :pretty off
+mySuspiciousExpr
+```
+
+Turn tracing off immediately once you've captured enough lines to avoid performance overhead.
+
+## Performance Cookbook
+
+| Scenario | Recommended Setup | Reason |
+|----------|-------------------|--------|
+| Pure lambda benchmarking | `:lazy off; :native off; :pretty off` | Removes thunk + native shortcut overhead |
+| Demonstrate laziness | `:lazy on; take 10 [0 .. 1000000]` | Shows finite prefix of huge range |
+| Maximizing cache hits | Evaluate same function repeatedly then `:stats` | Observe CacheHits growth |
+| Macro expansion audit | `:pretty off; :step on` once | Inspect raw expanded forms |
+| Structural regression tests | Use `isStructEqual` in macros + `:test result` | Track success count trend |
+
+Quick timing heuristic: compare `Iterations` between implementations of the same function (e.g., naive vs tail-recursive) under identical settings.
+
+## Embedding & Programmatic API
+
+Minimal embedding example:
+
+```csharp
+var logger = new LambdaCalculus.Logger { EnableBuffering = true };
+var interp = new LambdaCalculus.Interpreter(logger: logger);
+await interp.LoadFileIfExistsAsync("stdlib.lambda");
+var (ast, value) = await interp.ProcessInputAsync("succ 41");
+Console.WriteLine(interp.Format(value)); // 42
+```
+
+Registering a native primitive:
+
+```csharp
+interp.RegisterNativeFunction("triple", (op, args, env) =>
+{
+    if (args.Count == 1 && interp.TryGetChurchInt(args[0], env, out var n))
+        return interp.MakeChurchNumeral(n * 3);
+    return null; // Not handled
+});
+```
+
+Chained processing (commands + expression):
+
+```csharp
+await interp.ProcessInputAsync(":lazy off; :native on; plus 20 22");
+```
+
+Buffered logs:
+
+```csharp
+foreach (var line in logger.GetBufferSnapshot()) Console.WriteLine(line);
+```
+
+## Multi-user & Deployment Strategies
+
+Current Web UI: single shared interpreter instance (stateful). Options to scale:
+
+| Strategy | Isolation | Outline | Pros | Cons |
+|----------|-----------|---------|------|------|
+| Per-request new instance | Full | Instantiate `Interpreter` per eval | No state bleed | High GC & start cost |
+| Session-scoped | Medium | Dictionary keyed by session ID; expire LRU | Persistent user state | Cleanup complexity |
+| Pooled | Medium | Pool of warm interpreters; `:clear` before checkout | Amortized init | Risk of incomplete reset |
+| Stateless eval service | Logical | Reject definitions; evaluate single expr with ephemeral env | Horizontal scaling | Loses interactive definitions |
+
+Hardening checklist:
+
+- Enforce max iterations / time (wrap `ProcessInputAsync` with cancellation).
+- Limit macro clause count + expansion depth.
+- Restrict file load paths (whitelist) for `:load` / `/api/load`.
+- Add auth & rate limiting at reverse proxy.
+
+Observability: subscribe to `Logger.Subscribe(line => Forward(line));` to pipe logs to structured telemetry (ensure async, non-blocking).
+
 
 ## Building and Running
 
