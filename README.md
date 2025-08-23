@@ -40,7 +40,6 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 ### Advanced Features
 
 - **Infix Operators**: Define custom infix operators with precedence and associativity
-- **Macro System**: Pattern-based macro system for syntactic sugar
 - **Macro System**: Powerful pattern-driven macro system (multi-clause, guards, variadic/rest arguments, precedence & shadowing)
 - **Native Arithmetic & User Primitives**: Optional native arithmetic optimizations for Church numerals, plus support for user-defined native primitives (see below)
 - **Pretty Printing**: Automatic formatting of Church numerals and lists
@@ -69,26 +68,26 @@ The repository now consists of three projects:
 
 ### Build Everything
 
-```
+```bash
 dotnet build
 ```
 
 ### Run CLI (REPL)
 
-```
+```bash
 dotnet run --project src-cli -- [optional .lambda files]
 ```
 
 Examples:
 
-```
+```bash
 dotnet run --project src-cli
 dotnet run --project src-cli -- examples.lambda tests.lambda
 ```
 
 ### Run Web API
 
-```
+```bash
 dotnet run --project src-web
 ```
 
@@ -96,10 +95,10 @@ Default endpoints (no auth, for local/dev use):
 
 | Method | Route | Description | Example |
 |--------|-------|-------------|---------|
-| GET | `/api/health` | Liveness check (new) | curl http://localhost:5000/api/health |
-| GET | `/health` | (Legacy) liveness check | curl http://localhost:5000/health |
-| GET | `/eval?expr=EXPR` | Evaluate a single expression | curl "http://localhost:5000/eval?expr=succ%2041" |
-| POST | `/load` (JSON `{ "path": "file.lambda" }`) | Load a file into the global environment | curl -X POST -H "Content-Type: application/json" -d '{"path":"stdlib.lambda"}' http://localhost:5000/load |
+| GET | `/api/health` | Liveness check (new) | `curl http://localhost:5000/api/health` |
+| GET | `/health` | (Legacy) liveness check | `curl http://localhost:5000/health` |
+| GET | `/eval?expr=EXPR` | Evaluate a single expression | `curl "http://localhost:5000/eval?expr=succ%2041"` |
+| POST | `/load` (JSON `{ "path": "file.lambda" }`) | Load a file into the global environment | `curl -X POST -H "Content-Type: application/json" -d '{"path":"stdlib.lambda"}' http://localhost:5000/load` |
 
 Returns JSON like:
 
@@ -127,11 +126,11 @@ Console.WriteLine(result); // 42
 
 ### Run Web UI
 
-```
+```bash
 dotnet run --project src-webui
 ```
 
-Then open http://localhost:5000 (or the shown port) in your browser. Health status appears in the footer.
+Then open <http://localhost:5000> (or the shown port) in your browser. Health status appears in the footer.
 
 ## Web UI & Streaming Logs
 
@@ -280,7 +279,7 @@ interpreter.RegisterNativeFunction("inc", (args, env) =>
 
 This makes `inc` available as a function in your lambda calculus code:
 
-```
+```lambda
 inc 2   # returns 3 (as a Church numeral)
 ```
 
@@ -1499,6 +1498,7 @@ id = λx.x
 compose = λf g x.f (g x)
 
 # Define infix operators
+```lambda
 :infix ∘ 9 right
 ∘ = compose
 
@@ -1587,6 +1587,7 @@ Re‑enable with `:pretty on` once finished.
 This project is a high-performance, feature-rich lambda calculus interpreter implemented in C#. It is designed for students, researchers, and enthusiasts interested in functional programming, language theory, and interpreter implementation. The interpreter is based on the CEK (Control, Environment, Kontinuation) machine model, supporting both lazy and eager evaluation, a macro system, infix operators, and a comprehensive standard library.
 
 **Goals:**
+
 - Provide a practical and educational tool for exploring lambda calculus and functional programming concepts.
 - Offer a modern, extensible playground for experimenting with language features, macros, and evaluation strategies.
 - Achieve high performance through native optimizations and intelligent caching.
@@ -1616,19 +1617,24 @@ For more theoretical background, see `THEORY.md`.
 Contributions are welcome! To get started:
 
 1. **Clone the repository and build:**
+
     ```bash
     git clone <repo-url>
     cd lambda-cek-Y
     dotnet build
     ```
+
 2. **Run tests:**
     - (Add instructions here if you have a test suite, e.g., `dotnet test`)
+
 3. **Style guidelines:**
     - Use clear, descriptive names and add comments for new features.
     - Keep code modular; new primitives or macros should be added in their respective files.
+
 4. **Adding features:**
     - To add new primitives, see `Interpreter.Eval.cs`.
     - For new macros or infix operators, update `stdlib.lambda` or use the REPL.
+
 5. **Pull requests:**
     - Please describe your changes and reference any related issues.
 
