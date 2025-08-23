@@ -28,6 +28,8 @@
     .good { color:var(--good); }
   .full-span { grid-column:1 / -1; }
   #output { width:100%; max-width:100%; box-sizing:border-box; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
+  .cont-hint { font-size:.65rem; letter-spacing:.05em; text-transform:uppercase; margin-top:.35rem; color:#e3b341; display:none; font-weight:600; }
+  .cont-hint.active { display:block; }
   @media (max-width: 960px) { main { grid-template-columns:1fr; } #output { width:100%; } }
     /* Log color classes */
     .log-error{color:#ff6b6b;}
@@ -54,9 +56,11 @@
     <section id="repl">
       <label for="expr">Expression / Commands</label>
       <textarea id="expr" rows="8" placeholder=":help or succ 41 or let add = x,y -> x + y in add 2 3"></textarea>
+  <div id="contHint" class="cont-hint" aria-live="polite">Continuation: line will join with next</div>
       <div class="actions">
         <button id="runBtn">Evaluate (Ctrl+Enter)</button>
         <button class="secondary" id="clearBtn" type="button">Clear Output</button>
+  <button class="secondary" id="clearInputBtn" type="button">Clear Input</button>
         <button class="secondary" id="loadStdBtn" type="button">Reload stdlib</button>
         <button class="secondary" id="streamToggle" type="button" data-on="0">Streaming: Off</button>
         <button class="secondary" id="wsToggle" type="button" data-on="0">WS: Off</button>
@@ -103,6 +107,7 @@
     const outEl = document.getElementById('output');
     const runBtn = document.getElementById('runBtn');
     const clearBtn = document.getElementById('clearBtn');
+  const clearInputBtn = document.getElementById('clearInputBtn');
     const loadStdBtn = document.getElementById('loadStdBtn');
     const streamToggle = document.getElementById('streamToggle');
     const wsToggle = document.getElementById('wsToggle');
@@ -239,9 +244,22 @@
       finally { runBtn.disabled=false; }
     }
 
+    // ---- Continuation hint (live) ----
+    function updateContinuationHint(){
+      const v = exprEl.value;
+      const lines = v.split(/\r?\n/);
+      const last = lines[lines.length-1];
+      const active = /(^|[^\\])\\$/.test(last || '');
+      document.getElementById('contHint').classList.toggle('active', active);
+    }
+    exprEl.addEventListener('input', updateContinuationHint);
+    exprEl.addEventListener('keyup', updateContinuationHint);
+    updateContinuationHint();
+
     runBtn.addEventListener('click', doEval);
     exprEl.addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); doEval(); }});
     clearBtn.addEventListener('click', ()=>{ outEl.textContent=''; });
+  clearInputBtn.addEventListener('click', ()=>{ exprEl.value=''; updateContinuationHint(); exprEl.focus(); });
     loadStdBtn.addEventListener('click', ()=>{ filePathEl.value='stdlib.lambda'; loadBtn.click(); });
     loadBtn.addEventListener('click', async ()=>{
       const p = filePathEl.value.trim(); if(!p) return;
