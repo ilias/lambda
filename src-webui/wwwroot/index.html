@@ -113,7 +113,7 @@
     const fileProgressBar = document.getElementById('fileProgressBar');
 
     // ---- Log classification & append (with cap) ----
-    const MAX_LOG_LINES = 2000;
+    const MAX_LOG_LINES = 4000;
     function classify(line){
       if(line.startsWith('PROGRESS::')) return 'log-progress';
       if(line.startsWith('Error:')) return 'log-error';
