@@ -230,8 +230,13 @@
           if(!streaming){
             if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
             const primary = res.output || res.normalized || '(no output)';
-            if(!res.logs || !res.logs.includes(primary)) append(primary);
-            if(res.normalized && res.normalized !== primary && (!res.logs || !res.logs.includes(res.normalized))) append(res.normalized);
+            const logsArray = Array.isArray(res.logs) ? res.logs : [];
+            const hasResultLine = logsArray.some(l=> l.startsWith('-> '));
+            // Only append primary / normalized if not already represented in logs
+            if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
+            if(res.normalized && res.normalized !== primary && !logsArray.includes(res.normalized) && !logsArray.some(l=> l.trim() === res.normalized.trim())) {
+              append(res.normalized);
+            }
           } else {
             // streaming: only final outputs (logs already streamed)
             const primary = res.output || res.normalized || '(no output)';

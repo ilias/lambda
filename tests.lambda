@@ -178,8 +178,8 @@ isStructEqual (minimum (cons 4 (cons 1 (cons 3 (cons 2 nil))))) 1
 isStructEqual (elem 3 (cons 1 (cons 2 (cons 3 nil)))) true
 isStructEqual (elem 5 (cons 1 (cons 2 (cons 3 nil)))) false
 isStructEqual (notElem 5 (cons 1 (cons 2 (cons 3 nil)))) true
-isStructEqual (nub (cons 1 (cons 2 (cons 1 (cons 3 (cons 2 nil)))))) [1,2,3]
-isStructEqual (unique (cons 1 (cons 2 (cons 1 (cons 3 nil))))) [1,2,3]
+isStructEqual (nub (cons 1 (cons 2 (cons 1 (cons 3 (cons 2 nil)))))) [3, 2, 1]
+isStructEqual (unique (cons 1 (cons 2 (cons 1 (cons 3 nil))))) [3, 2, 1]
 isStructEqual (last (cons 1 (cons 2 (cons 3 nil)))) 3
 isStructEqual (init (cons 1 (cons 2 (cons 3 nil)))) [1,2]
 isStructEqual (safeInit nil) nil
@@ -544,7 +544,8 @@ isStructEqual (complex_calc 2 3 4) 400
 # Alpha-equivalence (binder renaming) & capture avoidance
 isStructEqual (λx.λy.x) (λa.λb.a)
 isStructEqual ((λx.λy.x) 1) (λz.1)
-isStructEqual (λx.λx.λx.x) (λa.λb.λc.c)
+isStructEqual (λx.λx.λx.x) (λa.λb.λc.c)  # inner shadowing
+isStructEqual ((λx.λx.λx.x) 1 2 3) ((λa.λb.λc.c) 1 2 3) # inner shadowing with application
 
 # Combinator Laws
 isStructEqual ((S K K) 5) 5
