@@ -162,10 +162,10 @@
     function append(text){
       const cls = classify(text);
       const span = document.createElement('span');
-      if(cls) span.className = cls;
+    if(cls) span.className = cls;
       span.textContent = text;
-  // Apply simple filter visibility
-  if(cls && isFilteredClass(cls)) span.classList.add('hidden-log');
+  // Apply simple filter visibility (support multiple classes added later)
+  if(isFilteredSpan(span)) span.classList.add('hidden-log');
       outEl.appendChild(span);
       outEl.appendChild(document.createTextNode('\n'));
       const maxNodes = MAX_LOG_LINES * 2;
@@ -257,7 +257,7 @@
             // Only append primary / normalized if not already represented in logs
             if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
             if(res.normalized && res.normalized !== primary && !logsArray.includes(res.normalized) && !logsArray.some(l=> l.trim() === res.normalized.trim())) {
-              append(res.normalized);
+              append("-> " + res.normalized);
             }
           } else {
             // streaming: only final outputs (logs already streamed)
@@ -323,11 +323,19 @@
       {label:'Test', classes:['log-test','log-test-pass','log-test-fail']},
       {label:'Time', classes:['log-time']},
       {label:'Step', classes:['log-step']},
+      {label:'Eval', classes:['log-eval']},
+      {label:'Name', classes:['log-name']},
       {label:'Processing', classes:['log-processing']}
     ];
     let disabledGroups = new Set(); // start with all enabled
-    function isFilteredClass(cls){
-      for(const g of FILTER_CONFIG){ if(g.classes.includes(cls)) return disabledGroups.has(g.label); }
+    // Determine if a span should be hidden based on ANY of its classes
+    function isFilteredSpan(el){
+      for(const g of FILTER_CONFIG){
+        if(disabledGroups.has(g.label)){
+          // If element has any class belonging to this disabled group -> hide
+            for(const cls of g.classes){ if(el.classList.contains(cls)) return true; }
+        }
+      }
       return false;
     }
     function renderFilters(){
@@ -342,8 +350,7 @@
     }
     function applyLineFilters(){
       outEl.querySelectorAll('span').forEach(s=>{
-        const c=s.className; if(!c) return;
-        if(isFilteredClass(c)) s.classList.add('hidden-log'); else s.classList.remove('hidden-log');
+        if(isFilteredSpan(s)) s.classList.add('hidden-log'); else s.classList.remove('hidden-log');
       });
     }
     renderFilters();
