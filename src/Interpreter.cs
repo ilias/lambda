@@ -250,6 +250,7 @@ public partial class Interpreter
             ":macros" => ShowMacros(),
             ":macro" => HandleMacroDefinition(arg),
             ":multiline" => ShowMultiLineHelp(),
+            ":commands" => BuildCommandsMarkdown(),
             _ => $"Unknown command: {command}"
         };
     }

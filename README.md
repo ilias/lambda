@@ -1164,22 +1164,32 @@ Notes:
 
 ## REPL Command Reference
 
-Unified list of interactive commands (all start with a colon):
+This table is generated from the interpreter's internal command metadata (`:commands`). Run `:commands` in the REPL to regenerate (ensures README and in-REPL help stay synchronized).
 
 | Command | Syntax | Description |
 |---------|--------|-------------|
-| :load | `:load <file.lambda>` | Load and evaluate definitions from a file (appends to current environment) |
-| :clear | `:clear` | Reset environment, caches, statistics |
-| :lazy | `:lazy on` / `:lazy off` | Toggle lazy evaluation (on by default) |
-| :stats | `:stats` | Show performance metrics (see Performance Metrics Reference) |
-| :infix | `:infix SYMBOL PRECEDENCE ASSOCIATIVITY` | Define or list infix operators (ASSOCIATIVITY = left\|right) |
-| :macros | `:macros` | List all currently defined macro clauses (with guards & rest markers) |
-| :help | `:help` | Show detailed built-in help text |
-| :exit / :quit | `:exit` | Leave the interpreter |
+| :clear | `:clear` | Clear environment, statistics and caches |
+| :commands | `:commands` | Output all commands as a markdown table (for README sync) |
+| :depth | `:depth [n]` | Show or set maximum recursion depth (range 10-10000) |
+| :env | `:env` | Display current top-level definitions (environment) |
+| :exit | `:exit \| :quit` | Exit the interpreter |
+| :help | `:help` | Show help summary |
+| :infix | `:infix [op prec assoc]` | Define or list infix operators (assoc = left\|right) |
+| :lazy | `:lazy on\|off` | Toggle lazy (on) vs eager (off) evaluation |
+| :load | `:load <file>` | Load a .lambda file (may contain defs, macros, infix) |
+| :log | `:log <file\|off\|clear>` | Log output to file, disable or clear current file |
+| :macro | `:macro (<pattern>) => <body>` | Define a macro clause (supports guards & rest) |
+| :macros | `:macros` | List all macro clauses |
+| :memo | `:memo` | Clear all memoization caches |
+| :multiline | `:multiline` | Show multi-line input help |
+| :native | `:native on\|off\|show` | Toggle native arithmetic or list native primitives |
+| :pretty | `:pretty on\|off` / `:pp on\|off` | Toggle pretty printing (numerals, lists, booleans) |
+| :save | `:save <file>` | Persist current environment to a file |
+| :stats | `:stats` | Show performance statistics & cache metrics |
+| :step | `:step on\|off` | Toggle step-by-step CEK trace output |
+| :test | `:test clear` / `:test result` | Reset or display structural equality test counters |
 
-Precedence guidance for `:infix` mirrors typical arithmetic (higher number binds tighter). Use `:infix` with no args to list existing operators.
-
-Tip: After heavy experimentation, run `:clear` to avoid subtle interactions from lingering definitions, and then `:load stdlib.lambda` to restore the standard library.
+Tip: After heavy experimentation, run `:clear` then `:load stdlib.lambda` to restore the baseline library.
 
 ## Examples (Extended)
 
@@ -1775,11 +1785,13 @@ A: Use `:clear` to reset all definitions and caches.
 - **Church Encoding:** Used for numbers, booleans, and lists to stay true to pure lambda calculus, with pretty-printing for usability.
 - **C# Implementation:** Leverages .NET performance, strong typing, and modern tooling.
 - **Extensibility:** Macro and infix systems allow users to extend the language without modifying the core interpreter.
-- **Limitations:**
-  - No floating-point or complex data types (yet).
-  - No user-defined native functions (planned for future).
-  - Environment is flat; closures and lexical scoping are limited.
-  - Error messages are improving but may lack detail in some cases.
+**Current Limitations (Updated):**
+    - No floating-point or rational literal support yet (only Church integers; extension planned).
+    - No hygienic macro system or quasiquotation (planned).
+    - Module/import system absent (single global environment unless manually isolated).
+    - Error objects are string-based (structured diagnostics planned).
+    - Sandboxing (timeouts, memory quotas) not yet enforced—use caution in multi-user setups.
+    - Pattern matching construct (`match`) not yet implemented (macros approximate use cases).
 
 ## License
 
