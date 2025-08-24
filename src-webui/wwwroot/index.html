@@ -30,11 +30,6 @@
   #output { width:100%; max-width:100%; box-sizing:border-box; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
   .cont-hint { font-size:.65rem; letter-spacing:.05em; text-transform:uppercase; margin-top:.35rem; color:#e3b341; display:none; font-weight:600; }
   .cont-hint.active { display:block; }
-  /* Log filters */
-  #filters { display:flex; flex-wrap:wrap; gap:.6rem; margin:.4rem 0 .3rem; }
-  #filters label { font-size:.6rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:#0f141a; padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
-  #filters input { margin:0; }
-  .hidden-log { display:none !important; }
   @media (max-width: 960px) { main { grid-template-columns:1fr; } #output { width:100%; } }
     /* Log color classes */
     .log-error{color:#ff6b6b;}
@@ -111,7 +106,6 @@
           <button class="secondary" id="searchClear" type="button" style="font-size:.6rem; padding:.35rem .5rem;">Clear</button>
         </div>
       </div>
-      <div id="filters"></div>
       <pre id="output" aria-live="polite"></pre>
     </section>
   </main>
@@ -182,11 +176,8 @@
       const span = document.createElement('span');
       if(cls) span.className = cls;
       span.textContent = text;
-      // Apply filter if currently disabled
-      if(cls && !isClassEnabled(cls)) span.classList.add('hidden-log');
       outEl.appendChild(span);
       outEl.appendChild(document.createTextNode('\n'));
-      // Trim (span + newline nodes considered)
       const maxNodes = MAX_LOG_LINES * 2;
       if(outEl.childNodes.length > maxNodes){
         while(outEl.childNodes.length > maxNodes){ outEl.removeChild(outEl.firstChild); }
@@ -306,44 +297,6 @@
 
     runBtn.addEventListener('click', doEval);
     exprEl.addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); doEval(); }});
-    // --- Log Filters ---
-    const FILTER_KEY='lambdaFilters';
-    const FILTER_GROUPS = [
-      { label:'Results', classes:['log-result'] },
-      { label:'Steps', classes:['log-step'] },
-      { label:'Macros', classes:['log-macro'] },
-      { label:'Errors', classes:['log-error'] },
-      { label:'Tests', classes:['log-test','log-test-pass','log-test-fail'] },
-      { label:'Progress', classes:['log-progress'] },
-      { label:'Commands', classes:['log-command'] }
-    ];
-    const classToGroup = new Map();
-    FILTER_GROUPS.forEach(g=> g.classes.forEach(c=> classToGroup.set(c,g.label)) );
-    let enabledGroups = new Set(FILTER_GROUPS.map(g=>g.label));
-    function isClassEnabled(cls){ const grp = classToGroup.get(cls); return !grp || enabledGroups.has(grp); }
-    function saveFilters(){ try{ localStorage.setItem(FILTER_KEY, JSON.stringify([...enabledGroups])); }catch{} }
-    function loadFilters(){ try{ const v=JSON.parse(localStorage.getItem(FILTER_KEY)||''); if(Array.isArray(v)&&v.length){ enabledGroups=new Set(v); } }catch{} }
-    function renderFilters(){
-      const host=document.getElementById('filters'); host.innerHTML='';
-      FILTER_GROUPS.forEach(g=>{
-        const id='f_'+g.label.toLowerCase();
-        const lab=document.createElement('label');
-        const chk=document.createElement('input'); chk.type='checkbox'; chk.id=id; chk.checked=enabledGroups.has(g.label);
-        chk.addEventListener('change',()=>{ if(chk.checked) enabledGroups.add(g.label); else enabledGroups.delete(g.label); applyFilters(); saveFilters(); });
-        lab.appendChild(chk); lab.appendChild(document.createTextNode(g.label));
-        host.appendChild(lab);
-      });
-    }
-    function applyFilters(){
-      // Iterate all spans; hide if not enabled
-      outEl.querySelectorAll('span').forEach(s=>{
-        if(!s.className) return;
-        if(isClassEnabled(s.className)) s.classList.remove('hidden-log'); else s.classList.add('hidden-log');
-      });
-    }
-    loadFilters();
-    renderFilters();
-    applyFilters();
     // --- Snippets ---
     const SNIPPET_KEY='lambdaSnippets';
     const DEFAULT_SNIPPETS = [
