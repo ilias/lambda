@@ -65,10 +65,9 @@
       <textarea id="expr" rows="8" placeholder=":help or succ 41 or let add = x,y -> x + y in add 2 3"></textarea>
   <div id="contHint" class="cont-hint" aria-live="polite">Continuation: line will join with next</div>
       <div class="actions">
-        <button id="runBtn">Evaluate (Ctrl+Enter)</button>
+        <button id="runBtn">Evaluate</button>
         <button class="secondary" id="clearBtn" type="button">Clear Output</button>
   <button class="secondary" id="clearInputBtn" type="button">Clear Input</button>
-        <button class="secondary" id="loadStdBtn" type="button">Reload stdlib</button>
         <button class="secondary" id="streamToggle" type="button" data-on="0">Streaming: Off</button>
         <button class="secondary" id="wsToggle" type="button" data-on="0">WS: Off</button>
       </div>
@@ -79,6 +78,8 @@
       <div class="split">
         <input type="text" id="filePath" placeholder="path e.g. stdlib.lambda" />
         <button id="loadBtn" type="button">Load</button>
+        <button id="localLoadBtn" type="button" class="secondary">Local...</button>
+        <input id="localFile" type="file" accept=".lambda,.txt" style="display:none" />
       </div>
       <div id="fileStatus" class="status" style="margin-top:.5rem;">Idle</div>
       <div id="fileProgress" style="margin-top:.4rem;height:6px;background:#222;border:1px solid var(--border);border-radius:4px;overflow:hidden;display:none;">
@@ -124,10 +125,11 @@
     const runBtn = document.getElementById('runBtn');
     const clearBtn = document.getElementById('clearBtn');
   const clearInputBtn = document.getElementById('clearInputBtn');
-    const loadStdBtn = document.getElementById('loadStdBtn');
     const streamToggle = document.getElementById('streamToggle');
     const wsToggle = document.getElementById('wsToggle');
-    const loadBtn = document.getElementById('loadBtn');
+  const loadBtn = document.getElementById('loadBtn');
+  const localLoadBtn = document.getElementById('localLoadBtn');
+  const localFileInput = document.getElementById('localFile');
     const filePathEl = document.getElementById('filePath');
     const fileStatus = document.getElementById('fileStatus');
     const fileProgress = document.getElementById('fileProgress');
@@ -386,7 +388,6 @@
     });
     clearBtn.addEventListener('click', ()=>{ outEl.textContent=''; });
   clearInputBtn.addEventListener('click', ()=>{ exprEl.value=''; updateContinuationHint(); exprEl.focus(); });
-    loadStdBtn.addEventListener('click', ()=>{ filePathEl.value='stdlib.lambda'; loadBtn.click(); });
     loadBtn.addEventListener('click', async ()=>{
       const p = filePathEl.value.trim(); if(!p) return;
       fileStatus.textContent='Loading...';
@@ -397,6 +398,60 @@
         if(!streaming && r.logs && Array.isArray(r.logs) && r.logs.length){ r.logs.forEach(l=>append(l)); append(''); }
       } catch(e){ fileStatus.textContent = 'Error: ' + e.message; }
     });
+    // ---- Local file loading (.lambda) ----
+    localLoadBtn?.addEventListener('click', ()=> localFileInput?.click());
+    localFileInput?.addEventListener('change', ()=>{
+      const f = localFileInput.files?.[0];
+      if(!f) return;
+      loadLocalLambdaFile(f);
+      // reset input so selecting same file again re-triggers
+      localFileInput.value='';
+    });
+    async function loadLocalLambdaFile(file){
+      fileStatus.textContent = `Local: ${file.name} (reading...)`;
+      try {
+        const text = await file.text();
+        const rawLines = text.split(/\r?\n/);
+        // Simple filtering: keep lines, preserve blank lines for counting but skip evaluating blanks/comments
+        const toEval = rawLines.map(l=>l.trim()).filter(l=> l.length && !l.startsWith('#'));
+        if(!toEval.length){ fileStatus.textContent = `Local: ${file.name} (no expressions found)`; return; }
+        append(`[local load start: ${file.name} expressions=${toEval.length}]`);
+        // Show progress bar even if not streaming for user feedback
+        fileProgress.style.display='block'; fileProgressBar.style.width='0%';
+        for(let i=0;i<toEval.length;i++){
+          const expr = toEval[i];
+          try {
+            const res = await evalExpr(expr);
+            append(`> ${expr}`);
+            if(!streaming){
+              if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
+              const primary = res.output || res.normalized || '(no output)';
+              const logsArray = Array.isArray(res.logs)? res.logs:[];
+              const hasResultLine = logsArray.some(l=> l.startsWith('-> '));
+              if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
+              if(res.normalized && res.normalized !== primary){
+                const alreadyLogged = logsArray.some(l=> l.trim() === res.normalized.trim() || l.trim() === ('Norm: '+res.normalized).trim());
+                if(!alreadyLogged) append('Norm: ' + res.normalized);
+              }
+            } else {
+              const primary = res.output || res.normalized || '(no output)';
+              append(primary);
+              if(res.normalized && res.normalized !== primary) append(res.normalized);
+            }
+            append('');
+          } catch(err){
+            append(`ERR: ${err.message}`);
+          }
+          const pct = Math.round(((i+1)/toEval.length)*100);
+          fileProgressBar.style.width = pct + '%';
+        }
+        setTimeout(()=>{ fileProgress.style.display='none'; fileProgressBar.style.width='0%'; }, 900);
+        fileStatus.textContent = `Local: ${file.name} loaded (${toEval.length} expressions)`;
+        append(`[local load done: ${file.name}]`);
+      } catch(e){
+        fileStatus.textContent = `Local load error: ${e.message}`;
+      }
+    }
 
     // ---- Health + auto-init ----
     fetch('/api/health').then(r=>r.ok?document.getElementById('health').textContent='ready':null).catch(()=>{});
