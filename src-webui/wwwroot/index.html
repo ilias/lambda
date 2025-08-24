@@ -48,6 +48,12 @@
     .log-fileline{color:#8b949e;}
     .log-fileresult{color:var(--good);}
     .log-progress{color:#58a6ff; opacity:.7;}
+  .log-processing{color:#8b949e;}
+  /* Simple filters */
+  #filters { display:flex; flex-wrap:wrap; gap:.5rem; margin:.4rem 0 .3rem; }
+  #filters label { font-size:.55rem; letter-spacing:.08em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:#0f141a; padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+  #filters input { margin:0; }
+  .hidden-log { display:none !important; }
   </style>
 </head>
 <body>
@@ -93,6 +99,7 @@
           <button class="secondary" id="searchClear" type="button" style="font-size:.6rem; padding:.35rem .5rem;">Clear</button>
         </div>
       </div>
+  <div id="filters"></div>
       <pre id="output" aria-live="polite"></pre>
     </section>
   </main>
@@ -145,6 +152,7 @@
       if(line.startsWith('Test: passed')) return 'log-test-pass';
       if(line.startsWith('Test: failed')) return 'log-test-fail';
       if(line.startsWith('Test:')) return 'log-test';
+  if(line.startsWith('Processing:')) return 'log-processing';
       if(line.startsWith(':')) return 'log-command';
       if(line.includes('Loading')) return 'log-loading';
       if(line.includes('<<')) return 'log-fileline';
@@ -156,6 +164,8 @@
       const span = document.createElement('span');
       if(cls) span.className = cls;
       span.textContent = text;
+  // Apply simple filter visibility
+  if(cls && isFilteredClass(cls)) span.classList.add('hidden-log');
       outEl.appendChild(span);
       outEl.appendChild(document.createTextNode('\n'));
       const maxNodes = MAX_LOG_LINES * 2;
@@ -307,6 +317,36 @@
     searchClear?.addEventListener('click',()=>{ searchInput.value=''; clearSearch(); });
     // Add search highlight styles dynamically
     (function(){ const style=document.createElement('style'); style.textContent='.search-hit{background:#1f2a33; border-radius:3px;} .search-current{outline:1px solid var(--accent);}'; document.head.appendChild(style); })();
+    // --- Simple Filters (Macro, Test, Time, Step, Processing) ---
+    const FILTER_CONFIG = [
+      {label:'Macro', classes:['log-macro']},
+      {label:'Test', classes:['log-test','log-test-pass','log-test-fail']},
+      {label:'Time', classes:['log-time']},
+      {label:'Step', classes:['log-step']},
+      {label:'Processing', classes:['log-processing']}
+    ];
+    let disabledGroups = new Set(); // start with all enabled
+    function isFilteredClass(cls){
+      for(const g of FILTER_CONFIG){ if(g.classes.includes(cls)) return disabledGroups.has(g.label); }
+      return false;
+    }
+    function renderFilters(){
+      const host=document.getElementById('filters'); if(!host) return; host.innerHTML='';
+      FILTER_CONFIG.forEach(g=>{
+        const id='f_'+g.label.toLowerCase();
+        const lab=document.createElement('label');
+        const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=!disabledGroups.has(g.label);
+        cb.addEventListener('change',()=>{ if(cb.checked) disabledGroups.delete(g.label); else disabledGroups.add(g.label); applyLineFilters(); });
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(g.label)); host.appendChild(lab);
+      });
+    }
+    function applyLineFilters(){
+      outEl.querySelectorAll('span').forEach(s=>{
+        const c=s.className; if(!c) return;
+        if(isFilteredClass(c)) s.classList.add('hidden-log'); else s.classList.remove('hidden-log');
+      });
+    }
+    renderFilters();
     // --- History navigation (Up/Down at boundaries) ---
     const HISTORY_KEY = 'lambdaHistory';
     let history = [];
