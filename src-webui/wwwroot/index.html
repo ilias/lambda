@@ -66,19 +66,6 @@
         <button class="secondary" id="wsToggle" type="button" data-on="0">WS: Off</button>
       </div>
   <div class="small">Multiple expressions separated by semicolons are processed sequentially. Each line is evaluated independently.</div>
-      <!-- Snippets Panel -->
-      <div id="snippets" style="margin-top:.75rem; display:flex; flex-direction:column; gap:.4rem;">
-        <div style="display:flex; gap:.5rem; align-items:center;">
-          <select id="snippetList" style="flex:1; min-width:0;"></select>
-          <button class="secondary" id="insertSnippetBtn" type="button" title="Insert snippet into editor">Insert</button>
-          <button class="secondary" id="deleteSnippetBtn" type="button" title="Delete user snippet">Del</button>
-        </div>
-        <div style="display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;">
-          <input id="snippetName" type="text" placeholder="Snippet name" style="flex:0 0 160px;" />
-          <input id="snippetValue" type="text" placeholder="Snippet code (uses selection if blank)" style="flex:1; min-width:200px;" />
-          <button class="secondary" id="saveSnippetBtn" type="button">Save</button>
-        </div>
-      </div>
     </section>
     <section>
       <label for="filePath">Load .lambda File</label>
@@ -137,13 +124,6 @@
     const fileStatus = document.getElementById('fileStatus');
     const fileProgress = document.getElementById('fileProgress');
     const fileProgressBar = document.getElementById('fileProgressBar');
-  // Snippet elements
-  const snippetList = document.getElementById('snippetList');
-  const insertSnippetBtn = document.getElementById('insertSnippetBtn');
-  const deleteSnippetBtn = document.getElementById('deleteSnippetBtn');
-  const saveSnippetBtn = document.getElementById('saveSnippetBtn');
-  const snippetName = document.getElementById('snippetName');
-  const snippetValue = document.getElementById('snippetValue');
   // Search elements
   const searchInput = document.getElementById('searchInput');
   const searchPrev = document.getElementById('searchPrev');
@@ -297,49 +277,6 @@
 
     runBtn.addEventListener('click', doEval);
     exprEl.addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); doEval(); }});
-    // --- Snippets ---
-    const SNIPPET_KEY='lambdaSnippets';
-    const DEFAULT_SNIPPETS = [
-      ['Identity','x -> x'],
-      ['Const (K)','x,y -> x'],
-      ['Apply Twice','f,x -> f (f x)'],
-      ['Factorial','let rec fact = n -> if (iszero n) 1 (mult n (fact (pred n))) in fact 5'],
-      ['List Example','[1,2,3]'],
-      ['Map Double','map (mult 2) [1,2,3,4]']
-    ];
-    function loadUserSnippets(){ try{ const v=JSON.parse(localStorage.getItem(SNIPPET_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch{return [];} }
-    function saveUserSnippets(arr){ try{ localStorage.setItem(SNIPPET_KEY, JSON.stringify(arr.slice(0,300))); }catch{} }
-    function allSnippets(){ return [...DEFAULT_SNIPPETS, ...loadUserSnippets()]; }
-    function refreshSnippetList(){
-      const items = allSnippets();
-      snippetList.innerHTML='';
-      items.forEach(([n,v])=>{ const opt=document.createElement('option'); opt.value=v; opt.textContent=n; opt.dataset.name=n; opt.dataset.isDefault = DEFAULT_SNIPPETS.some(d=>d[0]===n); snippetList.appendChild(opt); });
-    }
-    function insertAtCursor(el, text){
-      const start = el.selectionStart, end = el.selectionEnd;
-      const before = el.value.slice(0,start), after=el.value.slice(end);
-      el.value = before + text + after;
-      const pos = start + text.length; el.selectionStart = el.selectionEnd = pos; el.focus();
-    }
-    insertSnippetBtn.addEventListener('click', ()=>{ const opt=snippetList.selectedOptions[0]; if(!opt) return; insertAtCursor(exprEl, opt.value); updateContinuationHint(); });
-    saveSnippetBtn.addEventListener('click', ()=>{
-      const name = (snippetName.value||'').trim(); let val = (snippetValue.value||'').trim();
-      if(!val){ // fallback to current selection
-        const selStart = exprEl.selectionStart, selEnd = exprEl.selectionEnd; if(selEnd>selStart) val = exprEl.value.slice(selStart, selEnd); }
-      if(!name || !val) return;
-      const user = loadUserSnippets().filter(s=>s[0]!==name);
-      user.push([name,val]);
-      saveUserSnippets(user);
-      snippetName.value=''; snippetValue.value='';
-      refreshSnippetList();
-      snippetList.value = val;
-    });
-    deleteSnippetBtn.addEventListener('click', ()=>{
-      const opt = snippetList.selectedOptions[0]; if(!opt) return; const name=opt.textContent; if(DEFAULT_SNIPPETS.some(s=>s[0]===name)) return; // don't delete defaults
-      if(!confirm('Delete snippet "'+name+'"?')) return;
-      const user = loadUserSnippets().filter(s=>s[0]!==name); saveUserSnippets(user); refreshSnippetList();
-    });
-    refreshSnippetList();
     // --- Search ---
     let searchHits = [];
     let searchIndex = -1;
