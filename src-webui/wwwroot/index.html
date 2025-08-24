@@ -34,7 +34,8 @@
     /* Log color classes */
     .log-error{color:#ff6b6b;}
     .log-comment{color:#e3b341;}
-    .log-result{color:var(--good);}
+  .log-result{color:var(--good);}
+  .log-norm{color:var(--good); opacity:.85;}
     .log-step{color:#e3b341;}
     .log-time{color:#58a6ff;}
     .log-name{color:#58a6ff;}
@@ -140,37 +141,38 @@
     // ---- Log classification & append (with cap) ----
     const MAX_LOG_LINES = 4000;
     function classify(line){
-      if(line.startsWith('PROGRESS::')) return 'log-progress';
-      if(line.startsWith('Error:')) return 'log-error';
-      if(line.startsWith('#')) return 'log-comment';
-      if(line.startsWith('->')) return 'log-result';
-      if(line.startsWith('Step')) return 'log-step';
-      if(line.startsWith('Time:')) return 'log-time';
-      if(line.startsWith('Name:')) return 'log-name';
-      if(line.startsWith('Eval:')) return 'log-eval';
-      if(line.startsWith('Macro')) return 'log-macro';
-      if(line.startsWith('Test: passed')) return 'log-test-pass';
-      if(line.startsWith('Test: failed')) return 'log-test-fail';
-      if(line.startsWith('Test:')) return 'log-test';
-  if(line.startsWith('Processing:')) return 'log-processing';
-      if(line.startsWith(':')) return 'log-command';
-      if(line.includes('Loading')) return 'log-loading';
-      if(line.includes('<<')) return 'log-fileline';
-      if(line.includes('>>')) return 'log-fileresult';
+      const s = line.trimStart();
+      if(s.startsWith('PROGRESS::')) return 'log-progress';
+      if(s.startsWith('Error:')) return 'log-error';
+      if(s.startsWith('#')) return 'log-comment';
+      if(s.startsWith('Norm:')) return 'log-norm';
+      if(s.startsWith('->')) return 'log-result';
+      if(s.startsWith('Step')) return 'log-step';
+      if(s.startsWith('Time:')) return 'log-time';
+      if(s.startsWith('Name:')) return 'log-name';
+      if(s.startsWith('Eval:')) return 'log-eval';
+      if(s.startsWith('Macro')) return 'log-macro';
+      if(s.startsWith('Test: passed')) return 'log-test-pass';
+      if(s.startsWith('Test: failed')) return 'log-test-fail';
+      if(s.startsWith('Test:')) return 'log-test';
+      if(s.startsWith('Processing:')) return 'log-processing';
+      if(s.startsWith(':')) return 'log-command';
+      if(s.includes('Loading')) return 'log-loading';
+      if(s.includes('<<')) return 'log-fileline';
+      if(s.includes('>>')) return 'log-fileresult';
       return '';
     }
     function append(text){
       const cls = classify(text);
       const span = document.createElement('span');
-    if(cls) span.className = cls;
-      span.textContent = text;
-  // Apply simple filter visibility (support multiple classes added later)
-  if(isFilteredSpan(span)) span.classList.add('hidden-log');
+      if(cls) span.className = cls;
+      // Include trailing newline inside the span so hiding the span also hides its line break
+      span.textContent = text + '\n';
+      if(isFilteredSpan(span)) span.classList.add('hidden-log');
       outEl.appendChild(span);
-      outEl.appendChild(document.createTextNode('\n'));
-      const maxNodes = MAX_LOG_LINES * 2;
-      if(outEl.childNodes.length > maxNodes){
-        while(outEl.childNodes.length > maxNodes){ outEl.removeChild(outEl.firstChild); }
+      // Cap total lines by counting spans (one per line now)
+      if(outEl.childNodes.length > MAX_LOG_LINES){
+        while(outEl.childNodes.length > MAX_LOG_LINES){ outEl.removeChild(outEl.firstChild); }
       }
       outEl.scrollTop = outEl.scrollHeight;
     }
@@ -256,8 +258,9 @@
             const hasResultLine = logsArray.some(l=> l.startsWith('-> '));
             // Only append primary / normalized if not already represented in logs
             if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
-            if(res.normalized && res.normalized !== primary && !logsArray.includes(res.normalized) && !logsArray.some(l=> l.trim() === res.normalized.trim())) {
-              append("-> " + res.normalized);
+            if(res.normalized && res.normalized !== primary){
+              const alreadyLogged = logsArray.some(l=> l.trim() === res.normalized.trim() || l.trim() === ('Norm: '+res.normalized).trim());
+              if(!alreadyLogged) append('Norm: ' + res.normalized);
             }
           } else {
             // streaming: only final outputs (logs already streamed)
@@ -324,6 +327,7 @@
       {label:'Time', classes:['log-time']},
       {label:'Step', classes:['log-step']},
       {label:'Eval', classes:['log-eval']},
+      {label:'Norm', classes:['log-norm']},
       {label:'Name', classes:['log-name']},
       {label:'Processing', classes:['log-processing']}
     ];
