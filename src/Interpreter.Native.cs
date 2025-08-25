@@ -29,11 +29,12 @@ public partial class Interpreter
 
         _logger.Log($"Test: left:  {FormatWithNumerals(normLeft)}");
         _logger.Log($"Test: right: {FormatWithNumerals(normRight)}");
-        _logger.Log($"Test: {(equal ? "passed" : "failed")}");
 
         _nativeArithmetic++;
         _stats.StructEqCalls++;
         if (equal) _stats.StructEqSuccesses++;
+        var total = equal ? _stats.StructEqSuccesses : _stats.StructEqCalls - _stats.StructEqSuccesses;
+        _logger.Log($"Test: {(equal ? "passed" : "failed")} - {total}/{_stats.StructEqCalls}");
         return MakeChurchBoolean(equal);
     }
 

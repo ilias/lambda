@@ -59,6 +59,11 @@
   #filters label { font-size:.55rem; letter-spacing:.08em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:#0f141a; padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
   #filters input { margin:0; }
   .hidden-log { display:none !important; }
+  /* Floating search nav */
+  #searchFloat { position:fixed; bottom:14px; right:16px; display:none; gap:.35rem; background:rgba(22,27,34,.92); border:1px solid var(--border); padding:.4rem .55rem; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,.4); z-index:999; font-size:.6rem; align-items:center; }
+  #searchFloat button { font-size:.6rem; padding:.25rem .45rem; }
+  #searchFloat .count { opacity:.7; font-weight:500; }
+  @media (max-width:600px){ #searchFloat { right:8px; left:8px; justify-content:space-between; } }
   </style>
 </head>
 <body>
@@ -110,6 +115,7 @@
     </section>
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
+  <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev" type="button" class="secondary">Prev</button> <button id="sfNext" type="button" class="secondary">Next</button> <button id="sfClear" type="button" class="secondary" title="Clear (Esc)">✕</button></div>
   <script>
     // ---- Cache busting & cache clearing ----
     (function(){
@@ -155,6 +161,12 @@
   const searchPrev = document.getElementById('searchPrev');
   const searchNext = document.getElementById('searchNext');
   const searchClear = document.getElementById('searchClear');
+  // Floating nav elements
+  const searchFloat = document.getElementById('searchFloat');
+  const sfPrev = document.getElementById('sfPrev');
+  const sfNext = document.getElementById('sfNext');
+  const sfClear = document.getElementById('sfClear');
+  const searchCount = document.getElementById('searchCount');
 
     // ---- Log classification & append (with cap) ----
     const MAX_LOG_LINES = 4000;
@@ -276,17 +288,20 @@
             const hasResultLine = logsArray.some(l=> l.startsWith('-> '));
             // Only append primary / normalized if not already represented in logs
             if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
+            let appendedNorm = false;
             if(res.normalized && res.normalized !== primary){
               const alreadyLogged = logsArray.some(l=> l.trim() === res.normalized.trim() || l.trim() === ('Norm: '+res.normalized).trim());
-              if(!alreadyLogged) append('Norm: ' + res.normalized);
+              if(!alreadyLogged){ append('Norm: ' + res.normalized); appendedNorm = true; }
             }
+            if(appendedNorm) append('');
           } else {
             // streaming: only final outputs (logs already streamed)
             const primary = res.output || res.normalized || '(no output)';
             append(primary);
-            if(res.normalized && res.normalized !== primary) append(res.normalized);
+            let appendedNorm = false;
+            if(res.normalized && res.normalized !== primary){ append(res.normalized); appendedNorm = true; }
+            if(appendedNorm) append('');
           }
-          append('');
         }
       } catch(e){ append(`ERR: ${e.message}`); }
       finally { runBtn.disabled=false; }
@@ -313,16 +328,17 @@
     let searchIndex = -1;
     function clearSearch(){
       searchHits.forEach(el=> el.classList.remove('search-hit','search-current'));
-      searchHits=[]; searchIndex=-1;
+      searchHits=[]; searchIndex=-1; updateSearchFloat();
     }
     function performSearch(){
       clearSearch();
       const term = searchInput.value.trim();
-      if(!term) return;
+      if(!term){ updateSearchFloat(); return; }
       let rx;
       try { rx = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'); } catch { return; }
       outEl.querySelectorAll('span').forEach(s=>{ if(rx.test(s.textContent)){ s.classList.add('search-hit'); searchHits.push(s); } });
       if(searchHits.length){ searchIndex=0; focusSearch(); }
+      updateSearchFloat();
     }
     function focusSearch(){
       searchHits.forEach(el=> el.classList.remove('search-current'));
@@ -331,11 +347,40 @@
         el.classList.add('search-current');
         el.scrollIntoView({block:'center'});
       }
+      updateSearchFloat();
+    }
+    function updateSearchFloat(){
+      if(!searchFloat) return;
+      if(searchHits.length){
+        searchFloat.style.display='flex';
+        searchCount.textContent = (searchIndex>=0? (searchIndex+1):0) + '/' + searchHits.length;
+        searchFloat.setAttribute('aria-hidden','false');
+      } else {
+        searchFloat.style.display='none';
+        searchFloat.setAttribute('aria-hidden','true');
+      }
     }
     searchInput?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ performSearch(); } });
-    searchNext?.addEventListener('click',()=>{ if(!searchHits.length) performSearch(); else { searchIndex=(searchIndex+1)%searchHits.length; focusSearch(); } });
-    searchPrev?.addEventListener('click',()=>{ if(!searchHits.length) performSearch(); else { searchIndex=(searchIndex-1+searchHits.length)%searchHits.length; focusSearch(); } });
+    function nextHit(){ if(!searchHits.length) performSearch(); else { searchIndex=(searchIndex+1)%searchHits.length; focusSearch(); } }
+    function prevHit(){ if(!searchHits.length) performSearch(); else { searchIndex=(searchIndex-1+searchHits.length)%searchHits.length; focusSearch(); } }
+    searchNext?.addEventListener('click', nextHit);
+    searchPrev?.addEventListener('click', prevHit);
     searchClear?.addEventListener('click',()=>{ searchInput.value=''; clearSearch(); });
+    sfNext?.addEventListener('click', nextHit);
+    sfPrev?.addEventListener('click', prevHit);
+    sfClear?.addEventListener('click',()=>{ searchInput.value=''; clearSearch(); });
+    // Keyboard shortcuts: / focus, F3/Enter next, Shift+F3 previous, n/N for next/prev when not in input, Esc clears
+    document.addEventListener('keydown', e=>{
+      const active = document.activeElement;
+      const inEditable = active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA');
+      if(e.key==='/' && !inEditable){ e.preventDefault(); searchInput.focus(); }
+      else if(e.key==='F3'){ e.preventDefault(); if(e.shiftKey) prevHit(); else nextHit(); }
+      else if(e.key==='Enter' && active===searchInput){ e.preventDefault(); nextHit(); }
+      else if((e.key==='n' || e.key==='N') && !inEditable){ e.preventDefault(); e.key==='n'? nextHit(): prevHit(); }
+      else if(e.key==='Escape'){ if(searchHits.length){ clearSearch(); } }
+    });
+    // Placeholder hint update
+    if(searchInput) searchInput.placeholder = 'Search (/ F3 n/N)';
     // Add search highlight styles dynamically
     (function(){ const style=document.createElement('style'); style.textContent='.search-hit{background:#1f2a33; border-radius:3px;} .search-current{outline:1px solid var(--accent);}'; document.head.appendChild(style); })();
     // --- Simple Filters (Macro, Test, Time, Step, Processing) ---
@@ -445,16 +490,19 @@
               const logsArray = Array.isArray(res.logs)? res.logs:[];
               const hasResultLine = logsArray.some(l=> l.startsWith('-> '));
               if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
+              let appendedNorm = false;
               if(res.normalized && res.normalized !== primary){
                 const alreadyLogged = logsArray.some(l=> l.trim() === res.normalized.trim() || l.trim() === ('Norm: '+res.normalized).trim());
-                if(!alreadyLogged) append('Norm: ' + res.normalized);
+                if(!alreadyLogged){ append('Norm: ' + res.normalized); appendedNorm = true; }
               }
+              if(appendedNorm) append('');
             } else {
               const primary = res.output || res.normalized || '(no output)';
               append(primary);
-              if(res.normalized && res.normalized !== primary) append(res.normalized);
+              let appendedNorm = false;
+              if(res.normalized && res.normalized !== primary){ append(res.normalized); appendedNorm = true; }
+              if(appendedNorm) append('');
             }
-            append('');
           } catch(err){
             append(`ERR: ${err.message}`);
           }
