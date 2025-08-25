@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "lambda-cek.wasm",
   "resources": {
-    "hash": "sha256-2Art0HVO/5ScP05LZ7L30U1FTHL4uirRVWJoyQzmkns=",
+    "hash": "sha256-VdYdpNvzLyE3AuWx8jYOqj/E64HT4e1ZA214Eab6l6M=",
     "jsModuleNative": {
       "dotnet.native.js": "sha256-O/NCYcAN9uPocD7ns7AzF/cqx7f5vL1PTJCQs0vEXyk="
     },
@@ -51,8 +51,8 @@
       "System.Text.Json.wasm": "sha256-A1HN3bXTetxuVki5znW2VIwMjHcksrEllPX7HCT9osI=",
       "System.Threading.wasm": "sha256-zJDTLdhQp72DvHoh9ZH8UUzDpzty6CGi4qtYWfXbTH4=",
       "System.wasm": "sha256-nmuhbvNIgKqCvna0ksVCGihsNe9CE8/Pa/CSHvkThqc=",
-      "lambda-cek.wasm": "sha256-vCi9g28aLqFpuiTOE99yxTCisUub1mt9hoaBnPlZo3c=",
-      "lambda-cek.wasm.wasm": "sha256-bHnwnFD2jDgeJe4calL7dwNC9SbH13BztE66SOE952I="
+      "lambda-cek.wasm": "sha256-Gk6UMNSz32uVJN+rfxBEoU2efBOA8A+87hQvf4LPbDk=",
+      "lambda-cek.wasm.wasm": "sha256-5rJQAz0yEUvDjsWyJR81W7qw/rd5V9maqeCqdKOzP2o="
     }
   },
   "cacheBootResources": true,

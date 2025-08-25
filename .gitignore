@@ -1,4 +1,14 @@
 bin/
 obj/
 
+# Build outputs
+artifacts/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+
+# Publish folders
+**/publish/
+
 .fake
