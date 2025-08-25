@@ -1632,7 +1632,7 @@ Observability: subscribe to `Logger.Subscribe(line => Forward(line));` to pipe l
 
 ## Building and Running
 
-### Prerequisites
+### Prerequisites (Build & Run)
 
 - .NET 8.0 or later
 - C# compiler
@@ -1876,4 +1876,189 @@ Artifacts planned / available:
 - Add GitHub Actions workflow to pack & push NuGet on tagged release.
 - Publish WASM demo via GitHub Pages (copy `wwwroot` + `_framework`).
 - Provide minimal JS interop API (evaluate, normalize, stats) for embedding.
+
+## Build & Run Guide
+
+This section summarizes how to build and run each form of the interpreter: core library (NuGet), CLI, Web API, Web UI, and WASM.
+
+### Prerequisites
+
+- .NET 8 SDK (required). Optional: .NET 9 preview for multi-target build; ignore preview warning if not needed.
+- PowerShell (examples assume Windows `pwsh`).
+- (Optional) Docker Desktop for container build of Web UI.
+- (Optional for WASM static hosting) A static file server (`dotnet-serve`, `npx serve`, or any HTTP server).
+
+### 1. Core Library (NuGet Package)
+
+Build only:
+
+```powershell
+dotnet build src/lambda-cek.csproj -c Release
+```
+
+Pack (produces `.nupkg` in `artifacts`):
+
+```powershell
+dotnet pack src/lambda-cek.csproj -c Release -o artifacts
+```
+
+Override version:
+
+```powershell
+dotnet pack src/lambda-cek.csproj -c Release -o artifacts /p:PackageVersion=0.1.1
+```
+
+Consume in another project:
+
+```powershell
+dotnet add package LambdaCalculus.Interpreter --version 0.1.0
+```
+
+### 2. CLI REPL (`src-cli`)
+
+Run (Debug):
+
+```powershell
+dotnet run --project src-cli/lambda-cek.cli.csproj
+```
+
+Run (Release):
+
+```powershell
+dotnet run -c Release --project src-cli/lambda-cek.cli.csproj
+```
+
+Load extra lambda files at startup:
+
+```powershell
+dotnet run --project src-cli/lambda-cek.cli.csproj -- mydefs.lambda tests.lambda
+```
+
+Inside REPL: use `:help`, exit with `:quit` / `:exit`.
+
+### 3. Web API (`src-web`)
+
+Starts a minimal HTTP host (e.g., evaluation endpoints if implemented):
+
+```powershell
+dotnet run --project src-web/lambda-cek.web.csproj
+```
+
+If HTTPS dev cert not trusted:
+
+```powershell
+dotnet dev-certs https --trust
+```
+
+Override URL/port:
+
+```powershell
+dotnet run --project src-web/lambda-cek.web.csproj -- --urls http://localhost:5055
+```
+
+### 4. Web UI (`src-webui`)
+
+Interactive browser-based REPL with multi-tab output, search, filters.
+
+Run:
+
+```powershell
+dotnet run --project src-webui/lambda-cek.webui.csproj
+```
+
+Navigate to the printed local URL (commonly <http://localhost:5000>).
+
+#### Docker Build (Web UI)
+
+Using the build script (includes Docker unless `-NoDocker`):
+
+```powershell
+./build.ps1
+```
+
+Manual build & run:
+
+```powershell
+docker build -t lambda-cek-webui -f src-webui/Dockerfile .
+docker run -p 8080:8080 --name lambda-cek-webui lambda-cek-webui
+```
+
+Open <http://localhost:8080>.
+
+### 5. WASM (Blazor WebAssembly, `src-wasm`)
+
+Publish:
+
+```powershell
+dotnet publish -c Release src-wasm/lambda-cek.wasm.csproj -o artifacts/wasm
+```
+
+Serve the published folder:
+
+```powershell
+dotnet tool install --global dotnet-serve   # once
+dotnet serve -d artifacts/wasm
+```
+
+Visit the served URL; open browser console to confirm initialization.
+
+### 6. Unified Build Script (`build.ps1`)
+
+Examples:
+
+```powershell
+# Build everything + pack NuGet + publish WASM + build Docker image
+./build.ps1 -Pack -Wasm
+
+# Skip Docker
+./build.ps1 -Pack -Wasm -NoDocker
+
+# Validate package content & abort if missing files
+./build.ps1 -Pack -Validate
+
+# Continue pack even if validation fails
+./build.ps1 -Pack -Validate -SkipPackOnError
+```
+
+Outputs:
+
+- NuGet package → `artifacts/*.nupkg`
+- WASM publish → `artifacts/wasm`
+- Docker image → `lambda-cek-webui` (run with `docker run -p 8080:8080 lambda-cek-webui`)
+
+### 7. Running `tests.lambda`
+
+CLI:
+
+```powershell
+dotnet run --project src-cli/lambda-cek.cli.csproj -- tests.lambda
+```
+
+In REPL: `:load tests.lambda`
+
+### 8. Troubleshooting
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| NU5019 README not found | Wrong relative path in `.csproj` | Confirm `src/lambda-cek.csproj` uses `..\README.md` |
+| NETSDK1057 preview warning | net9.0 preview | Ignore or remove `net9.0` from `TargetFrameworks` |
+| HTTPS trust prompt | Dev cert untrusted | `dotnet dev-certs https --trust` |
+| Port in use | Conflict with existing process | Use `--urls` to pick another port |
+| WASM blank page | Not served over HTTP | Use a static server (not `file://`) |
+
+### 9. Quick Command Reference
+
+| Target | Command |
+|--------|---------|
+| Build all | `dotnet build -c Release` |
+| Pack | `dotnet pack src/lambda-cek.csproj -c Release -o artifacts` |
+| CLI REPL | `dotnet run --project src-cli/lambda-cek.cli.csproj` |
+| Web UI | `dotnet run --project src-webui/lambda-cek.webui.csproj` |
+| Web API | `dotnet run --project src-web/lambda-cek.web.csproj` |
+| WASM publish | `dotnet publish -c Release src-wasm/lambda-cek.wasm.csproj -o artifacts/wasm` |
+| Docker image | `docker build -t lambda-cek-webui -f src-webui/Dockerfile .` |
+
+---
+
+If you need a GitHub Actions CI workflow or JS interop examples for WASM, open an issue or continue the conversation.
 
