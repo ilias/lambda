@@ -34,7 +34,8 @@ public partial class Interpreter
         _stats.StructEqCalls++;
         if (equal) _stats.StructEqSuccesses++;
         var total = equal ? _stats.StructEqSuccesses : _stats.StructEqCalls - _stats.StructEqSuccesses;
-        _logger.Log($"Test: {(equal ? "passed" : "failed")} - {total}/{_stats.StructEqCalls}");
+        var totalPercent = (double)total / _stats.StructEqCalls * 100;
+        _logger.Log($"Test: {(equal ? "passed" : "failed")} - {total}/{_stats.StructEqCalls} ({totalPercent:F2}%)");
         return MakeChurchBoolean(equal);
     }
 

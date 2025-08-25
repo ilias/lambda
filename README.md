@@ -24,7 +24,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Range Syntax Extensions](#range-syntax-extensions)
 - [Parser Errors & Diagnostics](#parser-errors--diagnostics)
 - [Unary Minus / Negative Literals](#unary-minus--negative-literals)
-- [Either monad for detailed error reporting](#either-monad-for-detailed-error-reporting)
+- [Either Type (Error Handling)](#either-type-error-handling)
 - [Pretty Printing](#pretty-printing)
 - [Step Tracing & Debugging](#step-tracing--debugging)
 - [Performance Cookbook](#performance-cookbook)
@@ -57,6 +57,23 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - **Expression Interning**: Memory-efficient expression representation
 - **Stack-based Evaluation**: CEK (Control, Environment, Kontinuation) machine for efficient evaluation
 - **Thunk Forcing**: Lazy evaluation with intelligent thunk management
+
+### Recent UI / Tooling Updates (2025-08)
+
+Enhancements to the Web UI (`src-webui`):
+
+- Multi-Output Tabs: Separate sessions, independent logs and filters.
+- Log Filters: Toggle Macro, Test, Time, Step, Eval, Norm, Name, Processing categories.
+- Enhanced Search: Floating navigator, keyboard shortcuts (`/`, `F3`, `Shift+F3`, `n`, `N`, `Esc`).
+- Normalized Output Handling: `Norm:` lines only when distinct; blank spacer lines emitted only when normalization appears.
+- Local File Loader: Client-side `.lambda` loading with progress bar.
+- Streaming Transports: Buffered vs SSE vs WebSocket switchable at runtime.
+- Cache Busting: Timestamped resource fetches + cache/service worker clearing.
+- Persistent History: Up/Down arrow navigation with `localStorage` retention.
+- Structural Test Logging: Consistent `Test: left/right/passed|failed` lines; visibility controlled purely by filters.
+- Wrapped Output: Long lines wrap; horizontal scroll removed.
+
+Tip: Extend filtering or log classification via `classify()` and `FILTER_CONFIG` in `wwwroot/index.html`.
 
 ## Getting Started
 
@@ -655,6 +672,52 @@ For a condensed in‑REPL quick reference, run `:help`. The help view omits some
 Rationale: The grammar is optimized for clarity over minimality. Pratt parsing handles `InfixExpr` with dynamic precedence tables populated at runtime via `:infix` declarations; thus `InfixOp` is not a fixed token set.
 
 ---
+
+### Parser Errors & Diagnostics
+
+This section enumerates the most common parser errors along with their meaning and likely remedies.
+
+| Error | Meaning / Trigger | Typical Fix |
+|-------|-------------------|-------------|
+| `UnexpectedToken` | Token doesn't fit current production | Check for missing delimiters or stray characters |
+| `MissingLetEquals` | `let x ? y` missing `=` | Insert `=` between binding name and expression |
+| `UnexpectedArrow` | Misplaced `->` (e.g., outside lambda/guard) | Ensure correct lambda syntax `λx.y` or guard form |
+| `UnexpectedComma` | Extra comma in lists, params, or ranges | Remove trailing or double commas |
+| `EmptyExprList` | `[]` where at least one element required (contextual) | Provide an element or remove brackets |
+| `UnexpectedSemicolon` | Stray `;` not used in this language | Remove `;` |
+| `IllegalAssignment` | Attempt to assign to non‑identifier | Use identifier on left side of binding |
+| `UnexpectedDot` | Misplaced `..` or `.` in non‑range context | Correct range syntax or remove dot |
+| `UnterminatedList` | Missing closing `]` | Add `]` |
+| `MacroPatternError` | Malformed macro pattern / guard | Adjust pattern syntax / guard expression |
+
+Diagnostics Strategy:
+
+1. The parser accumulates context to produce precise span highlights (future: structured JSON diagnostics output for tooling).
+2. Multi‑line input preserves original indentation; caret alignment in UI mirrors source columns.
+3. Planned: colorized squiggles in the Web UI and a `:errors` command to reprint the last parse failure set.
+
+### Unary Minus / Negative Literals
+
+Negative integers are parsed as a unified literal token rather than a prefix application of `neg` to simplify downstream evaluation and enable eager list range expansion with negative endpoints.
+
+Rules:
+
+1. `-0` normalizes to `0`.
+2. A minus immediately followed by digits with no intervening space becomes a literal (e.g. `-42`).
+3. A space before digits (`- 5`) is parsed as the binary subtraction operator (if defined) or a future infix candidate.
+4. In ranges, `[-3 .. 3]` expands eagerly; stepped forms like `[-1,1 .. 5]` compute step = 2.
+5. Pretty‑printer preserves original negative literal tokens without inserting extra parentheses.
+
+Edge Cases:
+
+```lambda
+[-1]          # singleton list with negative literal
+[ -1 ]        # same (whitespace ignored)
+(-1)          # still a literal; parentheses preserved only if required by surrounding infix precedence
+map (plus -1) [0,1,2]  # partial application with negative literal argument
+```
+
+Rationale: Treating negative numbers as atomic avoids an explosion of parentheses in normalized forms and keeps macro pattern matching simpler (patterns can match `$n` against negative numerals directly).
 
 
 ### Church Numerals
@@ -1786,12 +1849,13 @@ A: Use `:clear` to reset all definitions and caches.
 - **C# Implementation:** Leverages .NET performance, strong typing, and modern tooling.
 - **Extensibility:** Macro and infix systems allow users to extend the language without modifying the core interpreter.
 **Current Limitations (Updated):**
-    - No floating-point or rational literal support yet (only Church integers; extension planned).
-    - No hygienic macro system or quasiquotation (planned).
-    - Module/import system absent (single global environment unless manually isolated).
-    - Error objects are string-based (structured diagnostics planned).
-    - Sandboxing (timeouts, memory quotas) not yet enforced—use caution in multi-user setups.
-    - Pattern matching construct (`match`) not yet implemented (macros approximate use cases).
+
+- No floating-point or rational literal support yet (only Church integers; extension planned).
+- No hygienic macro system or quasiquotation (planned).
+- Module/import system absent (single global environment unless manually isolated).
+- Error objects are string-based (structured diagnostics planned).
+- Sandboxing (timeouts, memory quotas) not yet enforced—use caution in multi-user setups.
+- Pattern matching construct (`match`) not yet implemented (macros approximate use cases).
 
 ## License
 

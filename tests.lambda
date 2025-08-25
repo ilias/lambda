@@ -7,6 +7,9 @@
 #   - Ambiguous expectations were converted where a reasonable canonical form exists
 # =========================================================================
 
+:test clear
+:memo
+
 # --- Boolean Logic ---
 isStructEqual (true 1 0) 1
 isStructEqual (false 1 0) 0
