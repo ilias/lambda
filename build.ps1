@@ -12,16 +12,16 @@ if(-not $NoBuild){
 }
 
 $name = 'lambda-cek-webui'
+$altName = 'lambda-webui'
 
-Write-Host "[docker] Checking for running container named '$name'" -ForegroundColor Cyan
-$existingContainers = docker ps -aq -f "name=^${name}$" 2>$null
-if($existingContainers){
-	Write-Host "[docker] Removing existing container(s): $existingContainers" -ForegroundColor Yellow
-	foreach($c in $existingContainers){
-		docker rm -f $c | Out-Null
-	}
+$containers = @(docker ps -aq -f "name=^(${name}|${altName})$" 2>$null)
+if ($containers.Count -gt 0) {
+    Write-Host "[docker] Removing existing container(s): $containers" -ForegroundColor Yellow
+    foreach ($c in $containers) {
+        docker rm -f $c | Out-Null
+    }
 } else {
-	Write-Host "[docker] No existing running/stopped container named '$name'" -ForegroundColor DarkGray
+    Write-Host "[docker] No existing running/stopped container named '$name' or '$altName'" -ForegroundColor DarkGray
 }
 
 Write-Host "[docker] Checking for existing image '$name'" -ForegroundColor Cyan
