@@ -1,10 +1,12 @@
 Param(
 	[switch]$NoBuild,
-	[switch]$Pack,          # dotnet pack core library
-	[string]$Version,       # optional override package version
-	[switch]$NoDocker,      # skip docker image build
-	[switch]$Wasm,          # publish WASM project
-	[switch]$CleanArtifacts,# remove artifacts folder first
+	[switch]$Pack,            # dotnet pack core library
+	[string]$Version,         # optional override package version
+	[switch]$NoDocker,        # skip docker image build
+	[switch]$Wasm,            # publish WASM project
+	[switch]$CleanArtifacts,  # remove artifacts folder first
+	[switch]$Validate,        # validate presence of package content files
+	[switch]$SkipPackOnError, # if validation fails, skip pack instead of stopping
 	[string]$Output = 'artifacts'
 )
 
@@ -25,6 +27,27 @@ if(-not $NoBuild){
 
 if($Pack){
 	if(-not (Test-Path $Output)) { New-Item -ItemType Directory -Path $Output | Out-Null }
+
+	# Validation of expected files for pack (README, stdlib, tests)
+	$expected = @(
+		'README.md',
+		'stdlib.lambda',
+		'tests.lambda'
+	)
+	$missing = @()
+	foreach($f in $expected){ if(-not (Test-Path $f)){ $missing += $f } }
+
+	if($missing.Count -gt 0){
+		Write-Host "[pack][warn] Missing expected files at repo root: $($missing -join ', ')" -ForegroundColor Yellow
+		if(-not $SkipPackOnError){
+			Write-Host "[pack][error] Aborting pack due to missing files (use -SkipPackOnError to continue)." -ForegroundColor Red
+			exit 1
+		} else {
+			Write-Host "[pack] Continuing despite missing files (SkipPackOnError)." -ForegroundColor DarkYellow
+		}
+	}
+
+	# Construct pack args
 	$packArgs = @('pack','src/lambda-cek.csproj','-c','Release','-o',$Output,'--no-build')
 	if($Version){ $packArgs += "/p:PackageVersion=$Version" }
 	Write-Host "[pack] dotnet $($packArgs -join ' ')" -ForegroundColor Cyan
@@ -72,5 +95,6 @@ Write-Host "[done] Build pipeline completed." -ForegroundColor Green
 # Web API: dotnet run --project src-web
 # Web UI: dotnet run --project src-webui
 # WASM: dotnet publish src-wasm -c Release -o artifacts\wasm then serve that folder
-# Pack: dotnet pack [lambda-cek.csproj](http://_vscodecontentref_/6) -c Release -o artifacts
-# All-in-one: .[build.ps1](http://_vscodecontentref_/7) -Pack -Wasm (add -NoDocker if you don’t need the image)
+# Pack: dotnet pack src/lambda-cek.csproj -c Release -o artifacts
+# All-in-one: .\build.ps1 -Pack -Wasm (add -NoDocker if you don’t need the image)
+# Validate only: .\build.ps1 -Pack -Validate -SkipPackOnError
