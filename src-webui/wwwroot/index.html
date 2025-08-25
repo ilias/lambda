@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <title>Lambda Calculus Interpreter UI</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- Disable caching -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <style>
     :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --accent:#58a6ff; --text:#c9d1d9; --bad:#ff6b6b; --good:#3fb950; }
     body { font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); margin:0; }
@@ -107,14 +111,26 @@
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
   <script>
+    // ---- Cache busting & cache clearing ----
+    (function(){
+      // Attempt to clear Service Worker registrations & caches (if any were previously installed)
+      if('serviceWorker' in navigator){
+        navigator.serviceWorker.getRegistrations().then(rs=> rs.forEach(r=> r.unregister().catch(()=>{}))).catch(()=>{});
+      }
+      if('caches' in window){
+        caches.keys().then(keys=> keys.forEach(k=> caches.delete(k).catch(()=>{}))).catch(()=>{});
+      }
+      // Add a cache-busting token to URL strings
+      window.__cacheBust = function(u){ try { const t = Date.now().toString(36)+Math.random().toString(36).slice(2); return u + (u.includes('?')?'&':'?') + '_='+ t; } catch { return u; } };
+    })();
     // ---- API helpers ----
     async function evalExpr(expr){
-      const r = await fetch(`/api/eval?expr=${encodeURIComponent(expr)}`);
+      const r = await fetch(__cacheBust(`/api/eval?expr=${encodeURIComponent(expr)}`), {cache:'no-store'});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
       return await r.json();
     }
     async function loadFile(p){
-      const r = await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:p})});
+      const r = await fetch(__cacheBust('/api/load'),{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Pragma':'no-cache'},body:JSON.stringify({path:p}),cache:'no-store'});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
       return await r.json();
     }
@@ -191,7 +207,7 @@
       if(useWS){
         if(ws && ws.readyState===WebSocket.OPEN) return;
         if(ws) { try{ ws.close(); }catch{} ws=null; }
-        ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  ws = new WebSocket(__cacheBust((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws'));
         ws.onmessage = ev => {
           const d = ev.data;
             if(typeof d==='string'){
@@ -202,7 +218,7 @@
         ws.onerror = ()=>{ try{ ws.close(); }catch{} if(streaming && useWS) setTimeout(ensureStream,1200); };
       } else {
         if(es) return;
-        es = new EventSource('/api/stream');
+  es = new EventSource(__cacheBust('/api/stream'));
         es.onmessage = e => {
           if(e.data && e.data!=='.'){
             if(e.data.startsWith('PROGRESS::')) handleProgress(parseInt(e.data.split('::')[1]||'0',10)); else append(e.data);
@@ -454,7 +470,7 @@
     }
 
     // ---- Health + auto-init ----
-    fetch('/api/health').then(r=>r.ok?document.getElementById('health').textContent='ready':null).catch(()=>{});
+  fetch(__cacheBust('/api/health'), {cache:'no-store'}).then(r=>r.ok?document.getElementById('health').textContent='ready':null).catch(()=>{});
     if(location.hash.includes('stream')) streamToggle.click();
   </script>
 </body>
