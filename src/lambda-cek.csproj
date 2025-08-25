@@ -9,6 +9,30 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   <!-- Suppress missing XML doc warnings until documentation is authored -->
   <NoWarn>$(NoWarn);1591</NoWarn>
+    <!-- NuGet package metadata -->
+    <IsPackable>true</IsPackable>
+    <PackageId>LambdaCalculus.Interpreter</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>ilias</Authors>
+    <Company></Company>
+    <Description>Lambda calculus interpreter (CEK machine) with REPL, macros, ranges, Church numerals, and lazy/strict evaluation strategies.</Description>
+    <PackageTags>lambda-calculus;interpreter;functional;church-numerals;macros;education;repl</PackageTags>
+    <RepositoryUrl>https://github.com/ilias/lambda</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <NeutralLanguage>en</NeutralLanguage>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Include top-level README in package -->
+  <None Include="..\README.md" Pack="true" PackagePath="/" />
+  <None Include="..\stdlib.lambda" Pack="true" PackagePath="contentFiles/any/any/" />
+  <None Include="..\tests.lambda" Pack="true" PackagePath="contentFiles/any/any/" />
+  </ItemGroup>
 
 </Project>

@@ -1,0 +1,1750 @@
+# =============================================================================
+# stdlib.lambda - Standard Library for Lambda Interpreter
+#
+# This library provides a comprehensive set of functions and utilities for
+# programming in the untyped lambda calculus. It includes everything from
+# basic boolean logic and Church numerals to advanced data structures,
+# functional programming utilities, and a macro system.
+# =============================================================================
+
+
+# =============================================================================
+# SECTION 1: CORE LANGUAGE CONSTRUCTS
+#
+# This section defines the fundamental building blocks of the language,
+# including core identity, boolean logic, and conditional expressions.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1.1. Core Identity and Combinators
+#
+# These are the fundamental building blocks of combinatory logic and lambda calculus.
+# They form the mathematical foundation for all higher-level programming constructs.
+#
+# THEORY:
+#   - I (Identity): The simplest combinator, returns its argument unchanged
+#   - K (Constant): Creates constant functions, foundation for Church booleans
+#   - S (Substitution): Most powerful combinator, can express any computable function
+#   - B (Composition): Function composition, essential for building complex functions
+#   - C (Flip): Argument order manipulation, useful for partial application
+#
+# USAGE EXAMPLES:
+#   I 42          # Returns 42 (identity)
+#   K 1 2         # Returns 1 (constant function, ignores second argument)
+#   S plus mult 3 # Returns plus 3 (mult 3) = plus 3 (3*3) = plus 3 9 = 12
+#   B succ double 5 # Returns succ (double 5) = succ 10 = 11
+#   C minus 3 10  # Returns minus 10 3 = 7 (flipped arguments)
+# -----------------------------------------------------------------------------
+id       = λx.x
+# Secondary identity & constant aliases used in tests
+id2      = id
+const2   = K
+K        = λx y.x
+I        = λx.x
+S        = λx y z.x z (y z)
+B        = λx y z.x (y z)
+C        = λx y z.x z y
+# Y        = λf.(λx.f (x x)) (λx.f (x x)) # The Y combinator is defined natively by the interpreter for recursion.
+
+# -----------------------------------------------------------------------------
+# 1.2. Boolean Logic and Conditionals
+#
+# Church booleans are the foundation of conditional logic in lambda calculus.
+# They are encoded as selector functions that choose between two alternatives.
+#
+# ENCODING:
+#   true  = λx y.x  (selects first argument)
+#   false = λx y.y  (selects second argument)
+#
+# This encoding makes conditionals natural: (condition then-branch else-branch)
+# 
+# LOGIC OPERATIONS:
+#   - NOT: Flips the selector by swapping the arguments to true/false
+#   - AND: Returns second argument if first is true, otherwise false
+#   - OR: Returns true if first argument is true, otherwise second argument
+#   - XOR: Returns true if exactly one argument is true
+#
+# USAGE EXAMPLES:
+#   true 1 0              # Returns 1 (selects first argument)
+#   false 1 0             # Returns 0 (selects second argument)
+#   if (gt 5 3) "yes" "no" # Returns "yes" (if 5 > 3 then "yes" else "no")
+#   and true false        # Returns false
+#   or false true         # Returns true
+#   not true              # Returns false
+#   xor true true         # Returns false (both true, so XOR is false)
+# -----------------------------------------------------------------------------
+true     = λx y.x
+false    = λx y.y
+if       = λp a b.p a b
+cond     = if
+not      = λp.p false true
+and      = λp q.p q false
+or       = λp q.p true q
+xor      = λp q.p (not q) q
+eqBool   = λx y.x y (not y)
+
+# Conditional application utilities
+when     = λp f x.if p (f x) x              # Apply function conditionally
+unless   = λp f x.if p x (f x)              # Apply function unless condition
+# cond     = λp t e.if p t e                  # (Now provided earlier as alias)
+
+
+# =============================================================================
+# SECTION 2: NUMERIC COMPUTATION
+#
+# This section covers all aspects of numeric computation using Church numerals.
+# It includes basic arithmetic, comparisons, advanced functions like GCD and
+# prime checking, and iterative helpers for performance.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 2.1. Church Numerals and Basic Arithmetic
+#
+# Church numerals encode natural numbers as higher-order functions that represent
+# repeated function application. This encoding makes arithmetic operations natural
+# function compositions and provides the foundation for all numeric computation.
+#
+# ENCODING:
+#   Number n = λf.λx.f^n(x)  (apply function f exactly n times to x)
+#   0 = λf.λx.x              (apply f zero times: just return x)
+#   1 = λf.λx.f x            (apply f once)
+#   2 = λf.λx.f (f x)        (apply f twice)
+#   3 = λf.λx.f (f (f x))    (apply f three times)
+#
+# ARITHMETIC OPERATIONS:
+#   - Addition: Apply f m times, then n more times
+#   - Multiplication: Compose f with itself m*n times
+#   - Exponentiation: Apply the "multiply by base" function n times
+#   - Predecessor: Complex operation using pairs and projection
+#
+# PERFORMANCE NOTE: 
+#   Enable native arithmetic with :native on for faster computation of large numbers.
+#
+# USAGE EXAMPLES:
+#   plus 3 4        # Returns 7 (Church numeral for 7)
+#   mult 6 7        # Returns 42 (Church numeral for 42)
+#   exp 2 3         # Returns 8 (2^3 as Church numeral)
+#   iszero 0        # Returns true (Church boolean)
+#   succ 5          # Returns 6 (successor of 5)
+#   pred 3          # Returns 2 (predecessor of 3, pred 0 = 0)
+# -----------------------------------------------------------------------------
+zero     = λf x.x
+succ     = λn f x.f (n f x)
+pred     = λn f x.n (λg h.h (g f)) (λu.x) (λu.u)
+plus     = λm n f x.m f (n f x)
+minus    = λm n.n pred m
+mult     = λm n f.m (n f)
+exp      = Y (λf. λb n. if (iszero n) 1 (mult b (f b (pred n))))
+pow      = exp
+iszero   = λn.n (λx.false) true
+
+# -----------------------------------------------------------------------------
+# 2.2. Division and Modulo
+#
+# Division and modulo are implemented using an iterative helper function that
+# repeatedly subtracts the divisor from the dividend while counting iterations.
+# The helper returns a pair (quotient, remainder) which is then destructured.
+#
+# ALGORITHM:
+#   1. Start with quotient = 0, remainder = dividend
+#   2. While remainder >= divisor:
+#      - Increment quotient
+#      - Subtract divisor from remainder
+#   3. Return (quotient, remainder)
+#
+# SAFETY: Division by zero returns 0 (handled by the lt comparison failing)
+#
+# USAGE EXAMPLES:
+#   div 15 3        # Returns 5 (15 ÷ 3 = 5)
+#   mod 17 5        # Returns 2 (17 mod 5 = 2)
+#   div 7 0         # Returns 0 (division by zero protection)
+#   mod 10 3        # Returns 1 (10 mod 3 = 1)
+# -----------------------------------------------------------------------------
+# Iterative division helper. Returns a pair (quotient, remainder).
+DIV_ITER = Y(λf. λq m n. \
+    if (lt m n) \
+        (pair q m)\
+        (f (succ q) (minus m n) n)\
+)
+div = λm n. first (DIV_ITER 0 m n)
+mod = λm n. second (DIV_ITER 0 m n)
+
+# -----------------------------------------------------------------------------
+# 2.3. Comparison Operations
+#
+# All comparison operations are built on Church numeral subtraction and the iszero
+# predicate. The foundation is the leq (≤) operation, which checks if m-n equals zero.
+# All other comparisons are derived from this basic operation.
+#
+# IMPLEMENTATION STRATEGY:
+#   - leq m n: Check if (m - n) = 0, meaning m ≤ n
+#   - eq m n: Check if both m ≤ n AND n ≤ m
+#   - lt m n: Check if m ≤ n but NOT m = n
+#   - gt m n: Check if NOT m ≤ n
+#   - geq/neq: Logical negations of lt/eq respectively
+#
+# USAGE EXAMPLES:
+#   leq 3 5         # Returns true (3 ≤ 5)
+#   eq 4 4          # Returns true (4 = 4)
+#   lt 2 2          # Returns false (2 is not < 2)
+#   gt 7 3          # Returns true (7 > 3)
+#   geq 5 5         # Returns true (5 ≥ 5)
+#   neq 3 8         # Returns true (3 ≠ 8)
+# -----------------------------------------------------------------------------
+leq      = λm n.iszero (minus m n)
+eq       = λm n.and (leq m n) (leq n m)
+lt       = λm n.and (leq m n) (not (eq m n))
+gt       = λm n.not (leq m n)
+geq      = λm n.not (lt m n)
+neq      = λm n.not (eq m n)
+
+# -----------------------------------------------------------------------------
+# 2.4. Additional Numeric Operations and Predicates
+#
+# This collection provides common mathematical operations and numeric predicates
+# built on top of the basic Church numeral operations. These functions demonstrate
+# how complex mathematical concepts can be expressed in pure lambda calculus.
+#
+# MATHEMATICAL OPERATIONS:
+#   - square/double/triple/quadruple: Common multiplications
+#   - half: Integer division by 2
+#   - abs: Absolute value (no-op for Church numerals since they're non-negative)
+#   - max/min: Selection based on comparison
+#
+# PREDICATES:
+#   - even/odd: Based on modulo 2 operation
+#   - isone/istwo: Specific equality checks
+#   - ispositive: Non-zero check
+#
+# USAGE EXAMPLES:
+#   square 7        # Returns 49 (7²)
+#   double 6        # Returns 12 (2 × 6)
+#   half 10         # Returns 5 (10 ÷ 2)
+#   even 8          # Returns true (8 is even)
+#   odd 7           # Returns true (7 is odd)
+#   max 5 3         # Returns 5 (maximum of 5 and 3)
+#   min 5 3         # Returns 3 (minimum of 5 and 3)
+#   ispositive 0    # Returns false (0 is not positive)
+# -----------------------------------------------------------------------------
+square   = λn.mult n n
+double   = λn.plus n n
+half     = λn.div n 2
+even     = λn.eq (mod n 2) zero
+odd      = λn.not (even n)
+abs      = λn.n                               # Church numerals are non-negative
+max      = λm n.if (geq m n) m n
+min      = λm n.if (leq m n) m n
+# pow      = exp                              # Alias for exp
+isone    = λn.eq n 1
+istwo    = λn.eq n 2
+ispositive = λn.not (iszero n)
+triple   = λn.plus n (plus n n)
+quadruple = λn.plus (double n) (double n)
+
+# -----------------------------------------------------------------------------
+# 2.5. Advanced Numeric Algorithms
+#
+# This section implements sophisticated mathematical algorithms using Church numerals
+# and lambda calculus techniques. These functions demonstrate how complex mathematics
+# can be expressed in pure functional form.
+#
+# ALGORITHMS IMPLEMENTED:
+#   - Iterative Factorial: Uses pair accumulation to avoid deep recursion
+#   - Iterative Fibonacci: Maintains (current, next) pair that shifts each iteration
+#   - Euclidean GCD: Classic algorithm using modulo and recursion
+#   - Newton's Method Square Root: Iterative approximation with convergence check
+#   - Trial Division Primality: Tests divisibility up to √n for efficiency
+#   - Ackermann Function: Extremely fast-growing function (use small arguments!)
+#
+# PERFORMANCE NOTES:
+#   - Iterative versions (fact, fib) avoid stack overflow for large inputs
+#   - Square root uses 20 iterations maximum with Newton's method
+#   - Prime checking is optimized to test only up to √n
+#   - GCD uses the efficient Euclidean algorithm
+#
+# USAGE EXAMPLES:
+#   fact 5              # Returns 120 (5! = 5×4×3×2×1)
+#   fib 10              # Returns 55 (10th Fibonacci number)
+#   gcd 48 18           # Returns 6 (greatest common divisor)
+#   lcm 4 6             # Returns 12 (least common multiple)
+#   sqrt 25             # Returns 5 (integer square root)
+#   sqrt 26             # Returns 5 (integer square root, rounded down)
+#   isPrime 17          # Returns true (17 is prime)
+#   isPrime 15          # Returns false (15 = 3×5, not prime)
+#   ackermann 3 2       # Returns 29 (grows very fast - keep arguments small!)
+# -----------------------------------------------------------------------------
+# Iterative Factorial
+FACT_ITER_HELPER = λn.n (λp.pair (succ (first p)) \
+                                  (mult (succ (first p)) (second p))) \
+                         (pair 0 1)
+fact             = λn.second (FACT_ITER_HELPER n)
+
+# Iterative Fibonacci
+FIB_ITER_HELPER  = λn.n (λp.pair (second p) \
+                                  (plus (first p) (second p))) \
+                         (pair 0 1)
+fib              = λn.first (FIB_ITER_HELPER n)
+
+# GCD and LCM using Euclidean algorithm
+gcd = Y (λg a b. if (iszero b) a (g b (mod a b)))
+lcm = λa b. if (or (iszero a) (iszero b)) 0 (div (mult a b) (gcd a b))
+
+# Square Root using Newton's method
+SQRT_NEWTON_STEP = λn x. half (plus x (div n x))
+SQRT_CONVERGED   = λn x. leq (abs (minus (mult x x) n)) 1
+SQRT_ITER        = Y (λf n x iterations. \
+    if (or (SQRT_CONVERGED n x) (iszero iterations)) \
+        x \
+        (f n (SQRT_NEWTON_STEP n x) (pred iterations)) \
+)
+sqrt = λn. \
+    if (iszero n) zero \
+    (if (eq n 1) 1 \
+        (SQRT_ITER n (half (plus n 1)) 20))  # Initial guess: (n+1)/2, 20 iterations
+
+# Prime number check via trial division
+isPrime = Y (λf n. \
+    let iter = Y (λiter i. \
+        if (gt (mult i i) n) true \
+        (if (eq (mod n i) 0) false \
+            (iter (succ i))) \
+    ) in \
+    if (lt n 2) false (iter 2) \
+)
+
+# Ackermann function
+ackermann  = \p.(p (\a.\q.(a (q a 1))) succ)
+
+# -----------------------------------------------------------------------------
+# 2.6. Recursive Function Examples (using Y combinator)
+#
+# These are alternative, often less efficient, implementations provided for
+# educational purposes to demonstrate recursion with the Y combinator.
+# -----------------------------------------------------------------------------
+factRec    = Y (\f.\n. if (iszero n) 1 (mult n (f (pred n))))
+fibRec     = Y (\f.\n. if (leq n 2) 1 (plus (f (pred n)) (f (pred (pred n)))))
+sumUptoRec = Y (\f.\n.if (iszero n) 0 (plus n (f (pred n))))
+
+
+# =============================================================================
+# SECTION 3: DATA STRUCTURES
+#
+# This section defines common data structures like pairs, lists, and trees,
+# along with a comprehensive suite of operations for each.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 3.1. Pairs
+#
+# Pairs are the fundamental data structure for combining two values in lambda calculus.
+# They are implemented using Church encoding where a pair is a function that takes
+# another function and applies it to the two stored values.
+#
+# ENCODING:
+#   pair x y = λf.f x y    (store x and y, apply function f to both)
+#   first p = p (λx y.x)   (apply pair to a function that selects first)
+#   second p = p (λx y.y)  (apply pair to a function that selects second)
+#
+# This encoding demonstrates the power of higher-order functions - data structures
+# become functions that can be manipulated through function application.
+#
+# USAGE EXAMPLES:
+#   p = pair 10 20      # Create a pair containing 10 and 20
+#   first p             # Returns 10 (extract first element)
+#   second p            # Returns 20 (extract second element)
+#   swap p              # Returns pair 20 10 (swapped pair)
+#   pair 3 4 plus       # Returns 7 (apply plus to the pair elements)
+# -----------------------------------------------------------------------------
+pair     = λx y f.f x y
+first    = λp.p (λx y.x)
+second   = λp.p (λx y.y)
+swap     = λp.λf.p (λx y.f y x)
+
+# -----------------------------------------------------------------------------
+# 3.2. Lists - Core Operations
+#
+# Lists in lambda calculus are implemented using Church encoding with a cons/nil
+# structure similar to LISP. This encoding makes fold operations the natural way
+# to process lists, since the fold operation is built into the list structure itself.
+#
+# ENCODING:
+#   nil = λf z.z                    (empty list: return accumulator unchanged)
+#   cons x xs = λf z.f x (xs f z)   (prepend x: apply f to x and rest of list)
+#
+# The beauty of this encoding is that a list IS its own right fold function!
+# When you call (list f z), you're performing foldr f z list.
+#
+# OPERATIONS:
+#   - isnil: Tests if list equals the nil function
+#   - head: Extracts first element using a selector function
+#   - tail: Complex operation using accumulator pairs to reconstruct list tail
+#
+# PERFORMANCE NOTES:
+#   - cons and head are O(1)
+#   - tail is O(n) due to the need to reconstruct the list
+#   - isnil is O(1) by testing list structure
+#
+# USAGE EXAMPLES:
+#   l = cons 1 (cons 2 nil)     # Creates list [1, 2]
+#   isnil nil                   # Returns true
+#   head l                      # Returns 1
+#   tail l                      # Returns [2] (the list containing just 2)
+#   isnil (tail (tail l))       # Returns true (tail of [2] is empty)
+# -----------------------------------------------------------------------------
+nil      = λf z.z
+cons     = λx xs f z.f x (xs f z)
+isnil    = λl.l (λx xs.false) true
+head     = λl.l (λx xs.x) nil
+tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil nil))
+# isempty  = isnil # Alias for isnil
+
+# -----------------------------------------------------------------------------
+# 3.3. Lists - Higher-Order Functions
+#
+# These are the fundamental list processing functions in functional programming.
+# They operate on lists using higher-order functions (functions that take other
+# functions as arguments) to transform, filter, and aggregate data.
+#
+# The Church encoding of lists makes these operations natural:
+#   - map: Transform each element using function f
+#   - filter: Keep only elements satisfying predicate f
+#   - foldl: Left-associative fold ((((z op x1) op x2) op x3) ...)
+#   - foldr: Right-associative fold (x1 op (x2 op (x3 op ... z)))
+#
+# MATHEMATICAL FOUNDATION:
+#   These functions form a complete basis for list processing. Any list operation
+#   can be expressed in terms of these primitives, making them the building blocks
+#   of functional data processing.
+#
+# USAGE EXAMPLES:
+#   map (mult 2) [1, 2, 3]      # Returns [2, 4, 6] (double each element)
+#   filter even [1, 2, 3, 4]    # Returns [2, 4] (keep only even numbers)
+#   foldl plus 0 [1, 2, 3]      # Returns 6 (sum: ((0+1)+2)+3)
+#   foldr mult 1 [2, 3, 4]      # Returns 24 (product: 2*(3*(4*1)))
+#   foldr cons nil [1, 2, 3]    # Returns [1, 2, 3] (identity for lists)
+# -----------------------------------------------------------------------------
+map      = λf l.l (λx rest.cons (f x) rest) nil
+filter   = λf l.l (λx rest.if (f x) (cons x rest) rest) nil
+# NOTE: Original foldl was effectively a right-to-left fold (processing elements in reverse),
+# which made reverse become the identity. Correct left fold via CPS:
+# foldl f z [x1,x2,..,xn] = f (... (f (f z x1) x2) ...) xn
+foldl    = λf z l.(l (λx k. λacc. k (f acc x)) (λacc.acc)) z
+foldr    = λf z l.l f z
+
+# -----------------------------------------------------------------------------
+# 3.4. Lists - Generation and Manipulation
+#
+# These functions provide essential list operations for building, combining,
+# and transforming lists. They build on the higher-order functions to provide
+# practical list manipulation capabilities.
+#
+# OPERATIONS:
+#   - append: Concatenates two lists using the foldr structure
+#   - reverse: Uses foldl to build reversed list by consing in opposite order
+#   - length: Counts elements by folding with successor function
+#   - take/drop: Extract prefix/suffix of specified length
+#   - range: Generates arithmetic sequences
+#   - enumeration: Creates lists of consecutive numbers
+#
+# COMPLEXITY ANALYSIS:
+#   - append: O(n) where n is length of first list
+#   - reverse: O(n) using foldl accumulation
+#   - length: O(n) by traversing entire list
+#   - take/drop: O(min(n, list_length))
+#   - range operations: O(n) where n is the count
+#
+# USAGE EXAMPLES:
+#   append [1, 2] [3, 4]        # Returns [1, 2, 3, 4]
+#   reverse [1, 2, 3]           # Returns [3, 2, 1]
+#   length [1, 2, 3, 4, 5]      # Returns 5
+#   take 3 [1, 2, 3, 4, 5]      # Returns [1, 2, 3]
+#   drop 2 [1, 2, 3, 4, 5]      # Returns [3, 4, 5]
+#   range 5                     # Returns [0, 1, 2, 3, 4]
+#   enumFromTo 3 7              # Returns [3, 4, 5, 6, 7]
+# -----------------------------------------------------------------------------
+append   = λl1 l2.l1 cons l2
+reverse  = λl.foldl (λacc x.cons x acc) nil l
+length   = λl.foldr (λx acc.succ acc) zero l
+take     = λn l.n (λf prev.if (isnil prev) nil (cons (head prev) (f (tail prev)))) (λx.nil) l
+drop     = λn l.n tail l
+concat   = λll.foldr append nil ll
+range    = λn. Y (λf k. if (eq k n) nil (cons k (f (succ k)))) 0
+countdown = λn. Y (λf k. if (iszero k) (cons 0 nil) (cons k (f (pred k)))) n
+enumFromTo = λstart end.map (plus start) (range (succ (minus end start)))
+enumFrom   = λstart n.map (plus start) (range n)
+primes     = λn.filter isPrime (enumFromTo 2 n)
+repeat     = λn x.n (λacc.cons x acc) nil
+iota       = range # Alias for range
+replicate  = λn x.n (λacc.cons x acc) nil
+
+# -----------------------------------------------------------------------------
+# 3.5. Lists - Element Access and Querying
+#
+# These functions provide ways to access specific elements and query properties
+# of lists. They demonstrate how higher-order functions can be used to implement
+# complex queries and searches over list structures.
+#
+# ELEMENT ACCESS:
+#   - nth: Random access to list elements (O(n) due to linear structure)
+#   - last/init: Access to end of list (requires full traversal)
+#   - elem/notElem: Membership testing using linear search
+#
+# PREDICATES AND AGGREGATIONS:
+#   - any/all: Universal and existential quantification over predicates
+#   - find: First element satisfying a condition
+#   - sum/product/max/min: Numeric aggregations using foldr
+#
+# PERFORMANCE NOTES:
+#   - nth, last, init are O(n) due to list traversal requirements
+#   - elem/notElem are O(n) worst case (linear search)
+#   - any/all can short-circuit in some lambda calculus implementations
+#   - sum/product/max/min are O(n) aggregations over entire list
+#
+# USAGE EXAMPLES:
+#   nth 2 [10, 20, 30, 40]      # Returns 30 (0-indexed access)
+#   last [1, 2, 3, 4]           # Returns 4 (last element)
+#   init [1, 2, 3, 4]           # Returns [1, 2, 3] (all but last)
+#   elem 3 [1, 2, 3, 4]         # Returns true (3 is in the list)
+#   any even [1, 3, 4, 5]       # Returns true (4 is even)
+#   all positive [1, 2, 3]      # Returns true (all elements > 0)
+#   find even [1, 3, 4, 5]      # Returns 4 (first even number)
+#   sum [1, 2, 3, 4]            # Returns 10 (1+2+3+4)
+#   maximum [3, 1, 4, 1, 5]     # Returns 5 (largest element)
+# -----------------------------------------------------------------------------
+nth      = λn l.head (drop n l)
+last     = λl.head (reverse l)
+init     = λl.reverse (tail (reverse l))
+elem     = λx l.any (eq x) l
+notElem  = λx l.not (elem x l)
+any      = λp l.foldr (λx acc.or (p x) acc) false l
+all      = λp l.foldr (λx acc.and (p x) acc) true l
+find     = λp l.foldl (λacc x.if (and (isnil acc) (p x)) x acc) nil l
+sum      = λl.foldr plus zero l
+product  = λl.foldr mult 1 l
+maximum  = λl.foldr (λx acc.if (gt x acc) x acc) zero l
+minimum  = λl.foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)
+
+# -----------------------------------------------------------------------------
+# 3.6. Lists - Advanced Utilities
+#
+# These sophisticated list operations combine multiple basic operations to provide
+# powerful data processing capabilities. They represent common patterns in
+# functional programming and demonstrate the composability of simple operations.
+#
+# COMBINING LISTS:
+#   - zip: Combines two lists element-wise into pairs
+#   - zipWith: Combines two lists using a binary function
+#   - unzip: Separates a list of pairs into two lists
+#
+# SCANNING AND ACCUMULATION:
+#   - scanl/scanr: Like fold, but returns all intermediate results
+#   - These show the step-by-step progression of an accumulation
+#
+# FILTERING AND PARTITIONING:
+#   - nub/unique: Remove duplicate elements (O(n²) with linear search)
+#   - partition: Split list into elements satisfying/not satisfying predicate
+#
+# MATHEMATICAL FOUNDATION:
+#   These operations preserve important algebraic properties and can be
+#   composed to create complex data transformations while maintaining
+#   referential transparency.
+#
+# USAGE EXAMPLES:
+#   zip [1, 2, 3] [a, b, c]         # Returns [(1,a), (2,b), (3,c)]
+#   zipWith plus [1, 2] [3, 4]      # Returns [4, 6] (element-wise addition)
+#   scanl plus 0 [1, 2, 3]          # Returns [0, 1, 3, 6] (running sums)
+#   scanr mult 1 [2, 3, 4]          # Returns [24, 12, 4, 1] (running products)
+#   nub [1, 2, 2, 3, 1]             # Returns [3, 2, 1] (duplicates removed)
+#   partition even [1, 2, 3, 4]     # Returns ([2, 4], [1, 3]) (evens, odds)
+#   unzip [(1,a), (2,b)]            # Returns ([1, 2], [a, b]) (separate pairs)
+# -----------------------------------------------------------------------------
+zip     = Y (λzip l1 l2.if (or (isnil l1) (isnil l2)) nil (cons (pair (head l1) (head l2)) (zip (tail l1) (tail l2))))
+zipWith = Y (λzipWith f l1 l2.if (or (isnil l1) (isnil l2)) nil (cons (f (head l1) (head l2)) (zipWith f (tail l1) (tail l2))))
+scanl    = λf z l.reverse (foldl (λacc x.cons (f (head acc) x) acc) (cons z nil) l)
+scanr    = λf z l.foldr (λx acc.cons (f x (head acc)) acc) (cons z nil) l
+unzip   = λl.pair (map first l) (map second l)
+nub     = λl.foldl (λacc x.if (elem x acc) acc (cons x acc)) nil l
+unique = nub
+partition = λp l.pair (filter p l) (filter (λx.not (p x)) l)
+splitAt = λn l.pair (take n l) (drop n l)
+
+# -----------------------------------------------------------------------------
+# 3.7. Set Operations on Lists
+#
+# These operations treat lists as mathematical sets, focusing on membership
+# and set relationships rather than order or duplicates. Note that these
+# implementations are not optimized for large sets since they use linear search.
+#
+# SET OPERATIONS:
+#   - union: All elements that appear in either set
+#   - intersect: Elements that appear in both sets
+#   - difference: Elements in first set but not in second
+#   - isSubset/isSuperset: Test containment relationships
+#
+# COMPLEXITY: All operations are O(n×m) where n and m are the list lengths,
+# due to the use of linear membership testing.
+#
+# USAGE EXAMPLES:
+#   union [1, 2] [2, 3, 4]          # Returns [1, 2, 3, 4] (all elements)
+#   intersect [1, 2, 3] [2, 3, 4]   # Returns [2, 3] (common elements)
+#   difference [1, 2, 3] [2, 4]     # Returns [1, 3] (in first, not second)
+#   isSubset [1, 2] [1, 2, 3]       # Returns true ([1,2] ⊆ [1,2,3])
+#   isSuperset [1, 2, 3] [1, 2]     # Returns true ([1,2,3] ⊇ [1,2])
+# -----------------------------------------------------------------------------
+union      = λl1 l2.append l1 (filter (λx.notElem x l1) l2)
+intersect  = λl1 l2.filter (λx.elem x l2) l1
+difference = λl1 l2.filter (λx.notElem x l2) l1
+isSubset   = λl1 l2.all (λx.elem x l2) l1
+isSuperset = λl1 l2.isSubset l2 l1
+
+# -----------------------------------------------------------------------------
+# 3.8. Tree Data Structures (Binary Trees)
+#
+# A basic implementation of binary trees using Church encoding. Trees are
+# represented as pairs where the first element is the value and the second
+# element is a pair of (left_subtree, right_subtree).
+#
+# ENCODING:
+#   leaf v = (v, (nil, nil))        - A leaf node with value v and no children
+#   node v l r = (v, (l, r))        - Internal node with value v and subtrees l, r
+#
+# TREE OPERATIONS:
+#   - Accessor functions: treeValue, treeLeft, treeRight
+#   - Predicate: isLeaf (checks if both subtrees are nil)
+#   - Traversals: inOrder, preOrder, postOrder (visit nodes in different orders)
+#   - Metrics: treeSize (count nodes), treeDepth (maximum path length)
+#
+# PERFORMANCE WARNING:
+#   Keep trees small to avoid deep recursion that might cause stack overflow.
+#   These implementations use explicit recursion which can be expensive.
+#
+# USAGE EXAMPLES:
+#   tree = node 5 (leaf 3) (leaf 7)     # Binary tree: 3 <- 5 -> 7
+#   treeValue tree                       # Returns 5 (root value)
+#   treeLeft tree                        # Returns leaf 3 (left subtree)
+#   isLeaf (treeLeft tree)               # Returns true (leaf 3 has no children)
+#   inOrder tree                         # Returns [3, 5, 7] (left-root-right)
+#   preOrder tree                        # Returns [5, 3, 7] (root-left-right)
+#   treeSize tree                        # Returns 3 (total nodes)
+#   treeDepth tree                       # Returns 2 (maximum depth)
+# -----------------------------------------------------------------------------
+leaf      = λv.pair v (pair nil nil)
+node      = λv l r.pair v (pair l r)
+treeValue = first
+treeLeft  = λt.first (second t)
+treeRight = λt.second (second t)
+isLeaf    = λt.and (isnil (treeLeft t)) (isnil (treeRight t))
+# Simplified traversals to avoid recursion
+inOrder   = Y (λf t.if (isnil t) nil (append (f (treeLeft t)) (cons (treeValue t) (f (treeRight t)))))
+preOrder  = Y (λf t.if (isnil t) nil (cons (treeValue t) (append (f (treeLeft t)) (f (treeRight t)))))
+postOrder = Y (λf t.if (isnil t) nil (append (f (treeLeft t)) (append (f (treeRight t)) (cons (treeValue t) nil))))
+
+treeSize  = λt.if (isnil t) 0 (succ (plus (treeSize (treeLeft t)) (treeSize (treeRight t))))
+treeDepth = λt.if (isnil t) 0 (succ (max (treeDepth (treeLeft t)) (treeDepth (treeRight t))))
+
+
+# =============================================================================
+# SECTION 4: FUNCTIONAL PROGRAMMING UTILITIES
+#
+# This section provides higher-order functions, combinators, and utilities
+# that are common in functional programming. These build on the basic
+# combinators to provide more sophisticated function manipulation capabilities.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 4.1. Function Composition and Application
+#
+# These fundamental operations form the backbone of functional programming style.
+# They allow building complex functions from simpler ones through composition
+# and provide various ways to apply functions to arguments.
+#
+# COMPOSITION THEORY:
+#   Function composition (∘) is associative: (f ∘ g) ∘ h = f ∘ (g ∘ h)
+#   This allows building complex transformations from simple building blocks.
+#
+# APPLICATION PATTERNS:
+#   - apply: Explicit function application (mostly for clarity)
+#   - compose: Creates new functions by chaining operations
+#   - flip: Changes argument order for partial application
+#   - on: Applies a binary operation to the results of a unary function
+#   - iterate: Repeated function application
+#   - times: Point-free style repeated application
+#
+# USAGE EXAMPLES:
+#   (compose succ double) 5      # Returns 11 (succ(double(5)) = succ(10) = 11)
+#   flip minus 3 10             # Returns 7 (minus 10 3 = 7, arguments flipped)
+#   iterate succ 3 0            # Returns 3 (apply succ three times: 0→1→2→3)
+#   on plus double 3 4          # Returns 14 (plus(double(3), double(4)) = 6+8)
+#   times 5 succ 0              # Returns 5 (apply succ five times to 0)
+# -----------------------------------------------------------------------------
+apply    = λf x.f x
+compose  = B
+flip     = C
+on       = λop f x y.op (f x) (f y)
+iterate  = λf n x.n f x
+times    = λn.λf.λx.n f x
+
+# -----------------------------------------------------------------------------
+# 4.2. Currying and Partial Application
+#
+# These functions manipulate function arity and argument application patterns.
+# Currying transforms functions to take arguments one at a time, while partial
+# application fixes some arguments to create specialized functions.
+#
+# MATHEMATICAL FOUNDATION:
+#   Currying establishes an isomorphism between:
+#   - Functions of type (A × B) → C
+#   - Functions of type A → (B → C)
+#   This allows treating multi-argument functions as chains of single-argument functions.
+#
+# PRACTICAL APPLICATIONS:
+#   - curry: Converts pair-taking functions to curried form
+#   - uncurry: Converts curried functions to pair-taking form
+#   - partial: Creates specialized functions by fixing arguments
+#   - partial2: Fixes first two arguments of a three-argument function
+#
+# USAGE EXAMPLES:
+#   add_pair = λp.plus (first p) (second p)  # Function taking a pair
+#   add_curried = curry add_pair              # Now takes two separate arguments
+#   add_curried 3 4                          # Returns 7
+#   
+#   add5 = partial plus 5                    # Function that adds 5
+#   add5 10                                  # Returns 15
+#   
+#   mult_with_pair = uncurry mult            # Takes pair instead of two args
+#   mult_with_pair (pair 3 4)                # Returns 12
+# -----------------------------------------------------------------------------
+curry    = λf x y.f (pair x y)
+uncurry  = λf p.f (first p) (second p)
+partial  = λf x.λy.f x y
+partial2 = λf x y.λz.f x y z
+# 3-arity curry helpers used in tests
+curry3   = λf x y z.f (pair x (pair y z))
+uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
+
+# -----------------------------------------------------------------------------
+# 4.3. Additional Combinators
+#
+# These are classic combinators from combinatory logic, many with bird names
+# from Raymond Smullyan's "To Mock a Mockingbird". They provide alternative
+# ways to express common functional programming patterns.
+#
+# BIRD NAMES AND THEIR MEANINGS:
+#   - Mockingbird (ω): Self-application, foundation of recursion
+#   - Thrush (T): Reverse application, useful for data flow
+#   - Cardinal (C): Argument flipping, enables partial application patterns
+#   - Bluebird (B): Function composition, building complex functions
+#   - Kestrel (K): Constant functions, basis for conditional logic
+#   - Warbler (W): Duplication combinator, applies function to same argument twice
+#   - Starling (S): Most powerful combinator, can express any computable function
+#
+# THEORETICAL IMPORTANCE:
+#   These combinators form a complete basis for computation - any computable
+#   function can be expressed using just S and K combinators.
+#
+# USAGE EXAMPLES:
+#   omega plus                   # Returns plus plus (self-application)
+#   thrush 42 succ               # Returns 43 (apply succ to 42)
+#   warbler plus 5               # Returns 10 (plus 5 5)
+#   cardinal minus 3 10          # Returns 7 (minus with flipped arguments)
+# -----------------------------------------------------------------------------
+const    = K
+omega    = λx.x x
+mockingbird = omega
+thrush   = λx f.f x
+cardinal = flip
+bluebird = compose
+kestrel  = const
+warbler  = λf x.f x x
+starling = S
+
+# -----------------------------------------------------------------------------
+# 4.4. Looping Constructs
+#
+# These combinators provide imperative-style looping in a purely functional way.
+# The WHILE combinator demonstrates how iteration can be expressed through
+# recursion and conditional application.
+#
+# WHILE LOOP SEMANTICS:
+#   WHILE condition body state repeatedly applies body to state while
+#   condition(state) returns true. This provides familiar iterative patterns
+#   within the pure functional paradigm.
+#
+# IMPLEMENTATION STRATEGY:
+#   Uses the Y combinator for recursion with conditional termination.
+#   The loop continues by recursively calling itself with the updated state,
+#   or terminates by returning the final state.
+#
+# SAFETY WARNING:
+#   Infinite loops are possible if the condition never becomes false!
+#   Always ensure the body function eventually leads to condition failure.
+#
+# USAGE EXAMPLES:
+#   # Count down from 5 to 0
+#   countdown_from_5 = WHILE (λn.gt n 0) pred 5    # Returns 0
+#   
+#   # Alternative GCD implementation using WHILE
+#   gcd1 12 8                                      # Returns 4
+#   
+#   # Custom iteration: multiply by 2 until > 100
+#   grow = WHILE (λn.leq n 100) (mult 2) 1         # Returns 128
+# -----------------------------------------------------------------------------
+# A general-purpose WHILE loop combinator
+WHILE = Y (λloop. λcond body state. if (cond state) (loop cond body (body state)) state)
+
+# Example of using WHILE for GCD (less efficient than the recursive version)
+GCD_STEP = λp. if (gt (first p) (second p)) \
+                 (pair (minus (first p) (second p)) (second p)) \
+                 (pair (first p) (minus (second p) (first p)))
+gcd1 = λm n. if (or (iszero m) (iszero n)) (if (iszero m) n m) \
+    (first (WHILE (λp. neq (first p) (second p)) GCD_STEP (pair m n)))
+
+
+# =============================================================================
+# SECTION 5: ALGEBRAIC DATA TYPES
+#
+# This section defines common algebraic data types like Maybe (Optional) and
+# Either, which are useful for handling computations that can fail or have
+# alternative results.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 5.1. Maybe (Optional) Type
+#
+# The Maybe type is a foundational algebraic data type that safely represents
+# the presence or absence of a value. This eliminates the need for null
+# references and provides a principled way to handle optional values.
+#
+# ENCODING:
+#   nothing = nil                   # Represents absence of value
+#   just x = pair true x           # Represents presence of value x
+#
+# TYPE THEORY:
+#   Maybe A = Nothing | Just A
+#   This creates a sum type that extends any type A with a "null" value.
+#   The encoding uses Church pairs where the first element indicates presence.
+#
+# SAFETY BENEFITS:
+#   - No null pointer exceptions or undefined behavior
+#   - Explicit handling of absent values in the type system
+#   - Compositional operations that preserve safety
+#
+# FUNCTIONAL PATTERNS:
+#   - maybe: Eliminates the Maybe with a default and transformation function
+#   - maybeMap: Applies a function only if value is present (functor law)
+#   - Chaining: Sequence operations that might fail
+#
+# USAGE EXAMPLES:
+#   value1 = just 42              # Contains the value 42
+#   value2 = nothing              # Contains no value
+#   
+#   fromMaybe 0 value1            # Returns 42
+#   fromMaybe 0 value2            # Returns 0 (default)
+#   
+#   maybe "empty" show value1     # Returns "42" (converted to string)
+#   maybe "empty" show value2     # Returns "empty"
+#   
+#   maybeMap (mult 2) value1      # Returns just 84
+#   maybeMap (mult 2) value2      # Returns nothing
+# -----------------------------------------------------------------------------
+nothing   = nil
+just      = λx.pair true x
+isNothing = isnil
+isJust    = λm.not (isNothing m)
+fromJust  = second
+maybe     = λdef f m.if (isNothing m) def (f (fromJust m))
+fromMaybe = λdef m.if (isNothing m) def (fromJust m)
+
+# -----------------------------------------------------------------------------
+# 5.2. Either Type
+#
+# The Either type represents a value that can be one of two types, commonly
+# used for error handling where Left contains an error and Right contains
+# a successful result. This provides structured error handling without exceptions.
+#
+# ENCODING:
+#   left x = pair false x         # Left value (typically error)
+#   right x = pair true x         # Right value (typically success)
+#
+# ERROR HANDLING PATTERN:
+#   Either Error Success
+#   - Left contains error information
+#   - Right contains successful computation result
+#   - Operations can be chained, short-circuiting on first error
+#
+# BIAS TOWARDS RIGHT:
+#   By convention, Either is "right-biased" - operations like map apply
+#   to Right values and preserve Left values unchanged.
+#
+# COMPARISON WITH MAYBE:
+#   Maybe: Presence/absence with no error information
+#   Either: Choice between two values, with error context
+#
+# USAGE EXAMPLES:
+#   success = right 42            # Successful computation
+#   error = left "division by zero"  # Error with message
+#   
+#   either show id success        # Returns 42 (right side)
+#   either show id error          # Returns "division by zero" (left side)
+#   
+#   # Error handling in division
+#   divide = λa b.if (iszero b) (left "divide by zero") (right (div a b))
+#   divide 10 2                   # Returns right 5
+#   divide 10 0                   # Returns left "divide by zero"
+# -----------------------------------------------------------------------------
+left      = λx.pair false x
+right     = λx.pair true x
+isLeft    = λe.not (first e)
+isRight   = first
+fromLeft  = second
+fromRight = second
+either    = λf g e.if (isLeft e) (f (fromLeft e)) (g (fromRight e))
+
+# -----------------------------------------------------------------------------
+# 5.3. Safe Operations using Maybe
+#
+# These functions demonstrate how Maybe types enable safe operations on
+# potentially dangerous computations. Instead of crashing or returning
+# invalid results, they return structured optional values.
+#
+# SAFETY PATTERN:
+#   Traditional: f(x) → crash if x invalid
+#   Safe: safef(x) → nothing if x invalid, just result if x valid
+#
+# COMPOSITION SAFETY:
+#   Safe operations can be chained using monadic bind patterns,
+#   automatically handling the failure cases throughout the chain.
+#
+# EXAMPLES OF SAFETY:
+#   - safehead: No crash on empty lists
+#   - safediv: No division by zero
+#   - safenth: No index out of bounds
+#   - safeMinimum/Maximum: No crash on empty collections
+#
+# USAGE EXAMPLES:
+#   safehead (cons 1 (cons 2 nil))    # Returns just 1
+#   safehead nil                      # Returns nothing
+#   
+#   safediv 10 2                      # Returns just 5
+#   safediv 10 0                      # Returns nothing
+#   
+#   safenth 0 (cons 'a' (cons 'b' nil))  # Returns just 'a'
+#   safenth 5 (cons 'a' nil)             # Returns nothing
+#   
+#   # Chaining safe operations
+#   processFirst = λl.maybeMap (mult 2) (safehead l)
+#   processFirst (cons 5 nil)         # Returns just 10
+#   processFirst nil                  # Returns nothing
+# -----------------------------------------------------------------------------
+safehead = λl.if (isnil l) nothing (just (head l))
+safetail = λl.if (isnil l) nothing (just (tail l))
+safenth  = λn l.if (gt n (pred (length l))) nothing (just (nth n l))
+# safediv: legacy lowercase naming kept for backward compatibility.
+# Prefer using safeDiv (alias) for consistency with other safe* functions.
+safediv  = λa b.if (iszero b) nothing (just (div a b))
+# Alias with preferred casing
+safeDiv  = safediv
+safeMinimum = λl.if (isnil l) nothing (just (minimum l))
+safeMaximum = λl.if (isnil l) nothing (just (maximum l))
+# safeInit
+# Returns the list without its last element (or nil if empty/singleton).
+# NOTE: Unlike other safe* functions this returns a plain list, NOT a Maybe.
+# Use safeInitMaybe if you need a Maybe-encoded result.
+safeInit = λl.if (or (isnil l) (isnil (tail l))) nil (reverse (tail (reverse l)))
+
+# Maybe-encoded variant for consistency with safehead/safetail/etc.
+safeInitMaybe = λl.if (or (isnil l) (isnil (tail l))) nothing (just (reverse (tail (reverse l))))
+maybeMap = λf m.if (isNothing m) nothing (just (f (fromJust m)))
+
+
+# =============================================================================
+# SECTION 6: STATE AND I/O
+#
+# This section provides utilities for managing state and simulating I/O in a
+# purely functional way. These patterns demonstrate how imperative concepts
+# can be expressed through pure functional programming using monadic patterns.
+#
+# STATE MONAD CONCEPT:
+#   The State monad encapsulates stateful computations as functions that
+#   take an initial state and return both a result and a new state.
+#   This allows for stateful programming without mutable variables.
+#
+# I/O SIMULATION:
+#   Since pure lambda calculus has no I/O primitives, we simulate I/O
+#   operations using list transformations and stream processing patterns.
+#
+# MONADIC LAWS:
+#   These combinators follow the monadic laws for composition:
+#   - Left identity: returnState >=> f ≡ f
+#   - Right identity: f >=> returnState ≡ f  
+#   - Associativity: (f >=> g) >=> h ≡ f >=> (g >=> h)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 6.1. State Monad Helpers
+#
+# The State monad allows for stateful computations in pure functional programming.
+# A stateful computation is represented as a function: State → (Result, NewState)
+#
+# MONAD OPERATIONS:
+#   returnState: Wraps a pure value in the state monad
+#   bindState: Sequences stateful computations (monadic bind)
+#   getState: Reads the current state
+#   putState: Sets a new state
+#   runState: Executes a stateful computation with initial state
+#
+# COMPUTATIONAL PATTERN:
+#   - Each operation takes state and returns (value, new_state)
+#   - bindState threads state through computations automatically
+#   - Provides illusion of mutable state in pure functional setting
+#
+# USAGE EXAMPLES:
+#   # Simple counter that increments state
+#   increment = λs.pair (plus s 1) (plus s 1)
+#   
+#   # Stateful computation that doubles then increments
+#   doubleInc = bindState (λx.returnState (mult x 2)) 
+#                        (λy.λs.pair (plus y 1) (plus s 1))
+#   
+#   runState increment 5          # Returns pair 6 6
+#   runState getState 42          # Returns pair 42 42
+#   runState (putState 100) 42    # Returns pair nil 100
+# -----------------------------------------------------------------------------
+returnState = λx s.pair x s
+bindState   = λm f s.f (first (m s)) (second (m s))
+getState    = λs.pair s s
+putState    = λs.λ_.pair nil s
+runState    = λm s.m s
+
+# -----------------------------------------------------------------------------
+# 6.2. I/O Simulation
+#
+# These functions simulate I/O by treating lists of characters (numbers) as
+# input/output streams. This demonstrates how imperative I/O can be modeled
+# functionally using stream transformations.
+#
+# STREAM-BASED I/O MODEL:
+#   Input: Stream of characters (list of ASCII codes)
+#   Output: Stream of characters being produced
+#   Operations transform or consume these streams
+#
+# CHARACTER REPRESENTATION:
+#   Characters are represented as Church numerals corresponding to ASCII codes:
+#   'A' = 65, 'a' = 97, '0' = 48, space = 32, newline = 10
+#
+# FUNCTIONAL I/O PRINCIPLES:
+#   - No side effects: I/O operations return new streams
+#   - Composable: Operations can be chained and combined
+#   - Referentially transparent: Same input always produces same output
+#
+# USAGE EXAMPLES:
+#   # Output a character to stream
+#   output1 = putChar 65 nil              # Outputs 'A'
+#   output2 = putChar 66 output1          # Outputs "BA"
+#   
+#   # Read first character from input
+#   input = cons 72 (cons 105 nil)        # "Hi"
+#   firstChar = getChar input             # Returns 72 ('H')
+#   
+#   # Append strings
+#   hello = cons 72 (cons 101 (cons 108 (cons 108 (cons 111 nil))))  # "Hello"
+#   world = cons 87 (cons 111 (cons 114 (cons 108 (cons 100 nil))))  # "World"
+#   greeting = putStr hello world         # "HelloWorld"
+# -----------------------------------------------------------------------------
+putChar = λc.cons c
+getChar = head
+putStr  = append
+getLine = λl.filter (neq 10) l # Simplified: take until newline
+
+
+# =============================================================================
+# SECTION 7: STRING AND CHARACTER SIMULATION
+#
+# This section provides utilities for working with "strings" and "characters,"
+# which are represented as lists of numbers (ASCII codes). This demonstrates
+# how higher-level data types can be built from primitive Church encodings.
+#
+# STRING REPRESENTATION:
+#   Strings are lists of Church numerals representing ASCII character codes.
+#   This encoding allows for uniform treatment of textual and numeric data
+#   while maintaining the pure functional paradigm.
+#
+# ASCII ENCODING FOUNDATION:
+#   - Printable characters: 32-126
+#   - Digits: 48-57 ('0'-'9')
+#   - Uppercase: 65-90 ('A'-'Z') 
+#   - Lowercase: 97-122 ('a'-'z')
+#   - Whitespace: space(32), tab(9), newline(10)
+#
+# CHARACTER CLASSIFICATION:
+#   Predicate functions test character properties using ASCII code ranges.
+#   These enable parsing and text processing operations.
+#
+# TEXT PROCESSING CAPABILITIES:
+#   - Case conversion (upper/lower)
+#   - Character type testing (digit, alpha, etc.)
+#   - String manipulation through list operations
+#   - Text parsing and formatting
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 7.1. ASCII Constants and Predicates
+#
+# These constants and predicates provide the foundation for character-based
+# text processing. They define important ASCII values and classification
+# functions for different character types.
+#
+# ASCII CONSTANTS:
+#   Critical whitespace and control characters used in text processing.
+#   These form the basis for parsing and formatting operations.
+#
+# PREDICATE FUNCTIONS:
+#   Character classification functions that test properties of ASCII codes.
+#   These enable sophisticated text parsing and validation.
+#
+# RANGE-BASED CLASSIFICATION:
+#   Uses numerical comparisons on ASCII codes to determine character types.
+#   This approach is efficient and leverages the ordered nature of ASCII.
+#
+# USAGE EXAMPLES:
+#   isdigit 48                    # Returns true ('0')
+#   isdigit 65                    # Returns false ('A')
+#   
+#   islower 97                    # Returns true ('a')
+#   isupper 97                    # Returns false ('a')
+#   isupper 65                    # Returns true ('A')
+#   
+#   isalpha 65                    # Returns true ('A')
+#   isalpha 48                    # Returns false ('0')
+#   
+#   isalnum 48                    # Returns true ('0')
+#   isalnum 65                    # Returns true ('A')
+#   isalnum 32                    # Returns false (space)
+#   
+#   isspace 32                    # Returns true (space)
+#   isspace 9                     # Returns true (tab)
+#   isspace 65                    # Returns false ('A')
+# -----------------------------------------------------------------------------
+space    = 32
+newline  = 10
+tab      = 9
+# null     = 0 # Redundant with zero
+isspace  = λc.or (eq c space) (or (eq c tab) (eq c newline))
+isdigit  = λc.and (geq c 48) (leq c 57)
+islower  = λc.and (geq c 97) (leq c 122)
+isupper  = λc.and (geq c 65) (leq c 90)
+isalpha  = λc.or (islower c) (isupper c)
+isalnum  = λc.or (isalpha c) (isdigit c)
+
+# -----------------------------------------------------------------------------
+# 7.2. Character and String Operations
+#
+# These functions provide character case conversion and demonstrate how
+# string operations can be implemented through ASCII code manipulation.
+#
+# CASE CONVERSION ALGORITHM:
+#   ASCII encoding places uppercase and lowercase letters exactly 32 positions
+#   apart: 'A'(65) vs 'a'(97), 'B'(66) vs 'b'(98), etc.
+#   Conversion involves adding/subtracting 32 based on current case.
+#
+# CONDITIONAL CONVERSION:
+#   Only converts characters that are actually letters, leaving other
+#   characters unchanged. This prevents corruption of numbers and symbols.
+#
+# STRING OPERATION ALIASES:
+#   Some functions provide familiar names for existing list operations,
+#   demonstrating how strings are just specialized lists of characters.
+#
+# USAGE EXAMPLES:
+#   tolower 65                    # Returns 97 ('A' → 'a')
+#   tolower 97                    # Returns 97 ('a' → 'a', no change)
+#   tolower 48                    # Returns 48 ('0' → '0', not a letter)
+#   
+#   toupper 97                    # Returns 65 ('a' → 'A')
+#   toupper 65                    # Returns 65 ('A' → 'A', no change)
+#   toupper 33                    # Returns 33 ('!' → '!', not a letter)
+#   
+#   # Converting entire strings (lists of characters)
+#   hello = cons 72 (cons 101 (cons 108 (cons 108 (cons 111 nil))))  # "Hello"
+#   upper_hello = map toupper hello    # "HELLO"
+#   lower_hello = map tolower hello    # "hello"
+# -----------------------------------------------------------------------------
+tolower  = λc.if (isupper c) (plus c 32) c
+toupper  = λc.if (islower c) (minus c 32) c
+# strlen   = length # Alias for length
+# strcat   = append # Alias for append
+# strrev   = reverse # Alias for reverse
+words    = λl.filter (λw.not (isnil w)) (break isspace l)
+lines    = λl.filter (λw.not (isnil w)) (break (eq newline) l)
+unwords  = intercalate (cons space nil)
+unlines  = intercalate (cons newline nil)
+break    = λp l.foldl (λacc x.if (p x) acc (pair (cons x (first acc)) (second acc))) (pair nil l) l
+intercalate = λsep l.if (isnil l) nil (if (isnil (tail l)) (head l) (foldr (λx acc.if (isnil acc) x (append x (cons sep acc))) nil l))
+
+
+# =============================================================================
+# SECTION 8: DEBUGGING, ERRORS, AND PERFORMANCE
+#
+# This section provides utilities for debugging, error handling, and
+# performance analysis in the lambda calculus. These tools help developers
+# understand program behavior and optimize computational efficiency.
+#
+# ERROR HANDLING PHILOSOPHY:
+#   Since lambda calculus lacks exceptions, errors are represented as
+#   divergent computations (infinite loops) or special values that can
+#   be detected by the runtime environment.
+#
+# DEBUGGING STRATEGY:
+#   Functional debugging relies on tracing values through computations
+#   rather than traditional step-through debugging. The trace function
+#   provides a hook for observing intermediate values.
+#
+# PERFORMANCE CONSIDERATIONS:
+#   Pure functional programming enables certain optimizations like
+#   memoization and lazy evaluation, though their effectiveness depends
+#   on the implementation environment.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 8.1. Debugging and Error Handling
+#
+# These functions provide mechanisms for program debugging and error
+# representation in the pure functional paradigm.
+#
+# TRACE FUNCTION:
+#   The trace function is designed to log or display debugging information
+#   while returning its argument unchanged. In this implementation, it's
+#   a no-op, but in a full system it would output the message.
+#
+# ERROR REPRESENTATION:
+#   Errors are represented as divergent computations using fixed-point
+#   combinators. When an error occurs, the computation enters an infinite
+#   loop rather than returning a value.
+#
+# ERROR TYPES:
+#   Different error conditions are represented by specific error constants:
+#   - divByZero: Division by zero errors
+#   - indexError: Array/list index out of bounds
+#   - typeError: Type mismatch errors
+#
+# USAGE EXAMPLES:
+#   # Debugging (conceptual - actual implementation may vary)
+#   trace "computing factorial" (factorial 5)
+#   
+#   # Error conditions
+#   divide = λa b.if (iszero b) divByZero (div a b)
+#   divide 10 2       # Returns 5
+#   divide 10 0       # Triggers divByZero (infinite loop)
+#   
+#   # Safe indexing
+#   safeIndex = λn l.if (geq n (length l)) indexError (nth n l)
+# -----------------------------------------------------------------------------
+trace     = λmsg x.x
+# debug     = trace # Alias for trace
+undefined = Y I
+error     = undefined
+# Error types for safe operations
+divByZero  = undefined
+indexError = undefined
+typeError  = undefined
+
+# -----------------------------------------------------------------------------
+# 8.2. Performance and Optimization
+#
+# These functions provide tools for measuring and optimizing performance
+# in functional programs.
+#
+# BENCHMARKING:
+#   The benchmark function repeatedly applies a function to measure
+#   performance characteristics. This helps identify computational
+#   bottlenecks and compare algorithm efficiency.
+#
+# MEMOIZATION:
+#   In pure functional programming, memoization can cache function results
+#   to avoid recomputation. This implementation is a placeholder since
+#   true memoization requires mutable state.
+#
+# LAZY EVALUATION:
+#   Delay and force implement a basic form of lazy evaluation where
+#   computations are deferred until their results are needed.
+#   This can improve performance by avoiding unnecessary calculations.
+#
+# OPTIMIZATION STRATEGIES:
+#   - Use tail recursion when possible to avoid stack overflow
+#   - Consider memoization for expensive recursive functions
+#   - Employ lazy evaluation for potentially infinite data structures
+#   - Benchmark different algorithms to choose the most efficient
+#
+# USAGE EXAMPLES:
+#   # Benchmarking factorial computation
+#   benchmark 1000 factorial 10    # Runs factorial(10) 1000 times
+#   
+#   # Lazy evaluation of expensive computation
+#   expensiveCalc = delay (factorial 100)
+#   result = force expensiveCalc    # Only computed when forced
+#   
+#   # Memoized function (conceptual)
+#   fastFib = memoize fibonacci     # Caches previous results
+# -----------------------------------------------------------------------------
+benchmark = λn f x.times n (λ_.f x) x
+# timeIt    = benchmark # Alias for benchmark
+# Memoization is a no-op without mutation, included for concept
+memoize   = λf.f
+# Lazy evaluation helpers
+delay     = λx.λf.f x
+force     = λthunk.thunk I
+
+
+# =============================================================================
+# 8.3. STRUCTURAL EQUALITY HELPERS
+#
+# Primitive eq only handles numerals (using order). For composite structures
+# we supply parametric structural equality combinators. They take an element
+# equality (or two, for Either) so callers choose how to compare leaves.
+# We intentionally do NOT redefine eq globally to avoid ambiguity between
+# 0 / nil / nothing, which all share the same Church encoding here.
+#
+# listEq   eqE l1 l2    : deep equality on lists
+# pairEq   eqA eqB p q  : product equality
+# maybeEq  eqA m1 m2    : optional equality
+# eitherEq eqL eqR e1 e2: sum equality
+#
+# Example convenience macros (added later) will allow: test-list, test-pair…
+#
+# NOTE: For nested structures use partial application: (listEq (listEq eq) a b)
+# =============================================================================
+# Equality Guide
+# eq            : primitive / numeric equality on Church numerals, booleans, chars
+# isStructEqual : full structural + alpha equivalence (normalizes expressions)
+# listEq/...Eq  : deep equality for specific encodings using a provided element eq
+#
+# Use hierarchy:
+#  1. For user data structures (lists/pairs/maybe/either): use listEq etc. with element eq.
+#  2. For general lambda expressions where structure matters: isStructEqual.
+#  3. For numerals/booleans/chars inside algorithms: eq.
+# listEq et al do NOT normalize arbitrary expressions; element eq should align with eq semantics.
+listEq   = Y (λself.λeqE.λl1.λl2. \
+                                if (and (isnil l1) (isnil l2)) true ( \
+                                    if (or (isnil l1) (isnil l2)) false ( \
+                                        and (eqE (head l1) (head l2)) (self eqE (tail l1) (tail l2)))))
+pairEq   = λeqA.λeqB.λp1.λp2.and (eqA (first p1) (first p2)) (eqB (second p1) (second p2))
+maybeEq  = λeqA.λm1.λm2.if (and (isNothing m1) (isNothing m2)) true ( \
+                                            if (or (isNothing m1) (isNothing m2)) false ( \
+                                                eqA (fromJust m1) (fromJust m2)))
+eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft e1) (fromLeft e2)) ( \
+                                                    if (and (isRight e1) (isRight e2)) (eqR (fromRight e1) (fromRight e2)) false)
+
+
+# =============================================================================
+# SECTION 9: MACRO SYSTEM
+#
+# This section defines a set of macros to provide syntactic sugar and simplify
+# common programming patterns in the lambda calculus. Macros enable more
+# readable and maintainable code by abstracting complex lambda expressions.
+#
+# MACRO PHILOSOPHY:
+#   Macros transform source code at parse time, expanding into underlying
+#   lambda expressions. They provide familiar syntax while maintaining
+#   the pure functional foundation.
+#
+# MACRO SYNTAX:
+#   :macro (pattern) => (expansion)
+#   Variables in patterns are prefixed with $ and substituted in expansion.
+#
+# CATEGORIES OF MACROS:
+#   1. Control flow: letbind, when, unless, for, iff
+#   2. Mathematical: square, cube, inc, dec, min2, max2
+#   3. Logical: nand, nor with list utilities
+#   4. Function composition: compose, apply_twice, apply_n
+#   5. Development aids: assert, test for validation
+#
+# BENEFITS:
+#   - More readable code with familiar syntax
+#   - Reduced boilerplate for common patterns
+#   - Type-safe transformations at compile time
+#   - Easier maintenance and refactoring
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 9.1. Core and Conditional Macros
+#
+# These macros provide essential control flow and binding constructs that
+# make lambda calculus programming more intuitive and readable.
+#
+# LETBIND MACRO:
+#   Creates local variable bindings using lambda abstraction and application.
+#   letbind x 5 (+ x 2) expands to ((λx.(+ x 2)) 5)
+#
+# CONDITIONAL MACROS:
+#   - when: Executes expression only if condition is true
+#   - unless: Executes expression only if condition is false
+#   - iff: Alternative syntax for if-then-else with clearer semantics
+#
+# ITERATION MACRO:
+#   for loops transform into map operations, embracing functional iteration
+#   over imperative looping constructs.
+#
+# USAGE EXAMPLES:
+#   letbind x 10 (mult x x)               # Local binding: x = 10, returns 100
+#   when (gt x 0) (display "positive")    # Conditional execution
+#   unless (iszero x) (div 100 x)         # Negative conditional
+#   for i at mylist do (mult i 2)         # Functional iteration
+#   iff (even x) then "even" else "odd"   # Clear conditional syntax
+# -----------------------------------------------------------------------------
+:macro (letbind $var $val $expr) => ((λ$var.$expr) $val)
+:macro (when $cond $expr) => (if $cond $expr I)
+:macro (unless $cond $expr) => (if $cond I $expr)
+:macro (for $var at $list do $body) => (map (λ$var.$body) $list)
+:macro (iff $p then $then else $else) => if $p $then $else
+
+# -----------------------------------------------------------------------------
+# 9.2. Math and Comparison Macros
+#
+# These macros provide convenient mathematical operations and comparisons
+# that would otherwise require more verbose lambda expressions.
+#
+# MATHEMATICAL OPERATIONS:
+#   - square, cube: Common polynomial operations
+#   - inc, dec: Increment and decrement (aliases for succ/pred)
+#   - min2, max2: Binary minimum and maximum functions
+#
+# RANGE OPERATIONS:
+#   between macro tests if a value falls within a specified range,
+#   combining multiple comparisons into a single readable expression.
+#
+# EFFICIENCY CONSIDERATIONS:
+#   These macros expand to efficient lambda expressions that avoid
+#   redundant computation while maintaining mathematical correctness.
+#
+# USAGE EXAMPLES:
+#   square 5                           # Returns 25
+#   cube 3                             # Returns 27
+#   inc 10                             # Returns 11
+#   dec 10                             # Returns 9
+#   between 5 1 10                     # Returns true (1 ≤ 5 ≤ 10)
+#   between 15 1 10                    # Returns false (15 > 10)
+#   min2 7 3                           # Returns 3
+#   max2 7 3                           # Returns 7
+# -----------------------------------------------------------------------------
+:macro (square $x) => (mult $x $x)
+:macro (cube $x) => (mult $x (mult $x $x))
+:macro (inc $x) => (succ $x)
+:macro (dec $x) => (pred $x)
+:macro (between $x $low $high) => (and (geq $x $low) (leq $x $high))
+:macro (min2 $a $b) => (if (leq $a $b) $a $b)
+:macro (max2 $a $b) => (if (geq $a $b) $a $b)
+
+# -----------------------------------------------------------------------------
+# 9.3. Boolean and List Macros
+#
+# These macros extend boolean logic and provide convenient list operations
+# with more intuitive naming conventions.
+#
+# EXTENDED BOOLEAN LOGIC:
+#   nand and nor provide the remaining basic boolean operations,
+#   completing the set of fundamental logical operators.
+#   These are derived from existing and/or operations with negation.
+#
+# LIST CONVENIENCE MACROS:
+#   - empty?: More intuitive name for testing empty lists
+#   - first/rest: Alternative names following Lisp conventions
+#   - These provide familiar vocabulary for list processing
+#
+# NAMING CONVENTIONS:
+#   The macros follow common functional programming conventions:
+#   - Predicate functions end with '?'
+#   - first/rest mirror head/tail semantics
+#   - Boolean operations use standard logical names
+#
+# USAGE EXAMPLES:
+#   nand true false                    # Returns true (not (and true false))
+#   nor false false                    # Returns false (not (or false false))
+#   empty? nil                         # Returns true
+#   empty? (cons 1 nil)                # Returns false
+#   first (cons 1 (cons 2 nil))        # Returns 1
+#   rest (cons 1 (cons 2 nil))         # Returns (cons 2 nil)
+# -----------------------------------------------------------------------------
+:macro (nand $a $b) => (not (and $a $b))
+:macro (nor $a $b) => (not (or $a $b))
+:macro (empty? $list) => (isnil $list) 
+:macro (rest $list) => (tail $list)
+
+# -----------------------------------------------------------------------------
+# 9.4. Function Application Macros
+#
+# These macros provide convenient ways to compose and apply functions,
+# fundamental operations in functional programming.
+#
+# FUNCTION COMPOSITION:
+#   The compose macro creates function pipelines where the output of one
+#   function becomes the input of another. This enables building complex
+#   operations from simple components.
+#
+# REPEATED APPLICATION:
+#   - apply_twice: Applies a function twice to its argument
+#   - apply_n: Applies a function n times, enabling iteration patterns
+#
+# FUNCTIONAL PROGRAMMING PATTERNS:
+#   These macros embody core functional programming principles:
+#   - Composition over inheritance
+#   - Building complexity through function combination
+#   - Avoiding explicit iteration through repeated application
+#
+# USAGE EXAMPLES:
+#   compose succ succ 5                # Returns 7 (increment twice)
+#   apply_twice succ 5                 # Returns 7 (same as above)
+#   apply_n succ 3 5                   # Returns 8 (increment three times)
+#   
+#   # More complex compositions
+#   compose (mult 2) succ 5            # Returns 12 (succ(5) * 2)
+#   apply_n (mult 2) 3 1               # Returns 8 (multiply by 2 three times)
+# -----------------------------------------------------------------------------
+:macro (compose $f $g $x) => ($f ($g $x))
+:macro (apply_twice $f $x) => ($f ($f $x))
+:macro (apply_n $f $n $x) => (times $n $f $x)
+
+# -----------------------------------------------------------------------------
+# 9.5. Debugging and Assertion Macros
+#
+# These macros provide essential development and testing utilities for
+# ensuring program correctness and facilitating debugging.
+#
+# ASSERTION MACRO:
+#   The assert macro implements precondition checking by returning the value
+#   if the condition is true, or triggering an error if false. This provides
+#   runtime validation of program invariants.
+#
+# TESTING MACRO:
+#   The test macro compares an expression result with an expected value,
+#   forming the basis for unit testing in functional programs.
+#
+# DEVELOPMENT WORKFLOW:
+#   These macros support test-driven development and defensive programming:
+#   - Assertions catch invalid states early
+#   - Tests verify function behavior
+#   - Both provide documentation of expected behavior
+#
+# USAGE EXAMPLES:
+#   assert (gt x 0) x                  # Ensures x is positive before using
+#   assert (not (isnil l)) (head l)    # Ensures list not empty before head
+#   
+#   test (plus 2 3) 5                  # Returns true (2 + 3 = 5)
+#   test (mult 4 5) 19                 # Returns false (4 * 5 ≠ 19)
+#   
+#   # Function testing
+#   test (factorial 5) 120             # Verify factorial correctness
+#   test (fibonacci 7) 13              # Verify fibonacci correctness
+# -----------------------------------------------------------------------------
+:macro (assert $condition $value) => (if $condition $value error)
+:macro (test $expr $expected) => (eq $expr $expected)
+
+# Structural test macros (list, pair, maybe, either)
+# These dispatch to the structural equality helpers with numeric element eq.
+# For custom element equality supply your own macro or call helpers directly.
+## NOTE: Hyphens in macro names can clash with minus parsing; prefer camelCase.
+:macro (testList $a $b) => (listEq eq $a $b)
+:macro (testPair $a $b) => (pairEq eq eq $a $b)
+:macro (testMaybe $a $b) => (maybeEq eq $a $b)
+:macro (testEither $a $b) => (eitherEq eq eq $a $b)
+
+# Variants allowing custom element equality (supply eq function first)
+:macro (testListBy $eqE $a $b) => (listEq $eqE $a $b)
+:macro (testPairBy $eqA $eqB $a $b) => (pairEq $eqA $eqB $a $b)
+:macro (testMaybeBy $eqA $a $b) => (maybeEq $eqA $a $b)
+:macro (testEitherBy $eqL $eqR $a $b) => (eitherEq $eqL $eqR $a $b)
+
+
+# =============================================================================
+# SECTION 10: INFIX OPERATORS
+#
+# This section defines infix operators for common arithmetic and logical
+# operations to allow for more conventional mathematical notation.
+# These operators transform lambda calculus into a more familiar syntax
+# while maintaining the underlying functional semantics.
+#
+# INFIX NOTATION BENEFITS:
+#   - Familiar mathematical syntax: 2 + 3 instead of (plus 2 3)
+#   - Operator precedence: 2 + 3 * 4 correctly parsed as 2 + (3 * 4)
+#   - Associativity rules: 2 - 3 - 4 correctly parsed as (2 - 3) - 4
+#   - Improved readability for mathematical expressions
+#
+# PRECEDENCE LEVELS:
+#   Higher numbers bind tighter (evaluated first):
+#   8: ^ (exponentiation)
+#   7: *, /, % (multiplication, division, modulo)
+#   6: +, - (addition, subtraction)
+#   5: <, <=, >, >= (comparisons)
+#   4: ==, != (equality tests)
+#   3: && (logical and)
+#   2: || (logical or)
+#
+# ASSOCIATIVITY:
+#   - left: Operations associate left-to-right
+#   - right: Operations associate right-to-left (only ^ in this set)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 10.1. Arithmetic Infix Operators
+#
+# These operators provide standard mathematical notation for arithmetic
+# operations, making mathematical expressions more intuitive and readable.
+#
+# OPERATOR DEFINITIONS:
+#   Each operator is defined as an alias to the corresponding function:
+#   + maps to plus, - to minus, * to mult, / to div, etc.
+#
+# PRECEDENCE AND ASSOCIATIVITY:
+#   - Exponentiation (^): Highest precedence (8), right-associative
+#   - Multiplication/Division/Modulo (*, /, %): Precedence 7, left-associative
+#   - Addition/Subtraction (+, -): Precedence 6, left-associative
+#
+# MATHEMATICAL CORRECTNESS:
+#   The precedence rules follow standard mathematical conventions:
+#   2 + 3 * 4^2 evaluates as 2 + (3 * (4^2)) = 2 + (3 * 16) = 50
+#
+# USAGE EXAMPLES:
+#   3 + 4 * 5                          # Returns 23 (not 35)
+#   2^3^2                              # Returns 512 (2^(3^2) = 2^9)
+#   10 / 2 + 3                         # Returns 8 ((10/2) + 3)
+#   15 % 4 * 2                         # Returns 6 ((15%4) * 2)
+# -----------------------------------------------------------------------------
++ = plus
+- = minus
+* = mult
+/ = div
+^ = exp
+% = mod
+:infix + 6 left
+:infix - 6 left
+:infix * 7 left
+:infix / 7 left
+:infix % 7 left
+:infix ^ 8 right
+
+# -----------------------------------------------------------------------------
+# 10.2. Logical and Comparison Infix Operators
+#
+# These operators provide familiar syntax for logical operations and
+# comparisons, essential for conditional logic and control flow.
+#
+# LOGICAL OPERATORS:
+#   && (and) and || (or) provide short-circuit boolean evaluation
+#   with appropriate precedence (and binds tighter than or).
+#
+# COMPARISON OPERATORS:
+#   ==, !=, <, <=, >, >= provide the complete set of comparison operations
+#   with consistent precedence and left-associativity.
+#
+# PRECEDENCE RATIONALE:
+#   The precedence follows programming language conventions:
+#   - Comparisons bind tighter than logical operations
+#   - And binds tighter than or (mimicking mathematical convention)
+#   - Equality tests bind tighter than logical operations
+#
+# CHAINING COMPARISONS:
+#   While syntactically possible, chaining comparisons like x < y < z
+#   may not behave as mathematically expected due to left-associativity.
+#
+# USAGE EXAMPLES:
+#   x > 0 && x < 10                    # Range check
+#   a == b || a == c                   # Multiple equality
+#   x != 0 && y / x > 5                # Safe division with check
+#   age >= 18 && age <= 65             # Age validation
+#   isValid && count > 0               # Compound conditions
+# -----------------------------------------------------------------------------
+&& = and
+|| = or
+== = eq
+!= = neq
+<  = lt
+<= = leq
+>  = gt
+>= = geq
+:infix && 3 left
+:infix || 2 left
+:infix == 4 left
+:infix != 4 left
+:infix <  5 left
+:infix <= 5 left
+:infix >  5 left
+:infix >= 5 left
+
+
+# =============================================================================
+# SECTION 11: DEPRECATED AND ALIASED FUNCTIONS
+#
+# This section contains functions that are duplicates, aliases, or less
+# efficient versions of other functions in the library. They are commented out
+# to reduce clutter but are kept for historical or educational reference.
+#
+# PURPOSE OF THIS SECTION:
+#   - Historical preservation of alternative implementations
+#   - Educational examples showing different approaches to same problems
+#   - Aliases that provide familiar names from other programming languages
+#   - Less efficient but more explicit implementations for learning
+#
+# CATEGORIES:
+#   1. Aliases: Alternative names for existing functions
+#   2. Redundant functions: Multiple implementations of same functionality
+#   3. Y-combinator examples: Explicit recursive implementations
+#   4. Less efficient versions: Direct but slower implementations
+#
+# EDUCATIONAL VALUE:
+#   These implementations demonstrate:
+#   - Multiple ways to solve the same problem
+#   - Trade-offs between clarity and efficiency
+#   - Evolution of function design and optimization
+#   - Different naming conventions across programming paradigms
+#
+# USAGE NOTE:
+#   These functions are commented out to avoid namespace pollution.
+#   Uncomment individual functions if needed for specific use cases.
+# =============================================================================
+
+# --- Aliases ---
+# factorial = fact
+# fibonacci = fib
+# contains = elem
+# indexOf  = elemIndex
+clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
+# bounded  = clamp
+# inrange  = between
+# pow2     = λn.exp 2 n
+# pow10    = λn.exp 10 n
+
+# --- Redundant or Less-Used ---
+# second   = λl.head (tail l)
+# third    = λl.head (tail (tail l))
+# butlast  = λl.reverse (tail (reverse l))
+# removeFirst = λx l.filter (λy.not (eq x y)) l
+# count    = λx l.length (filter (eq x) l)
+# singleton = λx.cons x nil
+# doubleton = λx y.cons x (cons y nil)
+# tripleton = λx y z.cons x (cons y (cons z nil))
+# issingle = λl.and (not (isnil l)) (isnil (tail l))
+# isdouble = λl.and (not (isnil l)) (and (not (isnil (tail l))) (isnil (tail (tail l))))
+# scanl    = λf z l.reverse (foldl (λacc x.cons (f (head acc) x) acc) (cons z nil) l)
+# scanr    = λf z l.foldr (λx acc.cons (f x (head acc)) acc) (cons z nil) l
+# findIndex = λp l.foldl (λacc x.if (and (isnil acc) (p x)) (cons (length acc) nil) acc) nil l
+# elemIndex = λx l.findIndex (eq x) l
+# safeInit = λl.if (isnil l) nil (reverse (tail (reverse l)))
+
+# --- Recursive examples using Y-combinator and infix operators (less efficient) ---
+fibY       = Y (\f. \n. if (n <= 2) 1 ((f (n - 1)) + (f (n - 2))))
+factY      = Y (\f. \n. if (n == 0) 1 (n * (f (n - 1))))
+sumUptoY   = Y (\f. \n. if (n == 0) 0 (n + (f (n - 1))))
+expY       = Y (\f. \b n. if (n == 0) 1 (b * (f b (n - 1))))
+rangeY     = \n. Y (\f k. if (k == n) nil (cons k (f (k + 1)))) 0
+countdownY = \n. Y (\f k. if (k == 0) (cons 0 nil) (cons k (f (k - 1)))) n
+gcdY       = Y (\f. \a b. if (b == 0) a (f b (a % b)))
+lcmY       = Y (\f. \a b. if (a == 0 || b == 0) 0 ((a * b) / (gcdY a b)))
+mapY       = Y (\f. \g l. if (isnil l) nil (cons (g (head l)) (f g (tail l))))
+filterY    = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (cons (head l) (f p (tail l))) (f p (tail l))))
+lengthY    = Y (\f. \l. if (isnil l) 0 (1 + (f (tail l))))
+reverseY   = \l. Y (\f l acc. if (isnil l) acc (f (tail l) (cons (head l) acc))) l nil
+sumY       = Y (\f. \l. if (isnil l) 0 ((head l) + (f (tail l))))
+productY   = Y (\f. \l. if (isnil l) 1 ((head l) * (f (tail l))))
+anyY       = Y (\f. \p l. if (isnil l) false (or (p (head l)) (f p (tail l))))
+allY       = Y (\f. \p l. if (isnil l) true (and (p (head l)) (f p (tail l))))
+findY      = Y (\f. \p l. if (isnil l) nil (if (p (head l)) (head l) (f p (tail l))))
+

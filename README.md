@@ -1860,3 +1860,20 @@ A: Use `:clear` to reset all definitions and caches.
 ## License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
+
+## Distribution & Packaging (New)
+
+Artifacts planned / available:
+
+- NuGet package: `LambdaCalculus.Interpreter` (core library, CEK evaluator, parser, macros). Install with:
+    `dotnet add package LambdaCalculus.Interpreter`
+- CLI tool project (`src-cli`) provides interactive REPL (build: `dotnet run --project src-cli`).
+- Web host (`src-web` / `src-webui`) serves browser UI.
+- WASM build (`src-wasm`) experimental Blazor WebAssembly host for in-browser evaluation (no server).
+
+### Roadmap
+
+- Add GitHub Actions workflow to pack & push NuGet on tagged release.
+- Publish WASM demo via GitHub Pages (copy `wwwroot` + `_framework`).
+- Provide minimal JS interop API (evaluate, normalize, stats) for embedding.
+

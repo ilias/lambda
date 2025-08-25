@@ -1,40 +1,76 @@
 Param(
-	[switch]$NoBuild
+	[switch]$NoBuild,
+	[switch]$Pack,          # dotnet pack core library
+	[string]$Version,       # optional override package version
+	[switch]$NoDocker,      # skip docker image build
+	[switch]$Wasm,          # publish WASM project
+	[switch]$CleanArtifacts,# remove artifacts folder first
+	[string]$Output = 'artifacts'
 )
 
 $ErrorActionPreference = 'Stop'
 
+if($CleanArtifacts -and (Test-Path $Output)){
+	Write-Host "[clean] Removing '$Output'" -ForegroundColor Yellow
+	Remove-Item -Recurse -Force $Output
+}
+
 if(-not $NoBuild){
-	Write-Host "[build] Compiling projects (Release)" -ForegroundColor Cyan
-	dotnet build --configuration Release
+	Write-Host "[build] Restoring & compiling solution (Release)" -ForegroundColor Cyan
+	dotnet restore | Out-Null
+	dotnet build lambda-cek.sln --configuration Release --no-restore
 } else {
 	Write-Host "[build] Skipping dotnet build (NoBuild flag)." -ForegroundColor Yellow
 }
 
-$name = 'lambda-cek-webui'
-$altName = 'lambda-webui'
-
-$containers = @(docker ps -aq -f "name=^(${name}|${altName})$" 2>$null)
-if ($containers.Count -gt 0) {
-    Write-Host "[docker] Removing existing container(s): $containers" -ForegroundColor Yellow
-    foreach ($c in $containers) {
-        docker rm -f $c | Out-Null
-    }
-} else {
-    Write-Host "[docker] No existing running/stopped container named '$name' or '$altName'" -ForegroundColor DarkGray
+if($Pack){
+	if(-not (Test-Path $Output)) { New-Item -ItemType Directory -Path $Output | Out-Null }
+	$packArgs = @('pack','src/lambda-cek.csproj','-c','Release','-o',$Output,'--no-build')
+	if($Version){ $packArgs += "/p:PackageVersion=$Version" }
+	Write-Host "[pack] dotnet $($packArgs -join ' ')" -ForegroundColor Cyan
+	dotnet @packArgs
 }
 
-Write-Host "[docker] Checking for existing image '$name'" -ForegroundColor Cyan
-$existingImage = docker images -q $name 2>$null
-if($existingImage){
-	Write-Host "[docker] Removing existing image $existingImage" -ForegroundColor Yellow
-	docker rmi -f $existingImage | Out-Null
-} else {
-	Write-Host "[docker] No existing image to remove" -ForegroundColor DarkGray
+if($Wasm){
+	if(-not (Test-Path $Output)) { New-Item -ItemType Directory -Path $Output | Out-Null }
+	$wasmOut = Join-Path $Output 'wasm'
+	Write-Host "[wasm] Publishing WebAssembly host to '$wasmOut'" -ForegroundColor Cyan
+	dotnet publish src-wasm/lambda-cek.wasm.csproj -c Release -o $wasmOut --nologo
 }
 
-Write-Host "[docker] Building fresh image '$name'" -ForegroundColor Cyan
-docker build -t $name -f src-webui/Dockerfile .
+if(-not $NoDocker){
+	$name = 'lambda-cek-webui'
+	$altName = 'lambda-webui'
 
-# run container
-# docker run -d -p 8080:8080 --name lambda-cek-webui lambda-cek-webui
+	Write-Host "[docker] Preparing image build" -ForegroundColor Cyan
+	$containers = @(docker ps -aq -f "name=^(${name}|${altName})$" 2>$null)
+	if ($containers.Count -gt 0) {
+		Write-Host "[docker] Removing existing container(s): $containers" -ForegroundColor Yellow
+		foreach ($c in $containers) { docker rm -f $c | Out-Null }
+	} else {
+		Write-Host "[docker] No existing container(s)" -ForegroundColor DarkGray
+	}
+
+	$existingImage = docker images -q $name 2>$null
+	if($existingImage){
+		Write-Host "[docker] Removing existing image $existingImage" -ForegroundColor Yellow
+		docker rmi -f $existingImage | Out-Null
+	} else {
+		Write-Host "[docker] No existing image to remove" -ForegroundColor DarkGray
+	}
+
+	Write-Host "[docker] Building fresh image '$name'" -ForegroundColor Cyan
+	docker build -t $name -f src-webui/Dockerfile .
+} else {
+	Write-Host "[docker] Skipped (NoDocker flag)." -ForegroundColor Yellow
+}
+
+Write-Host "[done] Build pipeline completed." -ForegroundColor Green
+
+# Quick Reference Summary
+# CLI: dotnet run --project src-cli
+# Web API: dotnet run --project src-web
+# Web UI: dotnet run --project src-webui
+# WASM: dotnet publish src-wasm -c Release -o artifacts\wasm then serve that folder
+# Pack: dotnet pack [lambda-cek.csproj](http://_vscodecontentref_/6) -c Release -o artifacts
+# All-in-one: .[build.ps1](http://_vscodecontentref_/7) -Pack -Wasm (add -NoDocker if you don’t need the image)
