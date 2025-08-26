@@ -450,8 +450,17 @@ The interpreter provides numerous commands for managing your session:
 ### Environment Management
 
 ```shell
-:clear                   # Clear environment and caches
-:env                     # Show current definitions
+:clear                   # Clear everything (env + macros + infix ops + stats + caches)
+:clear defs              # Clear only definitions (env); keep macros & infix ops
+:clear macros            # Clear only macro clauses
+:clear ops               # Clear custom infix operators (restores defaults |>, .)
+:clear cache             # Clear all memoization / analysis caches
+:clear all               # Same as bare :clear
+:env                     # Show environment (defs, macros, infix, natives)
+:env defs                # Show only definitions
+:env macros              # Show only macros
+:env infix               # Show only infix operators
+:env native              # Show native primitives
 :load <file>             # Load definitions from file
 :save <file>             # Save current environment to file
 ```
@@ -472,7 +481,7 @@ The interpreter provides numerous commands for managing your session:
 :stats                   # Show detailed performance statistics
 :test clear              # Reset structural equality test counters
 :test result             # Show structural equality test counters (calls/successes)
-:memo                    # Clear all caches
+:clear cache             # Clear all caches (memoization)
 :log <file|off>          # Enable/disable logging to file
 ```
 
@@ -481,16 +490,15 @@ The interpreter provides numerous commands for managing your session:
 ```shell
 :infix <op> <prec> <assoc>  # Define infix operator
 :macro (pattern) => body    # Define macro
-:macros                     # List all macros
+:env macros                # List macro clauses only (shortcut for filtering)
 ```
 
 ### Help and Information
 
 ```shell
-:help                    # Show comprehensive help
-:multiline               # Show multi-line input help
+:help                    # Show comprehensive help (includes multi-line input usage)
 :native show             # Show all native arithmetic functions
-:env                     # Show current environment, including user-defined primitives
+:env [defs|macros|infix|native|all]  # Show environment (optionally filtered)
 ```
 
 ## Command / Expression Chaining
@@ -510,7 +518,7 @@ You can place multiple commands and/or expressions on a single line (or in a fil
 let x = 10 in succ x; let y = 2 in mult y 5    # → 10
 
 # Mix multiple commands and expressions
-:macro (sq $x) => (mult $x $x); :macros; sq 7  # Lists macros, then evaluates → 49
+:macro (sq $x) => (mult $x $x); :env macros; sq 7  # Lists macros, then evaluates → 49
 ```
 
 ### Rules
@@ -525,7 +533,7 @@ let x = 10 in succ x; let y = 2 in mult y 5    # → 10
 
 - Rapid prototyping: define + test in one line.
 - Batch loading: `:load a.lambda; :load b.lambda; :stats`.
-- Macro refinement: redeclare a macro and immediately inspect with `:macros`.
+- Macro refinement: redeclare a macro and immediately inspect with `:env macros`.
 
 This feature streamlines interactive workflows by reducing the number of round trips required to iterate on definitions and tests.
 
@@ -1176,7 +1184,7 @@ The macro system has been extended beyond simple one-clause textual substitution
    - Rest cannot appear in nested list subpatterns (future enhancement may relax this).
 
 7. Display / Introspection
-   - `:macros` lists every clause including its guard (if any) and a `...` marker for rest variables.
+    - `:env macros` lists every clause including its guard (if any) and a `...` marker for rest variables.
 
 #### Example Putting It Together
 
@@ -1227,14 +1235,13 @@ Notes:
 
 ## REPL Command Reference
 
-This table is generated from the interpreter's internal command metadata (`:commands`). Run `:commands` in the REPL to regenerate (ensures README and in-REPL help stay synchronized).
+This table is synchronized with the interpreter's internal command metadata (shown via `:help`).
 
 | Command | Syntax | Description |
 |---------|--------|-------------|
-| :clear | `:clear` | Clear environment, statistics and caches |
-| :commands | `:commands` | Output all commands as a markdown table (for README sync) |
+| :clear | `:clear [macros\|defs\|ops\|cache\|all]` | Clear state (default all). macros, defs, ops (infix), cache (memoization), or all (env+macros+ops+stats+caches) |
 | :depth | `:depth [n]` | Show or set maximum recursion depth (range 10-10000) |
-| :env | `:env` | Display current top-level definitions (environment) |
+| :env | `:env [defs\|macros\|infix\|native\|all]` | Display environment (optionally filtered); default all |
 | :exit | `:exit \| :quit` | Exit the interpreter |
 | :help | `:help` | Show help summary |
 | :infix | `:infix [op prec assoc]` | Define or list infix operators (assoc = left\|right) |
@@ -1242,9 +1249,7 @@ This table is generated from the interpreter's internal command metadata (`:comm
 | :load | `:load <file>` | Load a .lambda file (may contain defs, macros, infix) |
 | :log | `:log <file\|off\|clear>` | Log output to file, disable or clear current file |
 | :macro | `:macro (<pattern>) => <body>` | Define a macro clause (supports guards & rest) |
-| :macros | `:macros` | List all macro clauses |
-| :memo | `:memo` | Clear all memoization caches |
-| :multiline | `:multiline` | Show multi-line input help |
+| (cache) | `:clear cache` | Clear all memoization caches |
 | :native | `:native on\|off\|show` | Toggle native arithmetic or list native primitives |
 | :pretty | `:pretty on\|off` / `:pp on\|off` | Toggle pretty printing (numerals, lists, booleans) |
 | :save | `:save <file>` | Persist current environment to a file |
@@ -1252,7 +1257,7 @@ This table is generated from the interpreter's internal command metadata (`:comm
 | :step | `:step on\|off` | Toggle step-by-step CEK trace output |
 | :test | `:test clear` / `:test result` | Reset or display structural equality test counters |
 
-Tip: After heavy experimentation, run `:clear` then `:load stdlib.lambda` to restore the baseline library.
+Tip: After heavy experimentation, run `:clear all` then `:load stdlib.lambda` to restore the baseline library. For only redefining functions without losing macro/infix definitions use `:clear defs`.
 
 ## Examples (Extended)
 
@@ -1468,12 +1473,12 @@ plus, minus, mult, div, mod        # Basic arithmetic
 succ, pred, iszero                 # Successor/predecessor
 lt, leq, eq, geq, gt, neq          # Comparisons
 max, min, sqrt, random             # Additional functions
-isStructEqual                      # Structural (syntactic) equality (non-alpha) for ANY two expressions
+alphaEq                            # Alpha-equivalence (normalize both; binder names ignored)
 ```
 
-#### Structural Equality (isStructEqual)
+#### Alpha Equivalence (alphaEq)
 
-`isStructEqual` is a native helper that returns a Church boolean (`true` / `false`) indicating whether two expressions are *semantically equal up to normalization and alpha-equivalence*.
+`alphaEq` is a native helper that returns a Church boolean (`true` / `false`) indicating whether two expressions are *semantically equal up to normalization and alpha-equivalence*.
 
 Current pipeline (implementation detail, but useful to know):
 
@@ -1486,7 +1491,7 @@ Current pipeline (implementation detail, but useful to know):
 
 Characteristics:
 
-- Ignores superficial binder name differences: `isStructEqual (λx.x) (λy.y)` → `true`.
+- Ignores superficial binder name differences: `alphaEq (λx.x) (λy.y)` → `true`.
 - Distinguishes genuinely different structure (no eta-reduction: `λx.f x` ≠ `f`).
 - Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
 - Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
@@ -1494,19 +1499,19 @@ Characteristics:
 
 Instrumentation:
 
-- Every `isStructEqual` invocation increments counters (`StructEqCalls`, `StructEqSuccesses`).
+- Every `alphaEq` invocation increments counters (`StructEqCalls`, `StructEqSuccesses`).
 - View with `:test result`, reset with `:test clear`.
 - Useful for tracking test coverage density in large spec suites.
 
 Practical examples:
 
 ```lambda
-isStructEqual (pair 1 (cons 2 nil)) (pair 1 (cons 2 nil))          # true
-isStructEqual [1,2,3] (cons 1 (cons 2 (cons 3 nil)))               # true
-isStructEqual (λx.plus x 1) (λy.plus y 1)                          # true (alpha-insensitive)
-isStructEqual (λx.plus x 1) (λy.plus y (succ 0))                   # false (different body after norm)
-isStructEqual ((S K K) 5) 5                                        # true (combinator reduces)
-isStructEqual (λx.f x) f                                          # false (no eta)
+alphaEq (pair 1 (cons 2 nil)) (pair 1 (cons 2 nil))          # true
+alphaEq [1,2,3] (cons 1 (cons 2 (cons 3 nil)))               # true
+alphaEq (λx.plus x 1) (λy.plus y 1)                          # true (alpha-insensitive)
+alphaEq (λx.plus x 1) (λy.plus y (succ 0))                   # false (different body after norm)
+alphaEq ((S K K) 5) 5                                        # true (combinator reduces)
+alphaEq (λx.f x) f                                           # false (no eta)
 ```
 
 Notes & Limits:
@@ -1556,7 +1561,7 @@ You will see `Step` lines (green/yellow in CLI, class `log-step` in Web UI) for 
 Common pattern to isolate a problematic expansion:
 
 ```shell
-:clear; :load stdlib.lambda; :step on; :pretty off
+:clear all; :load stdlib.lambda; :step on; :pretty off
 mySuspiciousExpr
 ```
 
@@ -1570,7 +1575,7 @@ Turn tracing off immediately once you've captured enough lines to avoid performa
 | Demonstrate laziness | `:lazy on; take 10 [0 .. 1000000]` | Shows finite prefix of huge range |
 | Maximizing cache hits | Evaluate same function repeatedly then `:stats` | Observe CacheHits growth |
 | Macro expansion audit | `:pretty off; :step on` once | Inspect raw expanded forms |
-| Structural regression tests | Use `isStructEqual` in macros + `:test result` | Track success count trend |
+| Structural regression tests | Use `alphaEq` in macros + `:test result` | Track success count trend |
 
 Quick timing heuristic: compare `Iterations` between implementations of the same function (e.g., naive vs tail-recursive) under identical settings.
 
@@ -1840,7 +1845,7 @@ A: Use `:step on` for step-by-step evaluation, `:stats` for performance info, an
 A: Extend the `TryNativeArithmetic` method in `Interpreter.Eval.cs`.
 
 **Q: How do I reset the environment?**
-A: Use `:clear` to reset all definitions and caches.
+A: Use `:clear` (or `:clear all`) to reset everything, or selectively `:clear defs` / `:clear macros` / `:clear ops`.
 
 ## Design Decisions
 

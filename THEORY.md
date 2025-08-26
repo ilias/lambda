@@ -82,13 +82,13 @@ While this document focuses on pure lambda calculus theory, the accompanying int
 
 1. Evaluation Engine: A lazy CEK-style machine with thunk caching. Arguments are wrapped in thunks and only forced when the head position requires a value (e.g., to discriminate a Church boolean or list constructor). An optional eager mode (`:lazy off`) forces arguments immediately.
 2. Normalization: Internal normalization (used by structural equality and some diagnostics) performs bounded beta-reduction plus inlining of top-level named lambda bindings. This allows combinators like `(S K K)` to reduce without requiring explicit user expansion while guarding against infinite unfolding (depth & visited-set limits).
-3. Equality Semantics: The native `isStructEqual` now compares expressions after normalization using alpha-equivalence (binder names ignored). Eta-equivalence is NOT applied: `λx.f x` and `f` are considered distinct unless they normalize to an identical structure through other reductions.
+3. Equality Semantics: The native `alphaEq` now compares expressions after normalization using alpha-equivalence (binder names ignored). Eta-equivalence is NOT applied: `λx.f x` and `f` are considered distinct unless they normalize to an identical structure through other reductions.
 4. Alpha-Conversion & Capture Avoidance: Substitution routines generate fresh binders as needed to prevent capture. This ensures user macros and recursive definitions remain hygienic at the operational level, even though the macro system itself is not fully hygienic (see below).
 5. Macro System: Multi-clause pattern macros support guards and a single trailing variadic (rest) capture. Clause selection orders by (a) greater arity specificity, then (b) most recent definition (shadowing). Macro expansion occurs pre-evaluation; expanded expressions participate in standard lazy evaluation.
 6. Variadic / Rest Arguments: A rest pattern `$xs ...` in a macro pattern collects zero or more trailing arguments into a Church list which can be consumed by ordinary list folds or maps inside the expansion.
 7. Guards: A clause guard `when (predicate)` is evaluated under the current evaluation mode; only a Church `false` rejects the clause (any other normalized value counts as true).
 8. Pretty Printing: The printer recognizes Church numerals, Church booleans, cons/nil lists, and Church-fold-encoded lists, with booleans detected prior to numeral recognition to disambiguate `false` vs `0` structural overlap.
-9. Performance Protections: Iteration counters and normalization depth limits abort runaway expansion; large or divergent expressions compared with `isStructEqual` may conservatively return `false` rather than hanging.
+9. Performance Protections: Iteration counters and normalization depth limits abort runaway expansion; large or divergent expressions compared with `alphaEq` may conservatively return `false` rather than hanging.
 10. Extensibility: Adding eta-equivalence, hygienic macros (gensym), or richer pattern forms (nested rests) would require extending the normalization phase or macro matcher, but current design isolates these concerns cleanly in the evaluator and macro dispatcher modules.
 
 These interpreter-specific behaviors ensure practical usability (testing, performance measurement, macro ergonomics) while remaining faithful to lambda calculus core semantics.
@@ -176,13 +176,13 @@ id2 42
     
    1. Evaluation Engine: A lazy CEK-style machine with thunk caching. Arguments are wrapped in thunks and only forced when the head position requires a value (e.g., to discriminate a Church boolean or list constructor). An optional eager mode (`:lazy off`) forces arguments immediately.
    2. Normalization: Internal normalization (used by structural equality and some diagnostics) performs bounded beta-reduction plus inlining of top-level named lambda bindings. This allows combinators like `(S K K)` to reduce without requiring explicit user expansion while guarding against infinite unfolding (depth & visited-set limits).
-   3. Equality Semantics: The native `isStructEqual` now compares expressions after normalization using alpha-equivalence (binder names ignored). Eta-equivalence is NOT applied: `λx.f x` and `f` are considered distinct unless they normalize to an identical structure through other reductions.
+   3. Equality Semantics: The native `alphaEq` now compares expressions after normalization using alpha-equivalence (binder names ignored). Eta-equivalence is NOT applied: `λx.f x` and `f` are considered distinct unless they normalize to an identical structure through other reductions.
    4. Alpha-Conversion & Capture Avoidance: Substitution routines generate fresh binders as needed to prevent capture. This ensures user macros and recursive definitions remain hygienic at the operational level, even though the macro system itself is not fully hygienic (see below).
    5. Macro System: Multi-clause pattern macros support guards and a single trailing variadic (rest) capture. Clause selection orders by (a) greater arity specificity, then (b) most recent definition (shadowing). Macro expansion occurs pre-evaluation; expanded expressions participate in standard lazy evaluation.
    6. Variadic / Rest Arguments: A rest pattern `$xs ...` in a macro pattern collects zero or more trailing arguments into a Church list which can be consumed by ordinary list folds or maps inside the expansion.
    7. Guards: A clause guard `when (predicate)` is evaluated under the current evaluation mode; only a Church `false` rejects the clause (any other normalized value counts as true).
    8. Pretty Printing: The printer recognizes Church numerals, Church booleans, cons/nil lists, and Church-fold-encoded lists, with booleans detected prior to numeral recognition to disambiguate `false` vs `0` structural overlap.
-   9. Performance Protections: Iteration counters and normalization depth limits abort runaway expansion; large or divergent expressions compared with `isStructEqual` may conservatively return `false` rather than hanging.
+   9. Performance Protections: Iteration counters and normalization depth limits abort runaway expansion; large or divergent expressions compared with `alphaEq` may conservatively return `false` rather than hanging.
    10. Extensibility: Adding eta-equivalence, hygienic macros (gensym), or richer pattern forms (nested rests) would require extending the normalization phase or macro matcher, but current design isolates these concerns cleanly in the evaluator and macro dispatcher modules.
     
    These interpreter-specific behaviors ensure practical usability (testing, performance measurement, macro ergonomics) while remaining faithful to lambda calculus core semantics.
@@ -1140,7 +1140,8 @@ quicksort unsorted
 :help                  # Show comprehensive help
 :load <file>          # Load definitions from file
 :save <file>          # Save current environment to file
-:clear                # Clear environment and caches
+:clear                # Clear everything (env + macros + ops + stats + caches)
+:clear cache          # Clear only memoization / analysis caches
 :exit                 # Exit the interpreter
 ```
 
@@ -1159,7 +1160,7 @@ quicksort unsorted
 ```text
 :env                  # Show current environment definitions
 :stats                # Show performance and environment statistics
-:memo                 # Clear all memoization/caches
+:clear cache          # Clear all memoization/caches
 :log <file|off>       # Log output to file or disable logging
 :log clear            # Clear the current log file
 ```
@@ -1169,8 +1170,8 @@ quicksort unsorted
 ```text
 :infix [op prec assoc]     # Define/show infix operators
 :macro (pattern) => transformation  # Define macros
-:macros               # List all defined macros
-:multiline            # Show multi-line input help
+:env macros           # List all defined macros
+# (Multi-line help merged into :help)
 :native show          # Show all supported native arithmetic functions
 ```
 
@@ -1375,7 +1376,7 @@ take 10 infinite_nats
 
 ```lambda
 # Clear caches when working with large computations
-:memo                          # Clear all memoization caches
+:clear cache                   # Clear all memoization caches
 
 # Monitor performance with stats
 :stats                         # Show detailed performance statistics

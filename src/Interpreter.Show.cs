@@ -2,22 +2,71 @@ namespace LambdaCalculus;
 
 public partial class Interpreter
 {
-    private async Task<string> ShowEnv()
+    private async Task<string> ShowEnv(string filter)
     {
-        var envResult = await SaveFileAsync("console");
-        return envResult;
+        var f = (filter ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(f) || f == "all")
+        {
+            // Existing export already prints definitions, macros, infix, natives meta
+            return await SaveFileAsync("console");
+        }
+
+        switch (f)
+        {
+            case "defs":
+                return ShowDefsOnly();
+            case "macros":
+                return ShowMacrosOnly();
+            case "infix":
+                return ShowInfixOnly();
+            case "native":
+                return ShowNativeOnly();
+            default:
+                return $"Unknown env filter: {filter}. Use :env [defs|macros|infix|native|all]";
+        }
     }
-    
-    private string ShowMacros()
+
+    private string ShowDefsOnly()
+    {
+        // Reuse save logic but limit to definitions section only
+        // We'll directly construct similar output subset
+        var lines = new List<string>();
+        lines.Add("# =============================================================================");
+        lines.Add("# VARIABLE DEFINITIONS");
+        lines.Add("# =============================================================================\n");
+        if (_contextUnevaluated.Count == 0)
+        {
+            lines.Add("(none)");
+        }
+        else
+        {
+            foreach (var kv in _contextUnevaluated.OrderBy(k => k.Key))
+            {
+                lines.Add($"  {kv.Key} = {FormatWithNumerals(kv.Value)}");
+            }
+        }
+        foreach (var l in lines) _logger.Log(l);
+        return $"# Displayed {_contextUnevaluated.Count} definition(s).";
+    }
+
+    private string ShowMacrosOnly()
     {
         var macros = _parser.ShowMacros();
-        if (macros.Count == 0)
-            return "No macros defined";
-        
-        _logger.Log("");
-        foreach (var macro in macros)
-            _logger.Log($"{macro}");
-        return $"# Displayed {_parser._macros.Count} macros.";
+        if (macros.Count == 0) return "No macros defined";
+        _logger.Log("\n# MACROS\n");
+        foreach (var macro in macros) _logger.Log(macro);
+        return $"# Displayed {_parser._macros.Count} macro group(s).";
+    }
+
+    private string ShowInfixOnly() => ShowInfixOperators();
+
+    private string ShowNativeOnly()
+    {
+        if (_nativeFunctions.Count == 0) return "No native functions registered.";
+        _logger.Log("\n# NATIVE FUNCTIONS\n");
+        foreach (var kv in _nativeFunctions.OrderBy(k => k.Key))
+            _logger.Log($"  {kv.Key}");
+        return $"# Displayed {_nativeFunctions.Count} native function(s).";
     }
 
     public string ShowInfixOperators()
@@ -104,8 +153,28 @@ public partial class Interpreter
 
         private static string ShowHelp()
         {
-                var commandsPlain = BuildCommandsPlain();
-                        return $"""
+            // Build command list dynamically from metadata
+            var maxSyntax = _commandMetadata.Max(c => c.Syntax.Length);
+            var cmdLines = _commandMetadata
+                .OrderBy(c => c.Key)
+                .Select(c => $"  {c.Syntax.PadRight(maxSyntax)}  {c.Description}");
+            var commandsPlain = string.Join("\n", cmdLines);
+
+            const string multiLine = """
+        -- Multi-Line Input --
+            Automatic continuation when:
+              * Unbalanced ( / ) or [ / ]
+              * Lambda missing body after λx. or x ->
+              * let binding missing 'in'
+              * :macro definition missing '=>'
+            Manual continuation: end a line with \\ to force join.
+            Controls inside an unfinished block:
+              :cancel / :abort  Discard buffer
+              :show             Display current buffer
+            Blank line while buffer valid attempts evaluation.
+        """;
+
+            return $"""
         ================= Lambda Calculus Interpreter Help =================
 
         -- Expression Syntax (abridged) --
@@ -124,41 +193,8 @@ public partial class Interpreter
         -- Commands --
         {commandsPlain}
 
-        Use ':commands' to output a markdown table of all commands (sync with README automatically).
-
-        Multi-line input: implicit continuation for unbalanced delimiters; '\\' forces continuation; ':cancel' aborts.
+        {multiLine}
         See README 'Formal Grammar' for precise grammar & desugarings.
         """;
         }
-
-    private static string ShowMultiLineHelp() =>
-            """
-            ===== Multi-Line Input System =====
-
-            The interpreter supports intelligent multi-line input with automatic completion detection:
-
-            -- Automatic Continuation --
-            Input automatically continues when:
-            • Parentheses are unmatched: (expr1 (expr2 
-            • Brackets are unmatched: [list element1
-            • Lambda expressions are incomplete: λx.
-            • Let expressions lack 'in': let x = 5
-            • Macro definitions lack '=>': :macro (when $cond $body)
-
-            -- Manual Continuation --
-            • Use '\\' at end of line for explicit continuation
-            • The interpreter shows enhanced prompts:
-                lambda> first line
-                ......> [2] second line (numbers are visual aids, not part of input)
-            • Blank line attempts completion of current buffer
-
-            -- Buffer Management --
-            :cancel / :abort   Discard current multi-line buffer
-            :show               Display current collected lines
-
-            -- Tips --
-            • Keep parentheses balanced for faster detection
-            • Complex let / macro bodies can span many lines; indentation is optional but recommended
-            • You can chain top-level segments with ';' only after completion, never mid buffer
-            """;
 }

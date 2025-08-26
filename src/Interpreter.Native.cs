@@ -2,10 +2,10 @@ namespace LambdaCalculus;
 
 public partial class Interpreter
 {
-    // Native structural equality (works for any two expressions)
-    // Pattern: (isStructEqual a b) -> Church true/false based on structural graph equality
+    // Native alpha equivalence / structural equality (works for any two expressions)
+    // Pattern: (alphaEq a b) -> Church true/false based on alpha-equivalence of normalized graphs
     // We evaluate both operands fully (respecting current lazy/native settings) to compare
-    internal Expr? IsStructEqual(string op, List<Expr> args, Dictionary<string, Expr> env)
+        internal Expr? AlphaEqNative(string op, List<Expr> args, Dictionary<string, Expr> env)
     {
         if (args.Count != 2) return null; // Need exactly two arguments
 
@@ -118,7 +118,7 @@ public partial class Interpreter
     private void RegisterNativeFunctions()
     {
         RegisterNativeFunction("random", IsRandom);
-        RegisterNativeFunction("isStructEqual", IsStructEqual);
+        RegisterNativeFunction("alphaEq", AlphaEqNative);
 
         List<string> nativeArithmeticOps =
         [

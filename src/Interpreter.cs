@@ -237,20 +237,16 @@ public partial class Interpreter
             ":save" => await SaveFileAsync(arg),
             ":step" => HandleStep(arg),
             ":lazy" => HandleLazy(arg),
-            ":clear" => ClearEnvironment(),
+            ":clear" => HandleClear(arg),
             ":stats" => ShowStats(),
             ":help" => ShowHelp(),
-            ":env" => await ShowEnv(),
-            ":memo" => MemoClear(),
+            ":env" => await ShowEnv(arg),
             ":exit" or ":quit" => "bye",
             ":depth" => HandleRecursionDepth(arg),
             ":infix" => HandleInfixCommand(arg),
             ":native" => HandleNativeArithmetic(arg),
             ":pretty" or ":pp"=> HandlePrettyPrint(arg),
-            ":macros" => ShowMacros(),
             ":macro" => HandleMacroDefinition(arg),
-            ":multiline" => ShowMultiLineHelp(),
-            ":commands" => BuildCommandsMarkdown(),
             _ => $"Unknown command: {command}"
         };
     }
@@ -301,6 +297,55 @@ public partial class Interpreter
         MemoClear(); // Reuse cache clearing logic
         _stats.Reset();
         return "Environment cleared.";
+    }
+
+    private string HandleClear(string arg)
+    {
+        var opt = arg.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(opt) || opt == "all")
+        {
+            _parser._macros.Clear();
+            _parser._infixOperators.Clear();
+            // Re-add default infix operators after full clear
+            _parser.DefineInfixOperator("|>", 1, "left");
+            _parser.DefineInfixOperator(".", 9, "right");
+            var envMsg = ClearEnvironment();
+            return envMsg + " (macros & infix operators cleared)";
+        }
+        return opt switch
+        {
+            "macros" => ClearMacros(),
+            "defs" => ClearDefinitions(),
+            "ops" => ClearInfixOperators(),
+            "cache" => MemoClear(),
+            _ => $"Unknown clear target: {opt}. Use :clear [macros|defs|ops|cache|all]"
+        };
+    }
+
+    private string ClearMacros()
+    {
+        int count = _parser._macros.Sum(kv => kv.Value.Count);
+        _parser._macros.Clear();
+        return $"Cleared {count} macro clause(s).";
+    }
+
+    private string ClearDefinitions()
+    {
+        int defCount = _context.Count + _contextUnevaluated.Count;
+        _context.Clear();
+        _contextUnevaluated.Clear();
+        // Do not touch macros / ops / stats / caches unless requested
+        return $"Cleared {defCount} definition(s).";
+    }
+
+    private string ClearInfixOperators()
+    {
+        int opCount = _parser._infixOperators.Count;
+        _parser._infixOperators.Clear();
+        // Restore defaults
+        _parser.DefineInfixOperator("|>", 1, "left");
+        _parser.DefineInfixOperator(".", 9, "right");
+        return $"Cleared {opCount} infix operator(s); restored defaults (|>, .).";
     }
 
     private string TestClear()
