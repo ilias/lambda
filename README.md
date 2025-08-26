@@ -70,7 +70,7 @@ Enhancements to the Web UI (`src-webui`):
 - Streaming Transports: Buffered vs SSE vs WebSocket switchable at runtime.
 - Cache Busting: Timestamped resource fetches + cache/service worker clearing.
 - Persistent History: Up/Down arrow navigation with `localStorage` retention.
-- Structural Test Logging: Consistent `Test: left/right/passed|failed` lines; visibility controlled purely by filters.
+- Alpha Equivalence Logging: Consistent `Alpha left/right/passed|failed` lines; visibility controlled purely by filters.
 - Wrapped Output: Long lines wrap; horizontal scroll removed.
 
 Tip: Extend filtering or log classification via `classify()` and `FILTER_CONFIG` in `wwwroot/index.html`.

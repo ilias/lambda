@@ -27,15 +27,15 @@ public partial class Interpreter
         if (!equal && Expr.AlphaEquivalent(leftVal, rightVal))
             equal = true; // normalization introduced incidental difference
 
-        _logger.Log($"Test: left:  {FormatWithNumerals(normLeft)}");
-        _logger.Log($"Test: right: {FormatWithNumerals(normRight)}");
+    _logger.Log($"Alpha left:  {FormatWithNumerals(normLeft)}");
+    _logger.Log($"Alpha right: {FormatWithNumerals(normRight)}");
 
         _nativeArithmetic++;
         _stats.StructEqCalls++;
         if (equal) _stats.StructEqSuccesses++;
         var total = equal ? _stats.StructEqSuccesses : _stats.StructEqCalls - _stats.StructEqSuccesses;
         var totalPercent = (double)total / _stats.StructEqCalls * 100;
-        _logger.Log($"Test: {(equal ? "passed" : "failed")} - {total}/{_stats.StructEqCalls} ({totalPercent:F2}%)");
+    _logger.Log($"Alpha {(equal ? "passed" : "failed")} - {total}/{_stats.StructEqCalls} ({totalPercent:F2}%)");
         return MakeChurchBoolean(equal);
     }
 

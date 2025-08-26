@@ -61,9 +61,9 @@
     .log-name{color:#58a6ff;}
     .log-eval{color:#d2a8ff;}
     .log-macro{color:#58a6ff;}
-    .log-test{color:#d2a8ff;}
-    .log-test-pass{color:var(--good);}
-    .log-test-fail{color:#ff6b6b;}
+    .log-alpha{color:#d2a8ff;}
+    .log-alpha-pass{color:var(--good);}
+    .log-alpha-fail{color:#ff6b6b;}
     .log-command{color:#ff7b72;}
     .log-loading{color:#76e3ea;}
     .log-fileline{color:#8b949e;}
@@ -371,9 +371,9 @@
       if(s.startsWith('Name:')) return 'log-name';
       if(s.startsWith('Eval:')) return 'log-eval';
       if(s.startsWith('Macro')) return 'log-macro';
-      if(s.startsWith('Test: passed')) return 'log-test-pass';
-      if(s.startsWith('Test: failed')) return 'log-test-fail';
-      if(s.startsWith('Test:')) return 'log-test';
+      if(s.startsWith('Alpha passed')) return 'log-alpha-pass';
+      if(s.startsWith('Alpha failed')) return 'log-alpha-fail';
+      if(s.startsWith('Alpha ')) return 'log-alpha';
       if(s.startsWith('Processing:')) return 'log-processing';
       if(s.startsWith(':')) return 'log-command';
       if(s.includes('Loading')) return 'log-loading';
