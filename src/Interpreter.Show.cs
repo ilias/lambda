@@ -86,69 +86,125 @@ public partial class Interpreter
 
     private string ShowStats()
     {
-        static string PerOfTotal(long value, long total) => total == 0 ? "0.0%" : $"{value * 100.0 / total:F1}%";
-        var totalTime = _stats.TimeInCacheLookup + _stats.TimeInSubstitution + _stats.TimeInEvaluation + _stats.TimeInForcing;
-        var process = System.Diagnostics.Process.GetCurrentProcess();
-        var memUsage = GC.GetTotalMemory(false) / 1024.0;
-        var peakMem = process.PeakWorkingSet64 / 1024.0;
-        var threads = process.Threads.Count;
-        var startTime = process.StartTime;
-        var upTime = DateTime.Now - startTime;
-        var gen0 = GC.CollectionCount(0);
-        var gen1 = GC.CollectionCount(1);
-        var gen2 = GC.CollectionCount(2);
+        static string Percent(long value, long total) => total <= 0 ? "0.0%" : $"{value * 100.0 / total:F1}%";
+        static string Bar(double fraction, int width = 24)
+        {
+            if (fraction < 0) fraction = 0; if (fraction > 1) fraction = 1;
+            var filled = (int)Math.Round(fraction * width);
+            return new string('█', filled) + new string('·', width - filled);
+        }
+
+        long totalTimeTicks = _stats.TimeInCacheLookup + _stats.TimeInSubstitution + _stats.TimeInEvaluation + _stats.TimeInForcing;
+        double ToMs(long ticks) => ticks / 10_000.0; // 1 tick = 100ns
+
+        var proc = System.Diagnostics.Process.GetCurrentProcess();
+        var now = DateTime.Now;
+        var up = now - proc.StartTime;
+        double memKB = GC.GetTotalMemory(false) / 1024.0;
+        double peakKB = proc.PeakWorkingSet64 / 1024.0;
+        double memMB = memKB / 1024.0;
+        double peakMB = peakKB / 1024.0;
         var evalMode = _lazyEvaluation ? "Lazy" : "Eager";
-        var cacheHitRate = PerOfTotal(_stats.CacheHits, _stats.CacheHits + _stats.CacheMisses);
-        var cacheStats = $"Subst: {_substitutionCache.Count}, Eval: {_evaluationCache.Count}, FreeVar: {_freeVarCache.Count}, Var: {_expressionPool.Count}, ContainsVar: {_containsVarCache.Count}, Norm: {_normalizationCache.Count}";
+        long cacheTotal = _stats.CacheHits + _stats.CacheMisses;
+        double cacheHitFrac = cacheTotal == 0 ? 0 : (double)_stats.CacheHits / cacheTotal;
+        double structEqFrac = _stats.StructEqCalls == 0 ? 0 : (double)_stats.StructEqSuccesses / _stats.StructEqCalls;
 
-        foreach (var (macro, count) in _stats.MacroUsage.OrderByDescending(kvp => kvp.Value))
+        // Collect macro/native usage (top 10 each)
+        var macroLines = _stats.MacroUsage
+            .OrderByDescending(k => k.Value)
+            .Take(10)
+            .Select(k => $"  {k.Key,-24} {k.Value,8:#,##0}");
+        var nativeLines = _stats.NativeUsage
+            .OrderByDescending(k => k.Value)
+            .Take(10)
+            .Select(k => $"  {k.Key,-24} {k.Value,8:#,##0}");
+
+        string Section(string title) => $"\n── {title} " + new string('─', Math.Max(0, 68 - title.Length));
+        string Line(string label, object value) => $"  {label.PadRight(28)} {value}";
+        string TimeLine(string label, long ticks)
         {
-            _logger.Log($"Macro '{macro}': {count:#,##0} uses");
+            var pct = Percent(ticks, totalTimeTicks);
+            var frac = totalTimeTicks == 0 ? 0 : (double)ticks / totalTimeTicks;
+            return $"  {label.PadRight(20)} {ToMs(ticks),10:#,##0.00} ms  {pct,7}  {Bar(frac)}";
         }
-        foreach (var (native, count) in _stats.NativeUsage.OrderByDescending(kvp => kvp.Value))
+
+        var cacheSizes = new[]
         {
-            _logger.Log($"Native '{native}': {count:#,##0} uses");
+            ($"Substitution", _substitutionCache.Count),
+            ($"Evaluation", _evaluationCache.Count),
+            ($"FreeVar", _freeVarCache.Count),
+            ($"VarPool", _expressionPool.Count),
+            ($"ContainsVar", _containsVarCache.Count),
+            ($"Normalization", _normalizationCache.Count)
+        };
+        var cacheSizeLines = cacheSizes.Select(c => $"  {c.Item1,-14} {c.Item2,8:#,##0}");
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("╔══════════════════════════════════════════════════════════════════════╗");
+        sb.AppendLine("║  Lambda Interpreter Statistics                                        ║");
+        sb.AppendLine("╚══════════════════════════════════════════════════════════════════════╝");
+
+        // SUMMARY
+        sb.AppendLine(Section("Summary"));
+        sb.AppendLine(Line("Mode", evalMode));
+        sb.AppendLine(Line("Definitions", _context.Count.ToString("#,##0")));
+        sb.AppendLine(Line("Infix operators", _parser._infixOperators.Count.ToString("#,##0")));
+        sb.AppendLine(Line("Native arithmetic", _useNativeArithmetic ? "ENABLED" : "DISABLED"));
+        sb.AppendLine(Line("Pretty printing", _prettyPrint ? "ENABLED" : "DISABLED"));
+        sb.AppendLine(Line("Unique expressions", _expressionPool.Count.ToString("#,##0")));
+        sb.AppendLine(Line("Fresh var counter", _stats.VarCounter.ToString("#,##0")));
+        sb.AppendLine(Line("Uptime", up.ToString(@"dd\.hh\:mm\:ss")));
+        sb.AppendLine(Line("Memory (working)", $"{memMB:#,##0.0} MB (peak {peakMB:#,##0.0} MB)"));
+
+        // EVALUATION
+        sb.AppendLine(Section("Evaluation"));
+        sb.AppendLine(Line("Recursion depth limit", _stats.MaxRecursionDepth.ToString("#,##0")));
+        sb.AppendLine(Line("Total iterations", _stats.TotalIterations.ToString("#,##0")));
+        sb.AppendLine(Line("Normalizations", _stats.NormalizeCEKCount.ToString("#,##0")));
+        sb.AppendLine(Line("Thunks forced", _stats.ThunkForceCount.ToString("#,##0")));
+        sb.AppendLine(Line("Hash code calls", Expr.HashCodeCount.ToString("#,##0")));
+        sb.AppendLine(Line("Native arithmetic calls", _nativeArithmetic.ToString("#,##0")));
+        sb.AppendLine(Line("Alpha equivalence tests", $"{_stats.StructEqCalls:#,##0} (success {Percent(_stats.StructEqSuccesses, _stats.StructEqCalls)} )"));
+        sb.AppendLine(Line("Alpha equivalence success", Bar(structEqFrac)));
+        sb.AppendLine(Line("Step mode", _showStep ? "ENABLED" : "DISABLED"));
+
+        // PERFORMANCE
+        sb.AppendLine(Section("Timing (inclusive)"));
+        sb.AppendLine("  Component              Time (ms)    Share    Distribution");
+        sb.AppendLine(TimeLine("Cache lookup", _stats.TimeInCacheLookup));
+        sb.AppendLine(TimeLine("Substitution", _stats.TimeInSubstitution));
+        sb.AppendLine(TimeLine("Evaluation", _stats.TimeInEvaluation));
+        sb.AppendLine(TimeLine("Thunk forcing", _stats.TimeInForcing));
+        sb.AppendLine(TimeLine("TOTAL", totalTimeTicks));
+
+        // CACHES
+        sb.AppendLine(Section("Caches"));
+        sb.AppendLine(Line("Hit / Miss", $"{_stats.CacheHits:#,##0} / {_stats.CacheMisses:#,##0} ({Percent(_stats.CacheHits, cacheTotal)})"));
+        sb.AppendLine(Line("Cache hit ratio", Bar(cacheHitFrac)));
+        foreach (var l in cacheSizeLines) sb.AppendLine(l);
+
+        // USAGE
+        if (_stats.MacroUsage.Count > 0)
+        {
+            sb.AppendLine(Section("Macro Usage (top 10)"));
+            sb.AppendLine("  Name                      Uses");
+            foreach (var l in macroLines) sb.AppendLine(l);
+        }
+        if (_stats.NativeUsage.Count > 0)
+        {
+            sb.AppendLine(Section("Native Usage (top 10)"));
+            sb.AppendLine("  Name                      Uses");
+            foreach (var l in nativeLines) sb.AppendLine(l);
         }
 
-        return $"""
-        === Lambda Interpreter Statistics ===
-        
-        -- Environment --
-        Definitions:              {_context.Count:#,##0}, infix operators: {_parser._infixOperators.Count:#,##0}, native arithmetic: {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}
-        Unique expressions:       {_expressionPool.Count:#,##0}
-        Unique var counter:       {_stats.VarCounter:#,##0}
-        Pretty printing:          {(_prettyPrint ? "ENABLED" : "DISABLED")}
-        
-        -- Evaluation --
-        Mode:                     {evalMode}
-        Recursion depth limit:    {_stats.MaxRecursionDepth:#,##0}, max iterations: {200_000:#,##0}
-        Step-by-step:             {(_showStep ? "ENABLED" : "DISABLED")}
-        Normalizations:           {_stats.NormalizeCEKCount:#,##0}
-        Thunks forced:            {_stats.ThunkForceCount:#,##0}
-        Total iterations:         {_stats.TotalIterations:#,##0}
-        Hash code calls:          {Expr.HashCodeCount:#,##0}
-        Native arithmetic:        {(_useNativeArithmetic ? "ENABLED" : "DISABLED")}, {_nativeArithmetic:#,##0} calls
-        Structural equality:      {_stats.StructEqCalls:#,##0} calls, {_stats.StructEqSuccesses:#,##0} successes ({(_stats.StructEqCalls == 0 ? 0 : _stats.StructEqSuccesses * 100.0 / _stats.StructEqCalls):F1}%) (use :test result / :test clear)
+        // SYSTEM
+        sb.AppendLine(Section("System"));
+        sb.AppendLine(Line("Logging", _logger.LogStatus));
+        sb.AppendLine(Line("Threads", proc.Threads.Count.ToString("#,##0")));
+        sb.AppendLine(Line("GC Collections", $"Gen0={GC.CollectionCount(0)} Gen1={GC.CollectionCount(1)} Gen2={GC.CollectionCount(2)}"));
+        sb.AppendLine(Line("Process start", proc.StartTime.ToString()));
 
-        -- Memoization/Caching --
-        Cache sizes:              {cacheStats}
-        Cache hits/misses:        {_stats.CacheHits:#,##0} / {_stats.CacheMisses:#,##0} ({cacheHitRate})
-        
-        -- Performance (timings) --
-        Cache lookup time:        {_stats.TimeInCacheLookup / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInCacheLookup, totalTime)})
-        Substitution time:        {_stats.TimeInSubstitution / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInSubstitution, totalTime)}) (calls: {_stats.SubstitutionExprCount:#,##0})
-        Evaluation time:          {_stats.TimeInEvaluation / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInEvaluation, totalTime)})
-        Thunk forcing time:       {_stats.TimeInForcing / 10000.0:#,##0.00} ms ({PerOfTotal(_stats.TimeInForcing, totalTime)})
-        Total measured time:      {totalTime / 10000.0:#,##0.00} ms
-        
-        -- System --
-        Logging:                  {_logger.LogStatus}
-        Memory usage:             {memUsage:#,##0.0} KB (peak: {peakMem:#,##0.0} KB)
-        Threads:                  {threads}
-        Uptime:                   {upTime:dd\.hh\:mm\:ss}
-        GC collections:           Gen0={gen0} Gen1={gen1} Gen2={gen2}
-        Process start:            {startTime}
-        """;
+        return sb.ToString();
     }
 
         private static string ShowHelp()
