@@ -341,6 +341,16 @@ public partial class Interpreter
             lines.Add($"# ============================================================================");
             lines.Add("");
 
+            List<string> DisplayFuncDefs(string title, List<(string, Expr)> vars)
+            {
+                var result = new List<string>() { title };
+                result.AddRange([.. vars.OrderBy(v => v.Item1)
+                                .Select(v => (name: v.Item1, expr: v.Item2, isNative: IsNativeFunction(v.Item1)))
+                                .Select(v => $"  {v.name} = {FormatWithNumerals(v.expr)}{v.isNative}")]);
+                result.Add("");
+                return result;
+            }
+
             string IsNativeFunction(string key) => _nativeFunctions.ContainsKey(key) ? " # native " : "";
 
             // Save variable definitions/assignments
@@ -355,42 +365,29 @@ public partial class Interpreter
 
                 foreach (var (key, value) in _contextUnevaluated.OrderBy(kv => kv.Key))
                 {
-                    // Categorize by expression type for better file organization
-                    if (value.Type == ExprType.Abs)
-                        functionVars.Add((key, value));
-                    else if (value.Type == ExprType.Var ||
-                            (value.Type == ExprType.App && IsSimpleApplication(value)))
-                        simpleVars.Add((key, value));
-                    else
-                        complexVars.Add((key, value));
+                    switch (value.Type)
+                    {
+                        case ExprType.Abs:
+                            functionVars.Add((key, value));
+                            break;
+                        case ExprType.Var:
+                        case ExprType.App when IsSimpleApplication(value):
+                            simpleVars.Add((key, value));
+                            break;
+                        default:
+                            complexVars.Add((key, value));
+                            break;
+                    }
                 }
 
-                // Write simple variables first
                 if (simpleVars.Count > 0)
-                {
-                    lines.Add("# Simple definitions and constants");
-                    foreach (var (key, value) in simpleVars)
-                        lines.Add($"  {key} = {FormatWithNumerals(value)} {IsNativeFunction(key)}");
-                    lines.Add("");
-                }
+                    lines.AddRange(DisplayFuncDefs("# Simple definitions and constants", simpleVars));
 
-                // Write function definitions
                 if (functionVars.Count > 0)
-                {
-                    lines.Add("# Function definitions");
-                    foreach (var (key, value) in functionVars)
-                        lines.Add($"  {key} = {FormatWithNumerals(value)} {IsNativeFunction(key)}");
-                    lines.Add("");
-                }
+                    lines.AddRange(DisplayFuncDefs("# Function definitions", functionVars));
 
-                // Write complex expressions
                 if (complexVars.Count > 0)
-                {
-                    lines.Add("# Complex expressions");
-                    foreach (var (key, value) in complexVars)
-                        lines.Add($"  {key} = {FormatWithNumerals(value)} {IsNativeFunction(key)}");
-                    lines.Add("");
-                }
+                    lines.AddRange(DisplayFuncDefs("# Complex expressions", complexVars));
             }
 
             // Save infix operators first (they need to be defined before use)

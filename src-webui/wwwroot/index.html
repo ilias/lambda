@@ -293,13 +293,65 @@
       const outEl = currentOutEl();
       if(!outEl) return;
       const cls = classify(text);
-      const span = document.createElement('span');
-      if(cls) span.className = cls;
-      // Include trailing newline inside the span so hiding the span also hides its line break
-      span.textContent = text + '\n';
-      if(isFilteredSpan(span)) span.classList.add('hidden-log');
-      outEl.appendChild(span);
+      // If no explicit classification (other than maybe result/etc) and line has an inline '#', split & color comment.
+      if(!text.trimStart().startsWith('#') && text.includes('#')){
+        const hashIdx = text.indexOf('#');
+        if(hashIdx > 0){
+          const before = text.slice(0, hashIdx).replace(/\s+$/,'');
+          const comment = text.slice(hashIdx); // include '#'
+          const container = document.createElement('span');
+          if(cls) container.className = cls; // preserve any existing class (e.g., log-result)
+          const beforeNode = document.createTextNode(before + ' ');
+          const commentSpan = document.createElement('span');
+          commentSpan.className = 'log-comment';
+          commentSpan.textContent = comment;
+          container.appendChild(beforeNode);
+          container.appendChild(commentSpan);
+          container.appendChild(document.createTextNode('\n'));
+          if(isFilteredSpan(container)) container.classList.add('hidden-log');
+          outEl.appendChild(container);
+        } else {
+          const span = document.createElement('span');
+          if(cls) span.className = cls;
+          span.textContent = text + '\n';
+          if(isFilteredSpan(span)) span.classList.add('hidden-log');
+          outEl.appendChild(span);
+        }
+      } else {
+        const span = document.createElement('span');
+        if(cls) span.className = cls;
+        span.textContent = text + '\n';
+        if(isFilteredSpan(span)) span.classList.add('hidden-log');
+        outEl.appendChild(span);
+      }
       // Cap total lines by counting spans (one per line now)
+      if(outEl.childNodes.length > MAX_LOG_LINES){
+        while(outEl.childNodes.length > MAX_LOG_LINES){ outEl.removeChild(outEl.firstChild); }
+      }
+      outEl.scrollTop = outEl.scrollHeight;
+    }
+    // Append a user-entered input line (" > expr # comment") with inline comment highlighting
+    function appendUserInputLine(raw){
+      const outEl = currentOutEl();
+      if(!outEl) return;
+      // Don't color lines that are pure comments (handled by append) or commands starting with ':'
+      if(!raw || raw.trimStart().startsWith('#')){ append(raw); return; }
+      const container = document.createElement('span');
+      // Split on first unescaped '#'
+      const idx = raw.indexOf('#');
+      if(idx >= 0){
+        const before = raw.slice(0, idx).replace(/\s+$/,'');
+        const comment = raw.slice(idx); // include '#'
+        container.textContent = '> ' + before + ' ';
+        const commentSpan = document.createElement('span');
+        commentSpan.className = 'log-comment';
+        commentSpan.textContent = comment;
+        container.appendChild(commentSpan);
+        container.appendChild(document.createTextNode('\n'));
+      } else {
+        container.textContent = '> ' + raw + '\n';
+      }
+      outEl.appendChild(container);
       if(outEl.childNodes.length > MAX_LOG_LINES){
         while(outEl.childNodes.length > MAX_LOG_LINES){ outEl.removeChild(outEl.firstChild); }
       }
@@ -379,7 +431,7 @@
       try {
         for(const raw of lines) {
           const res = await evalExpr(raw);
-          append(`> ${raw}`);
+          appendUserInputLine(raw);
           if(!streaming){
             if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
             const primary = res.output || res.normalized || '(no output)';
@@ -584,7 +636,7 @@
           const expr = toEval[i];
           try {
             const res = await evalExpr(expr);
-            append(`> ${expr}`);
+            appendUserInputLine(expr);
             if(!streaming){
               if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
               const primary = res.output || res.normalized || '(no output)';
