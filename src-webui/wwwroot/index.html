@@ -16,8 +16,8 @@
   #output { width:100%; max-width:100%; box-sizing:border-box; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
   #outputTabs, #inputTabs { display:flex; gap:.35rem; margin:.4rem 0 .5rem; align-items:stretch; flex-wrap:wrap; }
   #outputTabs.inline-tabs { margin:0 .75rem 0 .75rem; }
-  #outputTabs .tab, #inputTabs .tab { position:relative; padding:.35rem .65rem; background:#0f141a; border:1px solid var(--border); border-radius:5px; cursor:pointer; font-size:.65rem; font-weight:600; letter-spacing:.05em; -webkit-user-select:none; user-select:none; display:inline-flex; align-items:center; gap:.4rem; }
-  #outputTabs .tab.active, #inputTabs .tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #outputTabs .tab, #inputTabs .tab { position:relative; padding:.35rem .65rem; background:var(--panel); border:1px solid var(--border); border-radius:5px; cursor:pointer; font-size:.65rem; font-weight:600; letter-spacing:.05em; -webkit-user-select:none; user-select:none; display:inline-flex; align-items:center; gap:.4rem; }
+  /* active tab style moved to app.css */
   #outputTabs .tab .close, #inputTabs .tab .close { font-weight:700; font-size:.75rem; line-height:1; cursor:pointer; opacity:.8; }
   #outputTabs .tab .close:hover, #inputTabs .tab .close:hover { opacity:1; }
   #addTabBtn { padding:.35rem .55rem; font-size:.7rem; }
@@ -28,8 +28,8 @@
   /* Log color classes */
   .log-error{color:#ff6b6b;} .log-comment{color:#e3b341;} .log-result{color:var(--good);} .log-norm{color:var(--good); opacity:.85;} .log-step{color:#e3b341;} .log-time{color:#58a6ff;} .log-name{color:#58a6ff;} .log-eval{color:#d2a8ff;} .log-macro{color:#58a6ff;} .log-alpha{color:#d2a8ff;} .log-alpha-pass{color:var(--good);} .log-alpha-fail{color:#ff6b6b;} .log-command{color:#ff7b72;} .log-loading{color:#76e3ea;} .log-fileline{color:#8b949e;} .log-fileresult{color:var(--good);} .log-progress{color:#58a6ff; opacity:.7;} .log-processing{color:#8b949e;}
   #filters { display:flex; flex-wrap:wrap; gap:.5rem; margin:.4rem 0 .3rem; }
-  #filters label { font-size:.55rem; letter-spacing:.08em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:#0f141a; padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
-  #filters input { margin:0; }
+  #filters label { font-size:.55rem; letter-spacing:.08em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:var(--panel); padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+  #filters input { margin:0; accent-color:var(--accent); }
   .hidden-log { display:none !important; }
   #searchFloat { position:fixed; bottom:14px; right:16px; display:none; gap:.35rem; background:rgba(22,27,34,.92); border:1px solid var(--border); padding:.4rem .55rem; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,.4); z-index:999; font-size:.6rem; align-items:center; }
   #searchFloat button { font-size:.6rem; padding:.25rem .45rem; }
@@ -43,6 +43,11 @@
     <h1 class="site-title">Lambda Calculus Interpreter</h1>
     <nav class="site-nav">
       <a href="https://github.com/ilias/lambda" target="_blank" rel="noopener">GitHub ↗</a>
+      <select id="themeSel" class="theme-select" aria-label="Theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="colorful">Colorful</option>
+      </select>
     </nav>
   </header>
   <main>
@@ -713,6 +718,16 @@
     // ---- Health + auto-init ----
   fetch(__cacheBust('/api/health'), {cache:'no-store'}).then(r=>r.ok?document.getElementById('health').textContent='ready':null).catch(()=>{});
   if(location.hash.includes('stream')) streamToggle.click();
+
+  // ---- Theme handling ----
+  (function(){
+    const sel = document.getElementById('themeSel');
+    const key='lambdaTheme';
+    function apply(t){ document.body.setAttribute('data-theme', t); try{ localStorage.setItem(key,t);}catch{} }
+    const saved = (function(){ try{return localStorage.getItem(key);}catch{return null;} })();
+    if(saved && sel.querySelector(`option[value="${saved}"]`)){ sel.value=saved; apply(saved); }
+    sel.addEventListener('change', ()=> apply(sel.value));
+  })();
   </script>
 </body>
 </html>

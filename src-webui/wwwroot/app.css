@@ -1,4 +1,11 @@
+/* Theme Variables */
 :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --accent:#58a6ff; --text:#c9d1d9; --bad:#ff6b6b; --good:#3fb950; }
+body[data-theme='dark'] { --bg:#0d1117; --panel:#161b22; --border:#30363d; --accent:#58a6ff; --text:#c9d1d9; --bad:#ff6b6b; --good:#3fb950; }
+body[data-theme='light'] { --bg:#f6f8fa; --panel:#ffffff; --border:#d0d7de; --accent:#0969da; --text:#24292f; --bad:#d1242f; --good:#1a7f37; }
+body[data-theme='colorful'] { --bg:#1e0028; --panel:#2d0a3f; --border:#5e2e7e; --accent:#ff8a3d; --text:#f6ecff; --bad:#ff4d6d; --good:#5af29d; }
+body[data-theme='light'] .output-pane, body[data-theme='light'] textarea, body[data-theme='light'] input[type=text] { background:#ffffff; }
+body[data-theme='colorful'] .output-pane, body[data-theme='colorful'] textarea, body[data-theme='colorful'] input[type=text] { background:#330f49; }
+body[data-theme] { transition:background-color .25s ease, color .25s ease; }
 body { font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); margin:0; }
 
 /* Layout */
@@ -6,6 +13,9 @@ body { font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; backgr
 .site-title { margin:0; font-size:1.25rem; }
 .site-nav { display:flex; align-items:center; gap:.75rem; font-size:.75rem; flex-wrap:wrap; }
 .site-nav a, .site-nav button { color:var(--accent); text-decoration:none; font-weight:600; }
+.theme-select { background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:5px; font-size:.65rem; padding:.3rem .5rem; }
+body[data-theme='light'] .theme-select { background:#ffffff; }
+body[data-theme='colorful'] .theme-select { background:#2d0a3f; }
 .link-btn { background:transparent; border:0; cursor:pointer; font:inherit; padding:0; }
 .flex { display:flex; }
 .flex-wrap { flex-wrap:wrap; }
@@ -88,3 +98,23 @@ button.tiny { font-size:.6rem; padding:.3rem .5rem; }
 .input-pane.active { display:block; }
 /* README pre */
 .readme-md { max-height:600px; overflow:auto; font-size:.7rem; background:#0f141a; border:1px solid var(--border); padding:.85rem 1rem; border-radius:6px; }
+
+/* Tabs (inactive styles harmonized with themes) */
+#outputTabs .tab, #inputTabs .tab { background:var(--panel); }
+body[data-theme='light'] #outputTabs .tab, body[data-theme='light'] #inputTabs .tab { background:#ffffff; }
+body[data-theme='light'] #outputTabs .tab, body[data-theme='light'] #inputTabs .tab { color:#24292f; }
+body[data-theme='colorful'] #outputTabs .tab, body[data-theme='colorful'] #inputTabs .tab { background:#2d0a3f; }
+#outputTabs .tab:not(.active):hover, #inputTabs .tab:not(.active):hover { background:rgba(0,0,0,.05); }
+body[data-theme='dark'] #outputTabs .tab:not(.active):hover, body[data-theme='dark'] #inputTabs .tab:not(.active):hover { background:#1f2630; }
+body[data-theme='colorful'] #outputTabs .tab:not(.active):hover, body[data-theme='colorful'] #inputTabs .tab:not(.active):hover { background:#3a1452; }
+/* Active tabs (ensure contrast in light theme) */
+#outputTabs .tab.active, #inputTabs .tab.active { background:var(--accent) !important; color:#fff !important; border-color:var(--accent) !important; }
+/* Focus outline for keyboard users */
+#outputTabs .tab:focus-visible, #inputTabs .tab:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+/* Filters (log type toggles) moved from inline styles */
+#filters { display:flex; flex-wrap:wrap; gap:.5rem; margin:.4rem 0 .3rem; }
+#filters label { font-size:.55rem; letter-spacing:.08em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:var(--panel); padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+#filters input { margin:0; accent-color:var(--accent); }
+body[data-theme='light'] #filters label { background:#ffffff; }
+body[data-theme='colorful'] #filters label { background:#2d0a3f; }
