@@ -141,7 +141,7 @@ public partial class Interpreter
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("╔══════════════════════════════════════════════════════════════════════╗");
-        sb.AppendLine("║  Lambda Interpreter Statistics                                        ║");
+        sb.AppendLine("║  Lambda Interpreter Statistics                                       ║");
         sb.AppendLine("╚══════════════════════════════════════════════════════════════════════╝");
 
         // SUMMARY
@@ -183,18 +183,26 @@ public partial class Interpreter
         sb.AppendLine(Line("Cache hit ratio", Bar(cacheHitFrac)));
         foreach (var l in cacheSizeLines) sb.AppendLine(l);
 
-        // USAGE
-        if (_stats.MacroUsage.Count > 0)
+        // USAGE (combined)
+        if (_stats.MacroUsage.Count > 0 || _stats.NativeUsage.Count > 0)
         {
-            sb.AppendLine(Section("Macro Usage (top 10)"));
-            sb.AppendLine("  Name                      Uses");
-            foreach (var l in macroLines) sb.AppendLine(l);
-        }
-        if (_stats.NativeUsage.Count > 0)
-        {
-            sb.AppendLine(Section("Native Usage (top 10)"));
-            sb.AppendLine("  Name                      Uses");
-            foreach (var l in nativeLines) sb.AppendLine(l);
+            sb.AppendLine(Section("Usage (top 10 each)"));
+            sb.AppendLine("  Macro Name                Uses    │  Native Name               Uses");
+            sb.AppendLine("  ------------------------- --------┼------------------------- --------");
+            // Pair rows side-by-side
+            var macroArr = macroLines.ToList();
+            var nativeArr = nativeLines.ToList();
+            var rows = Math.Max(macroArr.Count, nativeArr.Count);
+            for (int i = 0; i < rows; i++)
+            {
+                var left = i < macroArr.Count ? macroArr[i] : string.Empty;
+                var right = i < nativeArr.Count ? nativeArr[i] : string.Empty;
+                // Strip leading double spaces used for indentation in original lines
+                if (left.StartsWith("  ")) left = left[2..];
+                if (right.StartsWith("  ")) right = right[2..];
+                left = left.PadRight(34); // ensure alignment (name+spaces to before separator)
+                sb.AppendLine($"  {left}│  {right}");
+            }
         }
 
         // SYSTEM
