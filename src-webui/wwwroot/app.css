@@ -79,6 +79,10 @@ button.tiny { font-size:.6rem; padding:.3rem .5rem; }
 .progress { margin-top:.4rem; height:6px; background:#222; border:1px solid var(--border); border-radius:4px; overflow:hidden; display:none; }
 .progress-bar { height:100%; width:0; background:var(--accent); transition:width .25s; }
 .anchor-highlight { outline:1px solid var(--accent); }
+/* Inline output tabs alignment */
+.bar-results { align-items:flex-start; }
+.label-small.mt-aligned { margin-top:.4rem; }
+.push-right { margin-left:auto; }
 /* Input panes */
 .input-pane { height:130px; width:100%; margin-top:.5rem; margin-bottom:0; display:none; background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.6rem .7rem; font-family:ui-monospace,Consolas,monospace; font-size:.95rem; resize:vertical; }
 .input-pane.active { display:block; }

@@ -15,6 +15,7 @@
   .full-span { grid-column:1 / -1; }
   #output { width:100%; max-width:100%; box-sizing:border-box; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
   #outputTabs, #inputTabs { display:flex; gap:.35rem; margin:.4rem 0 .5rem; align-items:stretch; flex-wrap:wrap; }
+  #outputTabs.inline-tabs { margin:0 .75rem 0 .75rem; }
   #outputTabs .tab, #inputTabs .tab { position:relative; padding:.35rem .65rem; background:#0f141a; border:1px solid var(--border); border-radius:5px; cursor:pointer; font-size:.65rem; font-weight:600; letter-spacing:.05em; -webkit-user-select:none; user-select:none; display:inline-flex; align-items:center; gap:.4rem; }
   #outputTabs .tab.active, #inputTabs .tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   #outputTabs .tab .close, #inputTabs .tab .close { font-weight:700; font-size:.75rem; line-height:1; cursor:pointer; opacity:.8; }
@@ -82,17 +83,17 @@
     </section>
     <section class="full-span" aria-label="Result Log">
       <div class="bar bar-results">
-        <label for="output" class="label-small">Result / Log</label>
-        <div id="searchBox" class="search-box inline">
+        <label for="output" class="label-small mt-aligned">Result / Log</label>
+        <div id="outputTabs" class="inline-tabs"></div>
+        <div id="searchBox" class="search-box inline push-right">
           <input id="searchInput" type="text" placeholder="Search" class="search-input" />
           <button class="secondary tiny" id="searchPrev" type="button">Prev</button>
           <button class="secondary tiny" id="searchNext" type="button">Next</button>
           <button class="secondary tiny" id="searchClear" type="button">Clear</button>
         </div>
       </div>
-  <div id="filters"></div>
-  <div id="outputTabs"></div>
-  <div id="outputPanes"></div>
+      <div id="filters"></div>
+      <div id="outputPanes"></div>
     </section>
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
