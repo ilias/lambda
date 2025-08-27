@@ -18,13 +18,15 @@ body { font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; backgr
 .hidden { display:none !important; }
 
 /* Buttons */
-button { cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:.55rem .9rem; font-size:.9rem; font-weight:600; display:inline-flex; gap:.4rem; align-items:center; }
+button { cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:5px; padding:.35rem .65rem; font-size:.65rem; font-weight:600; display:inline-flex; gap:.4rem; align-items:center; letter-spacing:.05em; }
 button.secondary { background:transparent; color:var(--accent); }
 button:disabled { opacity:.5; cursor:default; }
 
 /* Forms */
 textarea, input[type=text] { background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.6rem .7rem; font-family:ui-monospace,Consolas,monospace; font-size:.95rem; resize:vertical; }
 textarea:focus, input:focus { outline:1px solid var(--accent); }
+#filePath { font-size:.65rem; }
+#searchInput { font-size:.65rem; }
 label { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.25rem; opacity:.85; }
 .status { font-size:.75rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; }
 .small { font-size:.7rem; opacity:.7; }
@@ -73,7 +75,7 @@ footer { text-align:center; font-size:.65rem; opacity:.7; margin:3rem 0 0; }
 .label-small { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; opacity:.85; }
 .search-box.inline { position:static; background:transparent; padding:0; }
 .search-input { width:140px; font-size:.65rem; padding:.4rem .5rem; }
-button.tiny { font-size:.6rem; padding:.35rem .5rem; }
+button.tiny { font-size:.6rem; padding:.3rem .5rem; }
 .progress { margin-top:.4rem; height:6px; background:#222; border:1px solid var(--border); border-radius:4px; overflow:hidden; display:none; }
 .progress-bar { height:100%; width:0; background:var(--accent); transition:width .25s; }
 .anchor-highlight { outline:1px solid var(--accent); }
