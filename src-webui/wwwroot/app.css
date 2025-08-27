@@ -1,0 +1,84 @@
+:root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --accent:#58a6ff; --text:#c9d1d9; --bad:#ff6b6b; --good:#3fb950; }
+body { font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); margin:0; }
+
+/* Layout */
+.site-header { padding:1rem 1.5rem; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.site-title { margin:0; font-size:1.25rem; }
+.site-nav { display:flex; align-items:center; gap:.75rem; font-size:.75rem; flex-wrap:wrap; }
+.site-nav a, .site-nav button { color:var(--accent); text-decoration:none; font-weight:600; }
+.link-btn { background:transparent; border:0; cursor:pointer; font:inherit; padding:0; }
+.flex { display:flex; }
+.flex-wrap { flex-wrap:wrap; }
+.gap-sm { gap:.35rem; }
+.gap-md { gap:.75rem; }
+.gap-lg { gap:1rem; }
+.space-between { justify-content:space-between; }
+.items-center { align-items:center; }
+.nowrap { white-space:nowrap; }
+.hidden { display:none !important; }
+
+/* Buttons */
+button { cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:.55rem .9rem; font-size:.9rem; font-weight:600; display:inline-flex; gap:.4rem; align-items:center; }
+button.secondary { background:transparent; color:var(--accent); }
+button:disabled { opacity:.5; cursor:default; }
+
+/* Forms */
+textarea, input[type=text] { background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.6rem .7rem; font-family:ui-monospace,Consolas,monospace; font-size:.95rem; resize:vertical; }
+textarea:focus, input:focus { outline:1px solid var(--accent); }
+label { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.25rem; opacity:.85; }
+.status { font-size:.75rem; letter-spacing:.05em; text-transform:uppercase; font-weight:600; }
+.small { font-size:.7rem; opacity:.7; }
+
+/* Help page */
+.help-header { background:var(--panel); padding:1rem 1.5rem; border-bottom:1px solid var(--border); }
+.help-main { max-width:1200px; margin:0 auto; padding:1.25rem 1.4rem 3rem; }
+.badge { display:inline-block; background:#1f2630; border:1px solid var(--border); padding:.15rem .45rem; border-radius:4px; font-size:.6rem; letter-spacing:.05em; text-transform:uppercase; }
+.search-box { position:sticky; top:0; background:linear-gradient(var(--panel),rgba(13,17,23,0.85)); padding:.75rem 0 1rem; -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); z-index:10; }
+#filter { width:260px; max-width:100%; background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.55rem .65rem; font-size:.75rem; }
+.toc { font-size:.7rem; display:flex; flex-wrap:wrap; gap:.5rem 1.1rem; line-height:1.3; }
+.section { scroll-margin-top:72px; }
+.section h2 { margin:2.4rem 0 .75rem; font-size:1.05rem; letter-spacing:.05em; text-transform:uppercase; display:flex; gap:.5rem; align-items:center; }
+.section h2 .anchor-link { opacity:0; transition:opacity .2s; font-size:.75rem; }
+.section:hover h2 .anchor-link, .section h2:focus-within .anchor-link { opacity:1; }
+pre, code { font-family:ui-monospace,Consolas,monospace; font-size:.85rem; }
+pre { background:#0f141a; border:1px solid var(--border); padding:.85rem 1rem; border-radius:6px; overflow:auto; }
+.copy { cursor:pointer; }
+.table-wrap { overflow:auto; }
+.table-wrap table { border-collapse:collapse; font-size:.7rem; width:100%; }
+.table-wrap th, .table-wrap td { border:1px solid var(--border); padding:.4rem .5rem; text-align:left; vertical-align:top; }
+blockquote { margin:1rem 0; border-left:3px solid var(--accent); padding:.4rem .75rem; background:#121820; }
+footer { text-align:center; font-size:.65rem; opacity:.7; margin:3rem 0 0; }
+.anchor-copy-flash { outline:1px solid var(--accent); }
+
+/* Tabs & panes (original UI reused) */
+.output-pane { background:#0f141a; border:1px solid var(--border); border-radius:6px; padding:.75rem; width:100%; box-sizing:border-box; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; line-height:1.3; font-size:.85rem; }
+
+/* Utility */
+.mt-0 { margin-top:0; }
+.mb-0 { margin-bottom:0; }
+.m-0 { margin:0; }
+
+/* Safari fallback note: backdrop-filter already prefixed above */
+
+/* ---- Added classes for refactored inline styles (index.html) ---- */
+.bar { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; }
+.bar-space { justify-content:space-between; }
+.flex-tabs { display:flex; gap:.35rem; flex-wrap:wrap; align-items:stretch; }
+.expr-area { height:130px; display:none; }
+.m0, .mt0 { margin-top:0; }
+.mt-sm { margin-top:.5rem; }
+.rule { margin:1rem 0; border:0; border-top:1px solid var(--border); }
+.examples-list { margin:.25rem 0 0 1.1rem; padding:0; font-size:.8rem; line-height:1.4; }
+.bar-results { display:flex; flex-wrap:wrap; gap:.75rem; align-items:flex-end; justify-content:space-between; }
+.label-small { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; opacity:.85; }
+.search-box.inline { position:static; background:transparent; padding:0; }
+.search-input { width:140px; font-size:.65rem; padding:.4rem .5rem; }
+button.tiny { font-size:.6rem; padding:.35rem .5rem; }
+.progress { margin-top:.4rem; height:6px; background:#222; border:1px solid var(--border); border-radius:4px; overflow:hidden; display:none; }
+.progress-bar { height:100%; width:0; background:var(--accent); transition:width .25s; }
+.anchor-highlight { outline:1px solid var(--accent); }
+/* Input panes */
+.input-pane { height:130px; width:100%; margin-top:.5rem; margin-bottom:0; display:none; background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.6rem .7rem; font-family:ui-monospace,Consolas,monospace; font-size:.95rem; resize:vertical; }
+.input-pane.active { display:block; }
+/* README pre */
+.readme-md { max-height:600px; overflow:auto; font-size:.7rem; background:#0f141a; border:1px solid var(--border); padding:.85rem 1rem; border-radius:6px; }
