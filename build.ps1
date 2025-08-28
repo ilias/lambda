@@ -3,7 +3,6 @@ Param(
 	[switch]$Pack,            # dotnet pack core library
 	[string]$Version,         # optional override package version
 	[switch]$NoDocker,        # skip docker image build
-	[switch]$Wasm,            # publish WASM project
 	[switch]$CleanArtifacts,  # remove artifacts folder first
 	[switch]$Validate,        # validate presence of package content files
 	[switch]$SkipPackOnError, # if validation fails, skip pack instead of stopping
@@ -54,13 +53,6 @@ if($Pack){
 	dotnet @packArgs
 }
 
-if($Wasm){
-	if(-not (Test-Path $Output)) { New-Item -ItemType Directory -Path $Output | Out-Null }
-	$wasmOut = Join-Path $Output 'wasm'
-	Write-Host "[wasm] Publishing WebAssembly host to '$wasmOut'" -ForegroundColor Cyan
-	dotnet publish src-wasm/lambda-cek.wasm.csproj -c Release -o $wasmOut --nologo
-}
-
 if(-not $NoDocker){
 	$name = 'lambda-cek-webui'
 	$altName = 'lambda-webui'
@@ -94,7 +86,6 @@ Write-Host "[done] Build pipeline completed." -ForegroundColor Green
 # CLI: dotnet run --project src-cli
 # Web API: dotnet run --project src-web
 # Web UI: dotnet run --project src-webui
-# WASM: dotnet publish src-wasm -c Release -o artifacts\wasm then serve that folder
 # Pack: dotnet pack src/lambda-cek.csproj -c Release -o artifacts
-# All-in-one: .\build.ps1 -Pack -Wasm (add -NoDocker if you don’t need the image)
+# All-in-one: .\build.ps1 -Pack (add -NoDocker if you don’t need the image)
 # Validate only: .\build.ps1 -Pack -Validate -SkipPackOnError
