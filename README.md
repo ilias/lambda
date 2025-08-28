@@ -1874,12 +1874,10 @@ Artifacts planned / available:
     `dotnet add package LambdaCalculus.Interpreter`
 - CLI tool project (`src-cli`) provides interactive REPL (build: `dotnet run --project src-cli`).
 - Web host (`src-web` / `src-webui`) serves browser UI.
-<!-- WASM build removed (src-wasm) -->
 
 ### Roadmap
 
 - Add GitHub Actions workflow to pack & push NuGet on tagged release.
-<!-- WASM demo publication removed -->
 - Provide minimal JS interop API (evaluate, normalize, stats) for embedding.
 
 ## Build & Run Guide
@@ -1891,7 +1889,6 @@ This section summarizes how to build and run each form of the interpreter: core 
 - .NET 8 SDK (required). Optional: .NET 9 preview for multi-target build; ignore preview warning if not needed.
 - PowerShell (examples assume Windows `pwsh`).
 - (Optional) Docker Desktop for container build of Web UI.
-<!-- Static file server note (WASM) removed -->
 
 ### 1. Core Library (NuGet Package)
 
@@ -2031,7 +2028,6 @@ In REPL: `:load tests.lambda`
 | NETSDK1057 preview warning | net9.0 preview | Ignore or remove `net9.0` from `TargetFrameworks` |
 | HTTPS trust prompt | Dev cert untrusted | `dotnet dev-certs https --trust` |
 | Port in use | Conflict with existing process | Use `--urls` to pick another port |
-<!-- WASM troubleshooting entry removed -->
 
 ### 9. Quick Command Reference
 
@@ -2042,10 +2038,9 @@ In REPL: `:load tests.lambda`
 | CLI REPL | `dotnet run --project src-cli/lambda-cek.cli.csproj` |
 | Web UI | `dotnet run --project src-webui/lambda-cek.webui.csproj` |
 | Web API | `dotnet run --project src-web/lambda-cek.web.csproj` |
-<!-- WASM publish command removed -->
 | Docker image | `docker build -t lambda-cek-webui -f src-webui/Dockerfile .` |
 
 ---
 
-<!-- WASM JS interop note removed -->
+
 
