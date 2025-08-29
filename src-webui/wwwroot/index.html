@@ -40,6 +40,9 @@
   #scrollBottomBtn, #scrollTopBtn { position:fixed; z-index:1000; padding:.4rem .55rem; font-size:.65rem; }
   #scrollBottomBtn { top:10px; right:10px; }
   #scrollTopBtn { bottom:10px; right:10px; }
+  .max-lines-wrap { display:flex; align-items:center; gap:.35rem; margin-left:.75rem; }
+  .max-lines-wrap label { font-size:.55rem; letter-spacing:.08em; font-weight:600; text-transform:uppercase; }
+  #maxLinesInput { width:5.2rem; padding:.15rem .3rem; font-size:.55rem; }
   </style>
 </head>
 <body>
@@ -94,6 +97,10 @@
       <div class="bar bar-results">
         <label for="output" class="label-small mt-aligned">Result / Log</label>
         <div id="outputTabs" class="inline-tabs"></div>
+        <div class="inline small max-lines-wrap">
+          <label for="maxLinesInput">Max Lines</label>
+          <input id="maxLinesInput" type="number" min="100" max="200000" step="100" value="4000" title="Maximum lines retained per log tab" />
+        </div>
         <div id="searchBox" class="search-box inline push-right">
           <input id="searchInput" type="text" placeholder="Search" class="search-input" />
           <button class="secondary tiny" id="searchPrev" type="button">Prev</button>
@@ -322,7 +329,21 @@
   searchCount = document.getElementById('searchCount');
 
     // ---- Log classification & append (with cap) ----
-    const MAX_LOG_LINES = 4000;
+    const maxLinesInput = document.getElementById('maxLinesInput');
+    let maxLogLines = parseInt(maxLinesInput?.value,10) || 4000;
+    if(maxLinesInput){
+      maxLinesInput.addEventListener('change', ()=>{
+        const v = parseInt(maxLinesInput.value,10);
+        if(!isNaN(v) && v>0){
+          maxLogLines = v;
+          // Trim existing panes immediately
+          tabs.forEach(t=>{
+            const el = t.preEl; if(!el) return;
+            while(el.childNodes.length > maxLogLines){ el.removeChild(el.firstChild); }
+          });
+        }
+      });
+    }
     function classify(line){
       const s = line.trimStart();
       if(s.startsWith('PROGRESS::')) return 'log-progress';
@@ -381,8 +402,8 @@
         outEl.appendChild(span);
       }
       // Cap total lines by counting spans (one per line now)
-      if(outEl.childNodes.length > MAX_LOG_LINES){
-        while(outEl.childNodes.length > MAX_LOG_LINES){ outEl.removeChild(outEl.firstChild); }
+      if(outEl.childNodes.length > maxLogLines){
+        while(outEl.childNodes.length > maxLogLines){ outEl.removeChild(outEl.firstChild); }
       }
       outEl.scrollTop = outEl.scrollHeight;
     }
@@ -425,8 +446,8 @@
         container.textContent = '> ' + raw + '\n';
       }
       outEl.appendChild(container);
-      if(outEl.childNodes.length > MAX_LOG_LINES){
-        while(outEl.childNodes.length > MAX_LOG_LINES){ outEl.removeChild(outEl.firstChild); }
+      if(outEl.childNodes.length > maxLogLines){
+        while(outEl.childNodes.length > maxLogLines){ outEl.removeChild(outEl.firstChild); }
       }
       outEl.scrollTop = outEl.scrollHeight;
     }
