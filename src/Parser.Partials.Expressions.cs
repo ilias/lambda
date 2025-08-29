@@ -212,6 +212,7 @@ public partial class Parser
     {
         if (op.Symbol == ".") return Expr.App(left, right);
         if (op.Symbol == "|>") return Expr.App(right, left);
+    if (op.Symbol == "$") return Expr.App(left, right);
         var f = Expr.Var(op.GetFunctionName());
         return Expr.App(Expr.App(f, left), right);
     }

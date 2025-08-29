@@ -21,6 +21,14 @@ internal sealed class Tokenizer
                 continue; // skip to newline
             }
 
+            // Preserve macro variable prefix usage: `$name` must tokenize as Dollar + Term, not infix `$`.
+            if (ch == '$' && i + 1 < input.Length && char.IsLetter(input[i+1]))
+            {
+                Flush();
+                result.Add(new Token(TokenType.Dollar, pos));
+                continue;
+            }
+
             // Whitespace acts as a delimiter between terms; ensure we flush accumulated term
             if (char.IsWhiteSpace(ch))
             {

@@ -370,6 +370,15 @@ alphaEq (inc . double2 . square . 2) 9
 alphaEq (double2 . inc . square . 2) 10
 alphaEq (inc . double2 . 3 |> square) 49
 
+# --- Application operator ($) tests ---
+alphaEq (succ (pred 5)) (succ $ pred 5)
+alphaEq (succ (pred (succ 4))) (succ $ pred $ succ 4)
+alphaEq (map (λx.mult x x) (filter (λx.gt x 2) (range 6))) (map (λx.mult x x) $ filter (λx.gt x 2) $ range 6)
+
+# Macro with $ usage
+:macro (m $x) => succ $x
+alphaEq (m 4) 5
+
 # --- Advanced Multi-Feature Tests ---
 alphaEq (foldr plus 0 (filter (λx.gt x 2) (map (λx.mult x x) (range 5)))) 29
 alphaEq (let double2 = x -> x * 2 in (map double2 [1,2,3,4]) |> (filter (x -> x > 4))) [6,8]
@@ -397,6 +406,15 @@ alphaEq ((x, _ -> x) 42 99) 42
 alphaEq (let f = \_ . 123 in f 456) 123
 alphaEq (let g = \_ _ . 1 in g 2 3) 1
 alphaEq (let h = \_ y . y in h 0 9) 9
+
+# --- def function definition sugar ---
+def inc2 x = x + 1
+def add2 x y = x + y
+def const42 = 42
+alphaEq (inc2 5) 6
+alphaEq (add2 3 4) 7
+alphaEq const42 42
+alphaEq (let z = 10 in add2 (inc2 z) const42) 53
 
 # Macro System Tests
 :macro (letbind $var $val $expr) => ((λ$var.$expr) $val)

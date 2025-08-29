@@ -388,6 +388,30 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 (mult 2) . succ         # Composition operator: right-to-left function building
 3 + 4 * 5               # Infix arithmetic (when operators are defined) → 23
 
+# Application operator (predefined)
+# $ has lowest precedence (1) and is right-associative; f $ x ≡ f x
+succ (pred 5)            # Standard parentheses
+succ $ pred 5            # Same, parentheses removed
+succ $ pred $ succ 4     # Right associative chaining
+map (λx.mult x x) (filter (λx.gt x 2) (range 6))
+map (λx.mult x x) $ filter (λx.gt x 2) $ range 6   # Clearer without nesting
+
+# def function definition sugar
+def inc x = x + 1        # Desugars to: inc = x -> x + 1
+def add x y = x + y      # Desugars to: add = x,y -> x + y
+def id x = x             # Same as: id = x -> x
+def answer = 42          # No parameters ⇒ answer = 42 (no arrow introduced)
+inc 5                    # 6
+add 3 4                  # 7
+answer                   # 42
+
+# Formally:
+# def f p1 p2 ... pn = body  ⇒  f = p1,p2,...,pn -> body
+# def f = expr               ⇒  f = expr
+# - Parameters are a flat sequence of identifiers until '='.
+# - Works equally at top level or inside loaded files / sequences.
+# - `f` can also be an infix operator symbol previously declared (rare: for clarity keep alphanumeric names).
+
 # Comments
 # This is a comment
 

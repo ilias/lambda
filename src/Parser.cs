@@ -3,18 +3,19 @@
  Minimal Grammar (Single Source of Truth)
  Generated from parser rules below
 ----------------------------------------
- program        ::= expr (';' expr)*                // ParseProgram
- expr           ::= letExpr | arrowExpr | infixExpr // ParseExpression
- letExpr        ::= 'let' bindings 'in' expr        // ParseLetExpr
- bindings       ::= binding (',' binding)*          // ParseLetExpr (multi-binding)
- binding        ::= name '=' expr                   // ParseLetExpr (single binding)
- arrowExpr      ::= paramList '->' expr             // ParseArrowExpr
+ program        ::= expr (';' expr)*                      // ParseProgram
+ expr           ::= letExpr | arrowExpr | infixExpr       // ParseExpression
+ letExpr        ::= 'let' bindings 'in' expr              // ParseLetExpr
+ bindings       ::= binding (',' binding)*                // ParseLetExpr (multi-binding)
+ binding        ::= name '=' expr                         // ParseLetExpr (single binding)
+ arrowExpr      ::= paramList '->' expr                   // ParseArrowExpr
  paramList      ::= name (',' name)* | '(' name (',' name)* ')' // IsArrowParamListAhead
- infixExpr      ::= appExpr (infixOp appExpr)*      // ParseApplication + Pratt
- appExpr        ::= primary (primary)*              // ParseApplication
+ infixExpr      ::= appExpr (infixOp appExpr)*            // ParseApplication + Pratt
+ appExpr        ::= primary (primary)*                    // ParseApplication
  primary        ::= integer | name | '(' expr ')' | listExpr // ParsePrimary
- listExpr       ::= '[' exprList ']'                // ParseListExpr
- exprList       ::= expr (',' expr)*                // ParseListExpr
+ listExpr       ::= '[' exprList ']'                      // ParseListExpr
+ exprList       ::= expr (',' expr)*                      // ParseListExpr
+ defFunction    ::= 'def' name name* '=' expr             // (syntactic sugar) ⇒ name = p1,p2 -> expr
  macroDef       ::= ':macro' '(' name pattern* ')' ['when' guard] '=>' transformation // MacroExpander.ParseMacroDefinition
  pattern        ::= '$' name ['...'] | '(' pattern* ')' | name // MacroExpander.ParseMacroPattern
  guard          ::= expr                            // MacroExpander.ParseMacroGuardExpression
@@ -67,6 +68,7 @@ public partial class Parser
     {
         _logger = null;
         DefineInfixOperator("|>", 1, "left");
+    DefineInfixOperator("$", 1, "right");
         DefineInfixOperator(".", 9, "right");
         _tokenizer = new Tokenizer(this);
         _macroExpander = new MacroExpander(this, null);
@@ -76,6 +78,7 @@ public partial class Parser
     {
         _logger = logger;
         DefineInfixOperator("|>", 1, "left");
+    DefineInfixOperator("$", 1, "right");
         DefineInfixOperator(".", 9, "right");
         _tokenizer = new Tokenizer(this);
         _macroExpander = new MacroExpander(this, logger, interpreter);
@@ -142,6 +145,53 @@ public partial class Parser
             if (e < s) continue;
             var slice = tokens.GetRange(s, e - s + 1);
             if (slice.Count == 0) continue;
+            // 'def' function definition sugar: def f x y = body  ==>  f = x,y -> body
+            if (slice[0].Type == TokenType.Term && slice[0].Value == "def")
+            {
+                if (slice.Count < 4) // def name = expr  (or missing parts)
+                {
+                    // Fall through to normal handling if malformed; will likely raise parse error later
+                }
+                else
+                {
+                    // Find '=' token position
+                    int eqIndex = slice.FindIndex(t => t.Type == TokenType.Equals);
+                    if (eqIndex > 1 && eqIndex != -1)
+                    {
+                        var nameTok = slice[1];
+                        if (nameTok.Type == TokenType.Term || nameTok.Type == TokenType.InfixOp)
+                        {
+                            var paramTokens = slice.Skip(2).Take(eqIndex - 2).Where(t => t.Type == TokenType.Term).ToList();
+                            var bodyTokens = slice.Skip(eqIndex + 1).ToList();
+                            if (bodyTokens.Count > 0)
+                            {
+                                var transformed = new List<Token>();
+                                transformed.Add(new Token(nameTok.Type, nameTok.Position, nameTok.Value));
+                                transformed.Add(new Token(TokenType.Equals, nameTok.Position, "="));
+                                if (paramTokens.Count == 0)
+                                {
+                                    // Simple assignment: def f = body  ==> f = body
+                                    transformed.AddRange(bodyTokens);
+                                }
+                                else
+                                {
+                                    // Build param list with commas, then arrow, then body
+                                    for (int pi = 0; pi < paramTokens.Count; pi++)
+                                    {
+                                        transformed.Add(new Token(TokenType.Term, paramTokens[pi].Position, paramTokens[pi].Value));
+                                        if (pi < paramTokens.Count - 1)
+                                            transformed.Add(new Token(TokenType.Comma, paramTokens[pi].Position, ","));
+                                    }
+                                    transformed.Add(new Token(TokenType.Arrow, bodyTokens[0].Position, "->"));
+                                    transformed.AddRange(bodyTokens);
+                                }
+                                // Re-parse transformed slice as if user wrote the desugared form
+                                slice = transformed;
+                            }
+                        }
+                    }
+                }
+            }
             if (slice[0].Type == TokenType.Macro)
             {
                 _macroExpander.ParseAndStoreMacroDefinition(slice);

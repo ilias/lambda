@@ -46,6 +46,12 @@ B        = λx y z.x (y z)
 C        = λx y z.x z y
 # Y        = λf.(λx.f (x x)) (λx.f (x x)) # The Y combinator is defined natively by the interpreter for recursion.
 
+# Built-in infix operators (predefined in parser):
+#   |>  (pipeline, precedence 1 left)   a |> f      ==> f a
+#   $   (application, precedence 1 right) f $ x    ==> f x   (right-assoc chains remove parentheses)
+#   .   (composition, precedence 9 right) f . x    ==> f x   (implemented as left application chain)
+# You can still override or shadow with :infix if needed (not recommended for $ / |> / .).
+
 # -----------------------------------------------------------------------------
 # 1.2. Boolean Logic and Conditionals
 #
