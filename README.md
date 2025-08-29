@@ -48,8 +48,8 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - **Macro System**: Powerful pattern-driven macro system (multi-clause, guards, variadic/rest arguments, precedence & shadowing)
 - **Native Arithmetic & User Primitives**: Optional native arithmetic optimizations for Church numerals, plus support for user-defined native primitives (see below)
 - **Pretty Printing**: Automatic formatting of Church numerals and lists
-- **Comprehensive Standard Library**: Over 200 predefined functions and utilities
-- **General & Stepped Ranges**: Rich list range syntax `[a .. b]`, `[a, b .. c]` with lazy dynamic expansion
+- **Comprehensive Standard Library**: ~200 predefined functions and utilities (see sections below; count may evolve)
+- **General & Stepped Ranges**: Rich list range syntax `[a .. b]`, `[a, b .. c]` with lazy dynamic expansion (supports negative & descending ranges)
 
 ### Performance Optimizations
 
@@ -1347,20 +1347,20 @@ This section demonstrates sophisticated applications combining multiple features
 ### Complex Function Composition and Pipelines
 
 ```lambda
-# Building sophisticated data processing pipelines
-processNumbers = 
-    filter (_ > 5) . 
-    map (square . succ) . 
-    takeWhile (_ < 100)
+# Building sophisticated data processing pipelines (helpers shown all exist)
+processNumbers =
+    filter (_ > 5) .          # narrow early
+    map (square . succ) .     # transform (x+1)^2
+    filter (_ < 101)          # emulate upper bound (takeWhile not in stdlib)
 
-processNumbers [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-# → [36, 49, 64, 81, 100] (filter > 5, then (x+1)², while < 100)
+processNumbers [1,2,3,4,5,6,7,8,9,10]
+# → [49, 64, 81, 100]
 
-# Alternative with pipeline operator for readability
-[1, 2, 3, 4, 5, 6, 7, 8, 9, 10] 
-    |> takeWhile (_ < 100)
-    |> map (square . succ)
+# Alternative left-to-right style using the pipeline operator
+[1,2,3,4,5,6,7,8,9,10]
     |> filter (_ > 5)
+    |> map (square . succ)
+    |> filter (_ < 101)
 
 # Combining macros with pipelines
 :macro (between $x $low $high) => (and (geq $x $low) (leq $x $high))
@@ -1374,44 +1374,28 @@ processData =
 processData [-5, 15, 25, 105, 75]  # → [31, 51, 151] after clamping, filtering, transforming
 ```
 
+> Earlier drafts referenced `takeWhile`; it is **not implemented** in the distributed stdlib. Substitute a final `filter` (as above) or define your own helper.
+
 ### Advanced Macro Patterns
 
+#### Conceptual DSL (Illustrative – Not in Stdlib)
+
+The following macros reference imaginary helpers (`record`, `get`, `sortBy`, `groupWith`, `fromList`, `lookup`). They are *not provided*; they show how you could layer a DSL on top.
+
 ```lambda
-# Creating domain-specific languages with macros
-:macro (from $collection) => $collection
-:macro (where $predicate) => (filter $predicate)
-:macro (select $transform) => (map $transform)
-:macro (orderBy $keyFunc) => (sortBy $keyFunc)
-:macro (groupBy $keyFunc) => (groupWith (eq . $keyFunc))
+:macro (from $xs) => $xs
+:macro (where $p) => (filter $p)
+:macro (select $f) => (map $f)
+# :macro (orderBy $k) => (sortBy $k)        # needs sortBy implementation
+# :macro (groupBy $k) => (groupWith (eq . $k))
 
-# Usage: SQL-like queries in lambda calculus
-people = [
-    (record "name" "Alice" "age" 30 "dept" "Engineering"),
-    (record "name" "Bob" "age" 25 "dept" "Sales"),
-    (record "name" "Carol" "age" 35 "dept" "Engineering")
-]
-
-query = from people
-    |> where (λp. gt (get "age" p) 25)
-    |> select (λp. get "name" p)
-    |> orderBy id
-
-query  # → ["Alice", "Carol"]
-
-# Building a simple arithmetic DSL
-:macro (num $n) => $n
-:macro (add $a $b) => (plus $a $b)
-:macro (mul $a $b) => (mult $a $b)
-:macro (var $name) => (λenv. lookup $name env)
-
-# Expression evaluator
-eval = λexpr env. expr env
-
-# Usage
-formula = add (mul (var "x") (num 2)) (var "y")
-environment = fromList [("x", 5), ("y", 3)]
-eval formula environment  # → 13 (5*2 + 3)
+# Hypothetical usage once primitives exist:
+# people = [ (record "name" "Alice" "age" 30)
+#          , (record "name" "Bob"   "age" 25) ]
+# from people |> where (λp. gt (get "age" p) 25) |> select (λp. get "name" p)
 ```
+
+To make this concrete, choose a representation (e.g. association lists of key/value string–number pairs) and implement the missing primitives.
 
 ### Integration Patterns
 
@@ -1521,6 +1505,77 @@ Notes & Limits:
 - Designed for test/regression usage rather than user-facing proof of equivalence.
 
 If you require different equivalence semantics (e.g. eta-equivalence or observational equivalence), layer a custom checker on top of normalized forms.
+
+#### Structural Equality Helper Families
+
+For standard encodings you can use lighter-weight structural comparators instead of full normalization:
+
+| Helper | Purpose | Informal Signature |
+|--------|---------|--------------------|
+| `listEq` | Deep list equality | `(eqE -> list a -> list a -> Bool)` |
+| `pairEq` | Pair equality | `(eqA -> eqB -> pair a b -> pair a b -> Bool)` |
+| `maybeEq` | Maybe equality | `(eqA -> Maybe a -> Maybe a -> Bool)` |
+| `eitherEq` | Either equality | `(eqL -> eqR -> Either l r -> Either l r -> Bool)` |
+
+Macro wrappers (`testList`, `testPair`, `testMaybe`, `testEither`, and *By variants) delegate to these.
+
+#### Lazy Helpers & Benchmarking
+
+| Function | Description |
+|----------|-------------|
+| `delay`  | Wrap a value into a thunk `(λf.f value)` |
+| `force`  | Force a thunk: `force (delay x) = x` |
+| `benchmark n f x` | Apply `f` to `x` `n` times (simple micro benchmark) |
+| `memoize` | Currently identity (placeholder for future caching layer) |
+
+#### State Monad (Encapsulated State)
+
+State is encoded as functions `s -> pair value newState`.
+
+| Name | Meaning |
+|------|---------|
+| `returnState` | Lift pure value |
+| `bindState` | Monadic bind / sequencing |
+| `getState` | Read current state |
+| `putState` | Replace state (returns unit-like `nil`) |
+| `runState` | Execute a stateful computation |
+
+Example:
+
+```lambda
+increment = λs.pair (succ s) (succ s)
+runState increment 5      # → pair 6 6
+```
+
+#### Loop Combinator (WHILE)
+
+`WHILE cond body initial` repeatedly applies `body` while `cond current` is true.
+
+```lambda
+countDown = WHILE (λn.gt n 0) pred 5   # → 0
+```
+
+#### Additional Numeric / Utility Functions
+
+| Function | Description |
+|----------|-------------|
+| `ackermann` | Fast-growing benchmark function (use small arguments) |
+| `clamp min max x` | Bound value to inclusive range |
+
+#### Safe Operation Summary
+
+| Function | Returns | Empty / Error Case |
+|----------|---------|--------------------|
+| `safehead` | `just x` / `nothing` | Empty → `nothing` |
+| `safetail` | `just tail` / `nothing` | Empty → `nothing` |
+| `safenth n l` | `just (nth n)` / `nothing` | OOB index → `nothing` |
+| `safediv a b` / `safeDiv` | `just q` | `nothing` if divisor = 0 |
+| `safeMinimum` | `just min` | Empty → `nothing` |
+| `safeMaximum` | `just max` | Empty → `nothing` |
+| `safeInit` | list (not Maybe) | Empty or singleton → `nil` |
+| `safeInitMaybe` | `just prefix` / `nothing` | Empty or singleton → `nothing` |
+
+Chain with `maybe`, `maybeMap`, or a custom bind pattern.
 
 
 ### Caching and Memoization
