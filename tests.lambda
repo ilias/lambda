@@ -331,6 +331,39 @@ alphaEq (let rec fact = \n. if (eq n 0) 1 (mult n (fact (pred n))) in fact 5) 12
 alphaEq (let rec fib = \n. if (leq n 1) n (plus (fib (pred n)) (fib (minus n 2))) in fib 6) 8
 alphaEq (let rec sumTo = \n. if (eq n 0) 0 (plus n (sumTo (pred n))) in sumTo 4) 10
 
+# --- Macro Expansion inside let / let rec (iff) ---
+# Ensure iff macro expands inside non-recursive let binding
+alphaEq (let f = n -> (iff (iszero n) then 1 else (succ n)) in f 0) 1
+alphaEq (let f = n -> (iff (iszero n) then 1 else (succ n)) in f 5) 6
+
+# Ensure iff macro expands inside recursive let binding (with and without outer parens)
+alphaEq (let rec fact = n -> (iff (iszero n) then 1 else (mult n (fact (pred n)))) in fact 4) 24
+alphaEq (let rec fact = n -> iff (iszero n) then 1 else (mult n (fact (pred n))) in fact 4) 24
+
+# Macro inside later binding referencing earlier binding value
+alphaEq (let a = 1, b = (iff (eq a 1) then 2 else 3) in a + b) 3
+
+# --- Macro Expansion inside let / let rec (when / unless) ---
+# Non-recursive let with when
+alphaEq (let add1IfZero = n -> (when (iszero n) succ n) in add1IfZero 0) 1
+alphaEq (let add1IfZero = n -> (when (iszero n) succ n) in add1IfZero 5) 5
+
+# Non-recursive let with unless
+alphaEq (let add1UnlessZero = n -> (unless (iszero n) succ n) in add1UnlessZero 0) 0
+alphaEq (let add1UnlessZero = n -> (unless (iszero n) succ n) in add1UnlessZero 5) 6
+
+# Multi-binding referencing earlier binding
+alphaEq (let x = 0, y = (when (iszero x) succ 5) in y) 6
+alphaEq (let x = 0, y = (unless (iszero x) succ 5) in y) 5
+
+# Recursive let using when inside body
+alphaEq (let rec countdown = n -> (when (gt n 0) pred n) in countdown 3) 2
+alphaEq (let rec countdown = n -> (when (gt n 0) pred n) in countdown 0) 0
+
+# Recursive let using unless inside body
+alphaEq (let rec upIfLess5 = n -> (unless (geq n 5) succ n) in upIfLess5 3) 4
+alphaEq (let rec upIfLess5 = n -> (unless (geq n 5) succ n) in upIfLess5 5) 5
+
 # --- Pipeline Operator (|>) ---
 alphaEq (5 |> succ) 6
 alphaEq (5 |> square) 25
