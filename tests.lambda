@@ -723,3 +723,45 @@ alphaEq (runState (bindState (returnState 5) returnState) 0) (pair 5 0)
 mState = λs.pair 1 (succ s)
 alphaEq (runState (bindState mState returnState) 0) (runState mState 0)
 
+# --- Additional Macro & Helper Coverage (supplemental) ---
+alphaEq (nand true true) false
+alphaEq (nand true false) true
+alphaEq (nor false false) true
+alphaEq (nor true false) false
+alphaEq (apply_n succ 3 4) 7
+alphaEq (min2 3 5) 3
+alphaEq (max2 3 5) 5
+alphaEq (empty? nil) true
+alphaEq (empty? [1]) false
+alphaEq (rest [1,2,3]) [2,3]
+
+# Structural test macros wrappers
+alphaEq (testList [1,2] [1,2]) true
+alphaEq (testPair (pair 1 2) (pair 1 2)) true
+alphaEq (testMaybe (just 9) (just 9)) true
+alphaEq (testEither (right 4) (right 4)) true
+
+# Negative with wrappers
+alphaEq (testList [1,2] [2,1]) false
+alphaEq (testPair (pair 1 2) (pair 2 1)) false
+alphaEq (testMaybe (just 9) (just 8)) false
+alphaEq (testEither (left 4) (right 4)) false
+
+# WHILE with immediately false condition returns initial state
+alphaEq (WHILE (λn.lt n 0) succ 5) 5
+
+# safeInit vs safeInitMaybe distinction
+alphaEq (safeInit [1,2]) [1]
+alphaEq (safeInitMaybe [1,2]) (just [1])
+
+# Single-element safe min/max
+alphaEq (safeMinimum [7]) (just 7)
+alphaEq (safeMaximum [7]) (just 7)
+
+# Nested pair equality positive
+alphaEq (pairEq (pairEq eq eq) (pairEq eq eq) (pair (pair 1 2) (pair 3 4)) (pair (pair 1 2) (pair 3 4))) true
+
+# isspace tab/newline
+alphaEq (isspace 9) true
+alphaEq (isspace 10) true
+
