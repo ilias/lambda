@@ -341,7 +341,7 @@ alphaEq (let rec fact = n -> (iff (iszero n) then 1 else (mult n (fact (pred n))
 alphaEq (let rec fact = n -> iff (iszero n) then 1 else (mult n (fact (pred n))) in fact 4) 24
 
 # Macro inside later binding referencing earlier binding value
-alphaEq (let a = 1, b = (iff (eq a 1) then 2 else 3) in a + b) 3
+alphaEq (let a = 1 in let b = (iff (eq a 1) then 2 else 3) in a + b) 3
 
 # --- Macro Expansion inside let / let rec (when / unless) ---
 # Non-recursive let with when
@@ -353,8 +353,8 @@ alphaEq (let add1UnlessZero = n -> (unless (iszero n) succ n) in add1UnlessZero 
 alphaEq (let add1UnlessZero = n -> (unless (iszero n) succ n) in add1UnlessZero 5) 6
 
 # Multi-binding referencing earlier binding
-alphaEq (let x = 0, y = (when (iszero x) succ 5) in y) 6
-alphaEq (let x = 0, y = (unless (iszero x) succ 5) in y) 5
+alphaEq (let x = 0 in let y = (when (iszero x) succ 5) in y) 6
+alphaEq (let x = 0 in let y = (unless (iszero x) succ 5) in y) 5
 
 # Recursive let using when inside body
 alphaEq (let rec countdown = n -> (when (gt n 0) pred n) in countdown 3) 2

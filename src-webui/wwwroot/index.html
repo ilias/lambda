@@ -31,18 +31,15 @@
   #filters label { font-size:.55rem; letter-spacing:.08em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:var(--panel); padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
   #filters input { margin:0; accent-color:var(--accent); }
   .hidden-log { display:none !important; }
-  #searchFloat { position:fixed; bottom:14px; right:16px; display:none; gap:.35rem; background:rgba(22,27,34,.92); border:1px solid var(--border); padding:.4rem .55rem; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,.4); z-index:999; font-size:.6rem; align-items:center; }
-  #searchFloat button { font-size:.6rem; padding:.25rem .45rem; }
-  #searchFloat .count { opacity:.7; font-weight:500; }
   @media (max-width: 960px) { main { grid-template-columns:1fr; } #output { width:100%; } }
-  @media (max-width:600px){ #searchFloat { right:8px; left:8px; justify-content:space-between; } }
+  @media (max-width:600px){ #searchFloat { right:8px; /* left removed to keep it anchored right */ } }
   /* Scroll nav buttons */
   #scrollBottomBtn, #scrollTopBtn { position:fixed; z-index:1000; padding:.4rem .55rem; font-size:.65rem; }
   #scrollBottomBtn { top:10px; right:10px; }
   #scrollTopBtn { bottom:10px; right:10px; }
   .max-lines-wrap { display:flex; align-items:center; gap:.35rem; margin-left:.75rem; }
   .max-lines-wrap label { font-size:.55rem; letter-spacing:.08em; font-weight:600; text-transform:uppercase; }
-  #maxLinesInput { width:5.2rem; padding:.15rem .3rem; font-size:.55rem; }
+  #maxLinesInput { width:5.2rem; padding:.15rem .3rem; font-size:.7rem; }
   </style>
 </head>
 <body>
@@ -592,9 +589,14 @@
     }
     function updateSearchFloat(){
       if(!searchFloat) return;
-      if(searchHits.length){
+      const termActive = !!(searchInput && searchInput.value.trim().length);
+      if(termActive){
         searchFloat.style.display='flex';
-        searchCount.textContent = (searchIndex>=0? (searchIndex+1):0) + '/' + searchHits.length;
+        if(searchHits.length){
+          searchCount.textContent = (searchIndex>=0? (searchIndex+1):0) + '/' + searchHits.length;
+        } else {
+          searchCount.textContent = '0/0';
+        }
         searchFloat.setAttribute('aria-hidden','false');
       } else {
         searchFloat.style.display='none';
