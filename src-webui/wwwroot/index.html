@@ -36,6 +36,10 @@
   #searchFloat .count { opacity:.7; font-weight:500; }
   @media (max-width: 960px) { main { grid-template-columns:1fr; } #output { width:100%; } }
   @media (max-width:600px){ #searchFloat { right:8px; left:8px; justify-content:space-between; } }
+  /* Scroll nav buttons */
+  #scrollBottomBtn, #scrollTopBtn { position:fixed; z-index:1000; padding:.4rem .55rem; font-size:.65rem; }
+  #scrollBottomBtn { top:10px; right:10px; }
+  #scrollTopBtn { bottom:10px; right:10px; }
   </style>
 </head>
 <body>
@@ -103,6 +107,9 @@
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
   <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev" type="button" class="secondary">Prev</button> <button id="sfNext" type="button" class="secondary">Next</button> <button id="sfClear" type="button" class="secondary" title="Clear (Esc)">✕</button></div>
+  <!-- Scroll navigation links -->
+  <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom" class="secondary">▼</button>
+  <button id="scrollTopBtn" type="button" title="Go to top" aria-label="Scroll to top" class="secondary">▲</button>
   <script>
     // ---- Cache busting & cache clearing ----
     (function(){
@@ -379,6 +386,23 @@
       }
       outEl.scrollTop = outEl.scrollHeight;
     }
+    // ---- Scroll navigation buttons ----
+    const scrollTopBtn = document.getElementById('scrollTopBtn');
+    const scrollBottomBtn = document.getElementById('scrollBottomBtn');
+    function scrollToTop(){ window.scrollTo({top:0, behavior:'smooth'}); }
+    function scrollToBottom(){ window.scrollTo({top:document.documentElement.scrollHeight, behavior:'smooth'}); }
+    scrollTopBtn.addEventListener('click', scrollToTop);
+    scrollBottomBtn.addEventListener('click', scrollToBottom);
+    function updateScrollNav(){
+      const y = window.scrollY || document.documentElement.scrollTop;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      // Hide top button if near top, bottom button if near bottom
+      scrollTopBtn.style.display = y > 40 ? 'inline-block' : 'none';
+      scrollBottomBtn.style.display = (max - y) > 40 ? 'inline-block' : 'none';
+    }
+    window.addEventListener('scroll', updateScrollNav, {passive:true});
+    window.addEventListener('resize', updateScrollNav);
+    updateScrollNav();
     // Append a user-entered input line (" > expr # comment") with inline comment highlighting
     function appendUserInputLine(raw){
       const outEl = currentOutEl();
