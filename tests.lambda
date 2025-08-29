@@ -680,3 +680,46 @@ alphaEq (unzip (zip [1,2] [3,4])) (pair [1,2] [3,4])
 alphaEq (listEq (listEq eq) [[1,2],[3]] [[1,2],[3]]) true
 alphaEq (listEq (listEq eq) [[1,2],[3]] [[1,2],[4]]) false
 
+# Additional numeric predicate & helper coverage
+alphaEq (isone 1) true
+alphaEq (isone 2) false
+alphaEq (istwo 2) true
+alphaEq (istwo 3) false
+alphaEq (ispositive 0) false
+alphaEq (ispositive 3) true
+alphaEq (triple 4) 12
+alphaEq (quadruple 3) 12
+
+# GCD / LCM edge cases with zero
+alphaEq (gcd 0 7) 7
+alphaEq (gcd 9 0) 9
+alphaEq (gcd1 0 7) 7
+alphaEq (lcm 0 5) 0
+alphaEq (lcm 6 0) 0
+
+# Structural equality negative variants
+alphaEq (listEq eq [1,2] [2,1]) false
+alphaEq (pairEq eq eq (pair 1 2) (pair 1 3)) false
+alphaEq (maybeEq eq (just 5) (just 6)) false
+alphaEq (eitherEq eq eq (right 2) (right 3)) false
+
+# Benchmark & lazy helpers
+alphaEq (benchmark 5 succ 1) 2
+alphaEq (force (delay 42)) 42
+
+# ASCII classification extended
+alphaEq (isupper 65) true
+alphaEq (isupper 97) false
+alphaEq (islower 97) true
+alphaEq (islower 65) false
+alphaEq (isalnum 65) true
+alphaEq (isalnum 33) false
+alphaEq (toupper 65) 65
+alphaEq (tolower 97) 97
+
+# State monad laws (left/right identity exemplars)
+alphaEq (runState (bindState (returnState 5) (λx.returnState (succ x))) 0) (pair 6 0)
+alphaEq (runState (bindState (returnState 5) returnState) 0) (pair 5 0)
+mState = λs.pair 1 (succ s)
+alphaEq (runState (bindState mState returnState) 0) (runState mState 0)
+
