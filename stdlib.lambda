@@ -722,8 +722,8 @@ times    = λn.λf.λx.n f x
 # -----------------------------------------------------------------------------
 curry    = λf x y.f (pair x y)
 uncurry  = λf p.f (first p) (second p)
-partial  = λf x.λy.f x y
-partial2 = λf x y.λz.f x y z
+partial  = λf.λx.λy.f x y   # eta-expanded to avoid multi-param parsing ambiguity
+partial2 = λf.λx.λy.λz.f x y z
 # 3-arity curry helpers used in tests
 curry3   = λf x y z.f (pair x (pair y z))
 uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
@@ -1408,7 +1408,6 @@ eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft
 :macro (iff $p then $then else $else) => if $p $then $else
 
 # -----------------------------------------------------------------------------
-
 # 9.2. Math and Comparison Macros
 #
 # These macros provide convenient mathematical operations and comparisons

@@ -205,7 +205,7 @@ alphaEq (repeat 3 9) [9,9,9]
 
 # --- Iteration and Application ---
 alphaEq (iterate succ 5 0) 5
-alphaEq (times 3 succ 0) 3
+alphaEq (times 3 (succ 1)) 8
 alphaEq (when true succ 5) 6
 alphaEq (when false succ 5) 5
 alphaEq (unless true succ 5) 5
