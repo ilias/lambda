@@ -296,7 +296,10 @@ public partial class Parser
             int valueEnd = FindLetValueEnd(tokens, valueStart, end, arrowIdx);
             if (valueStart > valueEnd)
                 throw new ParseException(TreeErrorType.MissingLetValue, tokens[Math.Max(0, valueStart)].Position);
-            values.Add(BuildExpressionTree(tokens, valueStart, valueEnd));
+            var rawValueExpr = BuildExpressionTree(tokens, valueStart, valueEnd);
+            // Expand macros inside each let binding value before constructing the overall let abstraction
+            rawValueExpr = ExpandMacros(rawValueExpr);
+            values.Add(rawValueExpr);
             pos = valueEnd + 1;
             while (pos <= end && tokens[pos].Type == TokenType.Comma) pos++; // consume commas
             if (pos <= end && tokens[pos].Type == TokenType.In)
@@ -309,7 +312,9 @@ public partial class Parser
             if (tokens[pos].Type != TokenType.Term) throw new ParseException(TreeErrorType.MissingLetIn, tokens[pos].Position);
         }
         if (pos > end) throw new ParseException(TreeErrorType.MissingLetBody, tokens[Math.Max(0, pos - 1)].Position);
-        var bodyExpr = BuildExpressionTree(tokens, pos, end);
+    var bodyExpr = BuildExpressionTree(tokens, pos, end);
+    // Expand macros in let body prior to assembling lambda applications
+    bodyExpr = ExpandMacros(bodyExpr);
         pos = end + 1;
         if (isRec)
         {
