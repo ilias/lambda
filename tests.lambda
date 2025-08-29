@@ -618,3 +618,65 @@ fib6 = Y (\f.\n. if (leq n 2) 1 (plus (f (pred n)) (f (pred (pred n)))))
 alphaEq (fib6 10) 55
 fib7 = Y (\f. \n. if (n <= 2) 1 ((f (n - 1)) + (f (n - 2))))
 alphaEq (fib7 10) 55
+
+# ============================================================================
+# Added Extended Coverage (new)
+# Focus: WHILE combinator, gcd1, ackermann small cases, State monad sequencing,
+# structural equality helper families, safe* functions, ASCII predicates,
+# unzip, listEq/maybeEq/eitherEq negative cases, tolower/toupper, list unzip.
+# ============================================================================
+
+# WHILE loop basic countdown (should reach 0)
+alphaEq (WHILE (λn.gt n 0) pred 5) 0
+
+# gcd1 (WHILE-based) correctness vs known value
+alphaEq (gcd1 48 18) 6
+
+# Ackermann small direct values (pattern observed: ackermann 2 n = 2n + 3)
+alphaEq (ackermann 2 2) 7
+alphaEq (ackermann 2 3) 9
+
+# State monad: putState and bindState sequencing
+alphaEq (runState (putState 99) 42) (pair nil 99)
+
+# Construct a composite state computation: double state, then increment value & state
+doubleThenInc = bindState (λs.pair (mult s 2) (mult s 2)) (λres. λs.pair (succ res) (succ s))
+alphaEq (runState doubleThenInc 3) (pair 7 7)
+
+# Structural equality helpers (listEq / maybeEq / eitherEq)
+alphaEq (listEq eq [1,2,3] [1,2,3]) true
+alphaEq (listEq eq [1,2,3] [1,2]) false
+alphaEq (maybeEq eq (just 5) (just 5)) true
+alphaEq (maybeEq eq (just 5) nothing) false
+alphaEq (eitherEq eq eq (left 3) (left 3)) true
+alphaEq (eitherEq eq eq (left 3) (right 3)) false
+
+# Safe head/tail/nth/div operations
+alphaEq (safehead [1,2,3]) (just 1)
+alphaEq (safehead nil) nothing
+alphaEq (safetail [1,2,3]) (just [2,3])
+alphaEq (safetail nil) nothing
+alphaEq (safenth 1 [10,20,30]) (just 20)
+alphaEq (safenth 5 [10]) nothing
+alphaEq (safeDiv 12 3) (just 4)
+alphaEq (safeDiv 12 0) nothing
+
+# ASCII predicates and case conversion
+alphaEq (isdigit 48) true
+alphaEq (isdigit 65) false
+alphaEq (isalpha 65) true
+alphaEq (isalpha 48) false
+alphaEq (isspace 32) true
+alphaEq (isspace 65) false
+alphaEq (toupper 97) 65
+alphaEq (toupper 33) 33
+alphaEq (tolower 65) 97
+alphaEq (tolower 48) 48
+
+# unzip (zip round trip)
+alphaEq (unzip (zip [1,2] [3,4])) (pair [1,2] [3,4])
+
+# listEq nested usage example (list of lists)
+alphaEq (listEq (listEq eq) [[1,2],[3]] [[1,2],[3]]) true
+alphaEq (listEq (listEq eq) [[1,2],[3]] [[1,2],[4]]) false
+
