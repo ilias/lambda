@@ -242,23 +242,60 @@ public partial class Interpreter
         ================= Lambda Calculus Interpreter Help =================
 
         -- Expression Syntax (abridged) --
-            x                       Variable
-            λx.x / \\x.x            Lambda abstraction
-            x, y -> body            Arrow function (multi-parameter sugar)
-            f x y                   Application (left-assoc)
-            let x = A, y = B in C   Multiple let bindings (sugar for nested lambdas)
-            let rec f = E in B      Recursive binding via Y
-            [1,2,3] / [a .. b]      List / range / stepped range
-            a |> f |> g             Pipeline (left-to-right)
-            f . g . h               Composition (right associative)
-            _ placeholders          Ignored lambda params auto-gensym'd
-            e1; e2; e3              Top-level sequencing (commands or expressions)
+            x                         Variable
+            λx.x / \\x.x              Lambda abstraction
+            x, y -> body              Arrow function (multi-parameter sugar)
+            def f x y = body          Function definition sugar (desugars to f = x,y -> body)
+            f x y                     Application (left-assoc)
+            f $ x $ y                 Application via low‑precedence right-assoc operator ($)
+            let x = A, y = B in C     Multiple let bindings (sugar for nested λ abstractions)
+            let rec f = E in B        Recursive binding (desugars to let f = Y (λf.E) in B)
+            [1,2,3] / [a .. b]        List literal / inclusive numeric range
+            [a .. b .. s]             Stepped range (step s)
+            a |> f |> g               Pipeline (desugars to g (f a))
+            f . g . h                 Composition (desugars to f (g (h x)) when applied; right-assoc)
+            _ placeholders            Ignored lambda params auto-gensym'd (λ_._ -> λα0.α0)
+            e1; e2; e3                Sequential evaluation (each printed)
+
+        -- Built‑In Infix Operators --
+            |>   (pipeline, left, precedence 2)
+            .    (composition, right, precedence 3)
+            $    (application, right, precedence 1 – lowest)
+            (User operators definable via :infix name prec assoc)
 
         -- Commands --
         {commandsPlain}
 
+        -- Command Effects / Desugarings --
+            :clear                ≈ reset (macros|defs|ops|cache|stats) scope; :clear macros clears only macros, etc.
+            :depth n              Set maximum recursion depth guard to n
+            :env part             Show environment subset (defs, macros, infix, native, all)
+            :exit / :quit         Terminate process
+            :infix op p a         Register infix op (precedence p, associativity a)
+            :lazy on|off          Toggle evaluation strategy (on = lazy, off = eager)
+            :load file            Read file; each line evaluated (macros & :infix allowed)
+            :log file|off|clear   Append output to file / disable / truncate
+            :macro (pat) => body  Add macro rewrite rule (applied before parse segment)
+            :native on|off|show   Toggle/show native arithmetic & list primitives
+            :pretty on|off        Toggle pretty printing of numerals/lists/booleans
+            :save file            Persist current defs/macros/infix to file
+            :stats                Display performance metrics & cache sizes
+            :step on|off          Enable CEK machine step trace output
+            :test clear|result    Reset or show structural equality test counters
+            :help                 Show this summary
+
+        -- Key Desugarings (Summary) --
+            def f x y = body    =>  f = x,y -> body
+            x, y -> body        =>  x -> y -> body
+            let x = A, y = B in C  =>  let x = A in let y = B in C
+            let rec f = E in B  =>  let f = Y (λf. E) in B
+            a |> f |> g         =>  g (f a)
+            f . g . h           =>  f . (g . h)  (application: (f . g) x => f (g x))
+            f $ x $ y           =>  f x y  (right-assoc, lowest precedence)
+            λ_._ or λ_,x._      =>  λα0.α1...  (anonymous fresh names ignored if unused)
+
         {multiLine}
-        See README 'Formal Grammar' for precise grammar & desugarings.
+        See README 'Formal Grammar' for precise grammar & full desugarings.
         """;
         }
 }

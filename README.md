@@ -201,7 +201,7 @@ The classification is intentionally lightweight; adding new patterns only requir
 
 ### Log Retention
 
-To prevent the browser DOM from growing unbounded during long step traces, the UI caps the number of displayed log lines (default 2000). Older nodes are trimmed once the cap is exceeded. Adjust `MAX_LOG_LINES` in `index.html` if needed.
+To prevent the browser DOM from growing unbounded during long step traces, the UI caps the number of displayed log lines (default 4000). Older nodes are trimmed once the cap is exceeded. You can now adjust this at runtime with the "Max Lines" numeric control beside the Result / Log header (per page session). The underlying cap variable updates immediately and existing logs are trimmed if above the new limit.
 
 ### Typical Workflow
 
@@ -524,6 +524,48 @@ The interpreter provides numerous commands for managing your session:
 :native show             # Show all native arithmetic functions
 :env [defs|macros|infix|native|all]  # Show environment (optionally filtered)
 ```
+
+### Command Effects / Desugarings (Summary)
+
+This summarizes the operational effect or syntactic desugaring performed by each command / construct:
+
+| Command / Construct | Effect / Desugaring |
+|---------------------|---------------------|
+| `def f x y = body`  | `f = x,y -> body` |
+| `x, y -> body`      | `x -> y -> body` |
+| `let x = A, y = B in C` | `let x = A in let y = B in C` |
+| `let rec f = E in B` | `let f = Y (λf.E) in B` |
+| `a |> f |> g`       | `g (f a)` (left-to-right pipeline) |
+| `f . g . h`         | `f (g (h x))` when applied; composition is right-associative |
+| `f $ x $ y`         | `f x y` ( `$` is right-assoc, lowest precedence application operator ) |
+| `λx y.z`            | `λx.λy.z` |
+| `_` placeholders    | Each `_` becomes a fresh, unique parameter name (ignored if unused) |
+| `:infix op p a`     | Registers `op` with precedence `p` and associativity `a` |
+| `:macro (pat) => body` | Adds macro clause (pattern rewrite pre-parse of expressions segment) |
+| `:clear`            | Clears env, macros, infix ops (except built-ins), stats & caches |
+| `:clear macros`     | Clears only macro clauses |
+| `:clear defs`       | Removes value bindings (definitions) |
+| `:clear ops`        | Removes custom infix operators (keeps predefined `|>`, `.`, `$`) |
+| `:clear cache`      | Clears substitution/evaluation/analysis caches |
+| `:depth n`          | Sets recursion depth guard to `n` (10–10000) |
+| `:lazy on|off`      | Toggles lazy vs eager evaluation mode |
+| `:native on|off`    | Enables/disables native arithmetic & primitive optimizations |
+| `:native show`      | Lists current native primitives |
+| `:pretty on|off`    | Toggles pretty printing for numerals, lists, booleans |
+| `:step on|off`      | Toggles CEK step trace emission |
+| `:stats`            | Prints performance & cache statistics report |
+| `:test clear`       | Resets structural equality counters |
+| `:test result`      | Displays structural equality counters |
+| `:log file`         | Appends subsequent output to file |
+| `:log off`          | Stops logging to file |
+| `:log clear`        | Truncates current log file (if any) |
+| `:env …`            | Displays filtered environment subsets |
+| `:save file`        | Writes definitions/macros/infix declarations to file |
+| `:load file`        | Loads and evaluates a `.lambda` file line-by-line |
+| `:help`             | Displays help summary (includes these desugarings) |
+| `:exit` / `:quit`   | Terminates the interpreter |
+
+> Note: Built-in infix operators always available: `|>` (pipeline), `.` (composition), `$` (application). They may be redefined only by clearing operators and re-registering; pipeline / composition semantics are assumed by other documentation so overriding is discouraged.
 
 ## Command / Expression Chaining
 
