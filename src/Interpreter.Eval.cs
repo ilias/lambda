@@ -22,6 +22,8 @@ public partial class Interpreter
     internal Expr EvaluateCEK(Expr expr, Dictionary<string, Expr>? initialEnv = null)
     {
         _perfStopwatch.Restart();
+        // Disable evaluation memoization for structural equality tests (alphaEq calls)
+        var disableEvalCache = IsAlphaEqInvocation(expr);
         var environment = new Dictionary<string, Expr>(initialEnv ?? _context, StringComparer.Ordinal);
         var stateStack = new Stack<CEKState>();
         stateStack.Push(new CEKState(expr, environment, Kontinuation.Empty));
@@ -35,7 +37,7 @@ public partial class Interpreter
             var (control, env, kont) = stateStack.Pop();
             if (_showStep)
                 _logger.Log($"Step {currentStep++}: CEK \tC: {FormatWithNumerals(control)}, K: {kont.Type}");
-            if (GetEvalCache(control, out var cachedResult))
+            if (!disableEvalCache && GetEvalCache(control, out var cachedResult))
             {
                 ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
                 continue;
@@ -97,11 +99,19 @@ public partial class Interpreter
         if (finalResult != null)
         {
             // do not cache results if random numbers were used
-            if (!_usedRandom)
+            if (!disableEvalCache && !_usedRandom)
                 PutEvalCache(currentStep, expr, finalResult);
             return finalResult;
         }
         throw new InvalidOperationException("CEK evaluation completed without returning a value");
+    }
+
+    private static bool IsAlphaEqInvocation(Expr expr)
+    {
+        // Detect application chain whose head is variable 'alphaEq'
+        var cur = expr;
+        while (cur.Type == ExprType.App && cur.AppLeft != null) cur = cur.AppLeft;
+        return cur.Type == ExprType.Var && cur.VarName == "alphaEq";
     }
 
     // Native arithmetic for Church numerals

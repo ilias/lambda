@@ -5,7 +5,7 @@ public partial class Interpreter
     // Native alpha equivalence / structural equality (works for any two expressions)
     // Pattern: (alphaEq a b) -> Church true/false based on alpha-equivalence of normalized graphs
     // We evaluate both operands fully (respecting current lazy/native settings) to compare
-        internal Expr? AlphaEqNative(string op, List<Expr> args, Dictionary<string, Expr> env)
+    internal Expr? AlphaEqNative(string op, List<Expr> args, Dictionary<string, Expr> env)
     {
         if (args.Count != 2) return null; // Need exactly two arguments
 
@@ -27,15 +27,15 @@ public partial class Interpreter
         if (!equal && Expr.AlphaEquivalent(leftVal, rightVal))
             equal = true; // normalization introduced incidental difference
 
-    _logger.Log($"Alpha left:  {FormatWithNumerals(normLeft)}");
-    _logger.Log($"Alpha right: {FormatWithNumerals(normRight)}");
+        _logger.Log($"Alpha left:  {FormatWithNumerals(normLeft)}");
+        _logger.Log($"Alpha right: {FormatWithNumerals(normRight)}");
 
         _nativeArithmetic++;
         _stats.StructEqCalls++;
         if (equal) _stats.StructEqSuccesses++;
         var total = equal ? _stats.StructEqSuccesses : _stats.StructEqCalls - _stats.StructEqSuccesses;
         var totalPercent = (double)total / _stats.StructEqCalls * 100;
-    _logger.Log($"Alpha {(equal ? "passed" : "failed")} - {total}/{_stats.StructEqCalls} ({totalPercent:F2}%)");
+        _logger.Log($"Alpha {(equal ? "passed" : "failed")} - {total}/{_stats.StructEqCalls} ({totalPercent:F2}%)");
         return MakeChurchBoolean(equal);
     }
 

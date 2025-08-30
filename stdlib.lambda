@@ -48,8 +48,8 @@ C        = λx y z.x z y
 
 # Built-in infix operators (predefined in parser):
 #   |>  (pipeline, precedence 1 left)   a |> f      ==> f a
-#   $   (application, precedence 1 right) f $ x    ==> f x   (right-assoc chains remove parentheses)
-#   .   (composition, precedence 9 right) f . x    ==> f x   (implemented as left application chain)
+#   $   (application, precedence 1 right) f $ g $ x ==> f (g x)   (right-assoc chains remove parentheses)
+#   .   (composition, precedence 9 right) f . g . x ==> f (g x)   (implemented as left application chain)
 # You can still override or shadow with :infix if needed (not recommended for $ / |> / .).
 
 # -----------------------------------------------------------------------------

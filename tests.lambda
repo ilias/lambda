@@ -55,6 +55,38 @@ alphaEq (wrap (plus 0 11)) 11
 :macro (apply2 $f $a $b) => ($f $a $b)
 alphaEq (apply2 mult 3 4) 12
 
+# Additional macro coverage (specificity + rest + wildcard + int literal pattern)
+:macro (specNum 5) => 1
+:macro (specNum $x) => 0
+alphaEq (specNum 5) 1
+alphaEq (specNum 6) 0
+
+# Structural pattern + integer literal vs rest fallback ordering
+:macro (prio (cons 0 $t)) => 0
+:macro (prio $xs...) => $xs
+alphaEq (prio (cons 0 nil)) 0
+alphaEq (prio 1 2 3) [1,2,3]
+
+# Wildcard with rest capture (ignored first element) – ensures wildcard neutrality in specificity
+:macro (skipFirst _ $xs...) => $xs
+alphaEq (skipFirst 9 1 2 3) [1,2,3]
+
+# Structural nesting depth precedence: deeper literal inside structure wins
+:macro (deep (cons (cons 1 $x) $t)) => 1
+:macro (deep $any) => 0
+alphaEq (deep (cons (cons 1 nil) nil)) 1
+alphaEq (deep (cons (cons 2 nil) nil)) 0
+
+# Wrap integer literal under plus chain (tests associative neutrality not implemented but pattern anchoring works)
+:macro (zeroHead (plus 0 $x)) => $x
+alphaEq (zeroHead (plus 0 (plus 0 3))) (plus 0 3)
+
+# Ensure wildcard does not bind (paired with variable capturing same position alternative)
+:macro (wtest _ 7) => 1
+:macro (wtest $a $b) => 0
+alphaEq (wtest 5 7) 1
+alphaEq (wtest 5 8) 0
+
 
 # Wildcard pattern: ignore middle argument
 :macro (pick3 $a _ $c) => (pair $a $c)
