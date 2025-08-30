@@ -33,10 +33,10 @@
   .hidden-log { display:none !important; }
   @media (max-width: 960px) { main { grid-template-columns:1fr; } #output { width:100%; } }
   @media (max-width:600px){ #searchFloat { right:8px; /* left removed to keep it anchored right */ } }
-  /* Scroll nav buttons */
-  #scrollBottomBtn, #scrollTopBtn { position:fixed; z-index:1000; padding:.4rem .55rem; font-size:.65rem; }
-  #scrollBottomBtn { top:10px; right:10px; }
-  #scrollTopBtn { bottom:10px; right:10px; }
+  /* Scroll nav buttons (moved to left side) */
+  #scrollBottomBtn, #scrollTopBtn { position:fixed; z-index:1000; padding:.4rem .55rem; font-size:.65rem; left:10px; }
+  #scrollBottomBtn { top:10px; }
+  #scrollTopBtn { bottom:10px; }
   .max-lines-wrap { display:flex; align-items:center; gap:.35rem; margin-left:.75rem; }
   .max-lines-wrap label { font-size:.55rem; letter-spacing:.08em; font-weight:600; text-transform:uppercase; }
   #maxLinesInput { width:5.2rem; padding:.15rem .3rem; font-size:.7rem; }
@@ -629,7 +629,7 @@
     // --- Simple Filters (Macro, Test, Time, Step, Processing) ---
     const FILTER_CONFIG = [
       {label:'Macro', classes:['log-macro']},
-      {label:'Test', classes:['log-test','log-test-pass','log-test-fail']},
+      {label:'Test', classes:['log-alpha','log-alpha-pass','log-alpha-fail']},
       {label:'Time', classes:['log-time']},
       {label:'Step', classes:['log-step']},
       {label:'Eval', classes:['log-eval']},
