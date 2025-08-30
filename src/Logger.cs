@@ -83,19 +83,19 @@ public class Logger
     private static string GetColor(string message) => message switch
     {
         string s when s.StartsWith("Error:") => RED,
-        string s when s.StartsWith("#") => YELLOW,            // Comments
-        string s when s.StartsWith("->") => GREEN,            // Results/Assignments
-        string s when s.StartsWith("Step") => YELLOW,         // Evaluation steps
-        string s when s.StartsWith("Time:") => BLUE,          // Timing info
-        string s when s.StartsWith("Name:") => BLUE,          // Final result details
-        string s when s.StartsWith("Eval:") => MAGENTA,       // Evaluation expression
-        string s when s.StartsWith("Macro") => BLUE,          // Macro expansion
+        string s when s.StartsWith("#") => YELLOW,       // Comments
+        string s when s.StartsWith("->") => GREEN,       // Results/Assignments
+        string s when s.StartsWith("Step") => YELLOW,    // Evaluation steps
+        string s when s.StartsWith("Time:") => BLUE,     // Timing info
+        string s when s.StartsWith("Name:") => BLUE,     // Final result details
+        string s when s.StartsWith("Eval:") => MAGENTA,  // Evaluation expression
+        string s when s.StartsWith("Macro") => BLUE,     // Macro expansion
         string s when s.StartsWith("Test:") => s.Contains("passed") ? GREEN : s.Contains("failed") ? RED : MAGENTA,  // Alpha test result
-        string s when s.StartsWith(":") => PINK,              // General command
-        string s when s.Contains("Loading") => CYAN,          // Loading files
-        string s when s.Contains("<<") => GRAY,               // Reading file lines
-        string s when s.Contains(">>") => GREEN,              // Result of reading file lines
-        _ => RESET                                            // Default
+        string s when s.StartsWith(":") => PINK,         // General command
+        string s when s.Contains("Loading") => CYAN,     // Loading files
+        string s when s.Contains("<<") => GRAY,          // Reading file lines
+        string s when s.Contains(">>") => GREEN,         // Result of reading file lines
+        _ => RESET                                       // Default
     };
 
     static readonly List<string> commands =
