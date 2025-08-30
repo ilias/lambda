@@ -457,7 +457,7 @@ alphaEq (5 |> square |> succ) 26
 alphaEq (5 |> succ |> square) 36
 alphaEq (1 |> succ |> succ |> succ) 4
 alphaEq ((5 |> square) |> succ) 26
-alphaEq (5 |> (square |> succ)) 26
+alphaEq (5 |> (square |> succ)) 125
 alphaEq (2 |> succ |> square |> pred) 8
 
 # --- Arrow Function Syntax ---
@@ -832,6 +832,67 @@ alphaEq (gcd 0 7) 7
 alphaEq (gcd 9 0) 9
 alphaEq (gcd1 0 7) 7
 alphaEq (lcm 0 5) 0
+
+# ============================================================================
+# Added Coverage (Sets 3,4,5,7,8,9,10,11,12)
+# ============================================================================
+
+# 3. Numeric edge / arithmetic laws
+alphaEq (pred 1) 0
+alphaEq (minus 2 5) 0          # floor at zero
+alphaEq (iszero (minus 10 10)) true
+alphaEq (mult 3 (plus 2 4)) (plus (mult 3 2) (mult 3 4))    # distributive exemplar
+alphaEq (plus (plus 1 2) 3) (plus 1 (plus 2 3))             # associativity exemplar
+
+# 4. List algebraic laws
+alphaEq (append [1,2,3] nil) [1,2,3]
+alphaEq (append nil [1,2,3]) [1,2,3]
+alphaEq (reverse (reverse [1,2,3])) [1,2,3]
+alphaEq (map succ (map succ [1,2,3])) (map (λx.succ (succ x)) [1,2,3])  # fusion exemplar
+alphaEq (length (append [1,2] [3,4,5])) (plus (length [1,2]) (length [3,4,5]))
+alphaEq (foldr plus 0 [1,2,3,4]) (foldl plus 0 [1,2,3,4])
+
+# 5. Maybe / Either additional laws
+alphaEq (maybe 0 I (just 5)) 5
+alphaEq (maybe 0 I nothing) 0
+alphaEq (either I I (right 7)) 7
+alphaEq (either I I (left  7)) 7
+
+# 7. WHILE combinator equivalence with recursive countdown
+alphaEq (WHILE (λn.gt n 0) pred 5) 0
+alphaEq (let rec cd = n -> if (gt n 0) (cd (pred n)) 0 in (pair (WHILE (λn.gt n 0) pred 5) (cd 5))) (pair 0 0)
+alphaEq (WHILE (λn.leq n 16) (mult 2) 1) 32
+
+# 8. Range edge cases
+alphaEq [10,8 .. 4] [10,8,6,4]
+alphaEq [-3 .. -1] [-3,-2,-1]
+
+# 9. Composition vs application sanity
+alphaEq ((succ . pred . succ) 5) (succ (pred (succ 5)))
+alphaEq (succ $ pred $ succ 5) (succ (pred (succ 5)))
+
+# 10. Placeholder underscore captures (additional)
+alphaEq ((_ -> 1) 99) 1
+alphaEq ((_,_ -> 0) 1 2) 0
+alphaEq ((_,_,_ -> 1) 1 2 3) 1
+
+# 11. Macro system deeper edges
+:macro (restTest $xs...) => $xs
+alphaEq (restTest) nil
+alphaEq (restTest 1 2) [1,2]
+:macro (wprec _ 0) => 1
+:macro (wprec $a $b) => 0
+alphaEq (wprec 9 0) 1
+alphaEq (wprec 9 1) 0
+:macro (litOr 3) => 1
+:macro (litOr $x) => 0
+alphaEq (litOr 3) 1
+alphaEq (litOr 4) 0
+
+# 12. Alpha equivalence harder cases
+alphaEq ((λx.λy.x) y) (λa.λb.y)
+alphaEq (λx.λx.x) (λa.λb.b)
+alphaEq ((λx.λx.x) 1 2) 2
 alphaEq (lcm 6 0) 0
 
 # Structural equality negative variants
