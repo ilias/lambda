@@ -894,6 +894,44 @@ alphaEq (litOr 4) 0
 alphaEq (λx.λy.x) (λa.λb.a)
 alphaEq (λx.λx.x) (λa.λa.a)
 alphaEq ((λx.λy.y) 1) (λb.b)
+
+# ============================================================================
+# Targeted Additional Coverage (negative literal pattern, lazy branch, rest zero-arity,
+# negative ranges, composition/$ precedence, guard ordering)
+# ============================================================================
+
+# Negative integer literal pattern (if negative numerals are tokenized as Integer)
+:macro (negSpec -2) => 1
+:macro (negSpec $x) => 0
+alphaEq (negSpec -2) 1
+alphaEq (negSpec -3) 0
+
+# Lazy branch avoidance (Ω not evaluated)
+K = λx.λy.x            # ensure K is defined (if already in stdlib this is harmless shadowing)
+omega = (λx.x x) (λx.x x)
+alphaEq (K 1 omega) 1
+alphaEq (if true 1 omega) 1
+
+# Rest zero-arity confirmation (already have restTest earlier; add another distinct)
+:macro (gather $xs...) => $xs
+alphaEq (gather) nil
+alphaEq (gather 4 5) [4,5]
+
+# Negative & descending ranges
+alphaEq [-5 .. -3] [-5,-4,-3]
+alphaEq [5,3 .. -1] [5,3,1,-1]
+
+# Composition / application precedence interplay
+alphaEq (succ . pred $ succ 5) (succ (pred (succ 5)))
+alphaEq (succ . (pred $ succ 5)) (succ (pred (succ 5)))
+
+# Guard ordering (guard false skipped, fallback chosen; guard true variant wins when present)
+:macro (gtest2 $x) when false => 0
+:macro (gtest2 $x) => 1
+alphaEq (gtest2 42) 1
+:macro (gtest3 $x) => 0
+:macro (gtest3 $x) when true => 2
+alphaEq (gtest3 7) 2
 alphaEq (lcm 6 0) 0
 
 # Structural equality negative variants
@@ -963,4 +1001,56 @@ alphaEq (pairEq (pairEq eq eq) (pairEq eq eq) (pair (pair 1 2) (pair 3 4)) (pair
 # isspace tab/newline
 alphaEq (isspace 9) true
 alphaEq (isspace 10) true
+
+# ============================================================================
+# Additional Proposed Coverage (Edge Cases & Remaining Gaps)
+# - Church numeral recognition in integer literal macro patterns
+# - Negative alphaEq cases (non-equivalent lambda structures)
+# - Guard expression (non-literal true) vs literal-false skip
+# - Rest vs fixed arity precedence (when both could match arity >= 2)
+# - Range singletons & mixed step termination
+# - Composition chaining depth
+# - Integer literal macro pattern precedence over earlier generic (inverse order)
+# ============================================================================
+
+# Church numeral structural match for integer literal pattern (3)
+:macro (litChurch 3) => 1
+:macro (litChurch $x) => 0
+alphaEq (litChurch 3) 1
+alphaEq (litChurch (succ (succ (succ zero)))) 1   # structural Church numeral 3
+alphaEq (litChurch 2) 0
+
+# Inverse order: generic first, then literal should still prefer literal (specificity)
+:macro (invSpec $x) => 0
+:macro (invSpec 7) => 1
+alphaEq (invSpec 7) 1
+alphaEq (invSpec 6) 0
+
+# Negative alphaEq cases (should be false)
+alphaEq (alphaEq (λx.x) (λx.λy.x)) false
+alphaEq (alphaEq (λx.λy.y) (λx.λy.x)) false
+
+# Guard expression that evaluates to non-literal true succeeds
+:macro (gexpr $x) when (iszero 0) => 1
+:macro (gexpr $x) => 0
+alphaEq (gexpr 42) 1
+
+# Guard literal false on specific pattern falls through to next clause
+:macro (gexpr2 5) when false => 1
+:macro (gexpr2 5) => 2
+alphaEq (gexpr2 5) 2
+
+# Rest vs fixed arity precedence (fixed two-arg should win for arity=2)
+:macro (restPref $a $b) => 2
+:macro (restPref $a $rest...) => (length $rest)
+alphaEq (restPref 1 2) 2
+alphaEq (restPref 1 2 3 4) 3
+
+# Range singletons and mixed termination
+alphaEq [5 .. 5] [5]
+alphaEq [5,4 .. 4] [5,4]
+alphaEq [5,3 .. 2] [5,3]
+
+# Composition chaining depth
+alphaEq (succ . pred . succ . 5) (succ (pred (succ 5)))
 

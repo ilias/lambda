@@ -353,9 +353,9 @@
       if(s.startsWith('Name:')) return 'log-name';
       if(s.startsWith('Eval:')) return 'log-eval';
       if(s.startsWith('Macro')) return 'log-macro';
-      if(s.startsWith('Test: alpha passed')) return 'log-alpha-pass';
-      if(s.startsWith('Test: alpha failed')) return 'log-alpha-fail';
-      if(s.startsWith('Test: alpha ')) return 'log-alpha';
+      if(s.startsWith('Test:')) {
+        return s.includes("passed") ? 'log-alpha-pass' : s.includes("failed") ? 'log-alpha-fail' : 'log-alpha';
+      }
       if(s.startsWith('Processing:')) return 'log-processing';
       if(s.startsWith(':')) return 'log-command';
       if(s.includes('Loading')) return 'log-loading';

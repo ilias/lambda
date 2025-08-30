@@ -90,10 +90,7 @@ public class Logger
         string s when s.StartsWith("Name:") => BLUE,          // Final result details
         string s when s.StartsWith("Eval:") => MAGENTA,       // Evaluation expression
         string s when s.StartsWith("Macro") => BLUE,          // Macro expansion
-        string s when s.StartsWith("Test: alpha left") => MAGENTA,  // Alpha equivalence left expression
-        string s when s.StartsWith("Test: alpha right") => MAGENTA, // Alpha equivalence right expression
-        string s when s.StartsWith("Test: alpha passed") => GREEN,  // Alpha test result
-        string s when s.StartsWith("Test: alpha failed") => RED,    // Alpha test result
+        string s when s.StartsWith("Test:") => s.Contains("passed") ? GREEN : s.Contains("failed") ? RED : MAGENTA,  // Alpha test result
         string s when s.StartsWith(":") => PINK,              // General command
         string s when s.Contains("Loading") => CYAN,          // Loading files
         string s when s.Contains("<<") => GRAY,               // Reading file lines

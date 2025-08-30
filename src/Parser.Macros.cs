@@ -52,6 +52,11 @@ internal sealed class MacroExpander
                 var lit = t.Value!; i++;
                 if (lit == "_") return MacroPattern.Wildcard();
                 return MacroPattern.Literal(lit);
+            case TokenType.InfixOp when t.Value == "-":
+                // Negative integer literal pattern: '-' followed immediately by Integer token
+                if (i + 1 < tokens.Count && tokens[i+1].Type == TokenType.Integer && int.TryParse("-" + tokens[i+1].Value, out var negVal))
+                { i += 2; return MacroPattern.IntLiteral(negVal); }
+                throw new ParseException(TreeErrorType.IllegalAssignment, t.Position);
             case TokenType.Integer:
                 // Support integer literal patterns (match only exact numeral occurrences)
                 if (!int.TryParse(t.Value, out var intVal)) throw new ParseException(TreeErrorType.IllegalAssignment, t.Position);
@@ -118,6 +123,8 @@ internal sealed class MacroExpander
         // Sum of pattern specificities; higher means more constrained.
         int total = 0;
         foreach (var p in macro.Pattern) total += PatternSpecificity(p);
+        // Guard presence increases effective specificity vs unguarded generic clause.
+        if (macro.Guard is not null) total += 1;
         return total;
     }
 
@@ -140,8 +147,15 @@ internal sealed class MacroExpander
         {
             if (macro.Guard is not null)
             {
-                var guardEval = SubstituteMacroVariables(macro.Guard, bindings);
-                if (guardEval.Type == ExprType.Var && guardEval.VarName == "false")
+                // Substitute variables, expand macros within the guard, then evaluate it.
+                var guardExpr = SubstituteMacroVariables(macro.Guard, bindings);
+                guardExpr = ExpandRecursive(guardExpr, depth + 1); // allow nested macro usage inside guard
+                // Evaluate guard expression to a value; treat Church false or literal false as failure.
+                Expr evaluated;
+                try { evaluated = _interpreter!.EvaluateCEK(guardExpr); }
+                catch { return MacroExpansionResult.Failed("Guard evaluation error"); }
+                // Recognize false via boolean extraction or literal var name.
+                if ((evaluated.Type == ExprType.Var && evaluated.VarName == "false") || (Expr.TryExtractBoolean(evaluated, out var boolVal) && !boolVal))
                     return MacroExpansionResult.Failed("Guard failed");
             }
             var expanded = SubstituteMacroVariables(macro.Transformation, bindings);
@@ -174,16 +188,26 @@ internal sealed class MacroExpander
         if (args.Count != patterns.Count) return false; for (int k = 0; k < patterns.Count; k++) if (!MatchSingle(args[k], patterns[k], bindings)) return false; return true;
     }
 
-    private static bool MatchSingle(Expr expr, MacroPattern pattern, Dictionary<string, Expr> bindings)
+    private bool MatchSingle(Expr expr, MacroPattern pattern, Dictionary<string, Expr> bindings)
     {
         switch (pattern)
         {
             case LiteralPattern lit:
                 return expr.Type == ExprType.Var && expr.VarName == lit.Value;
             case IntLiteralPattern intLit:
-                // Numeral is Church encoded λf.λx.f(f(...x)) – detect by counting applications when pretty-printed? Simplest: re-normalize to numeral using interpreter's detection not available here.
-                // We'll structural match against the canonical Church numeral form produced by parser (λf.λx. f^n x)
-                return IsChurchNumeral(expr, intLit.Value);
+                // First try direct structural match.
+                if (IsChurchNumeral(expr, intLit.Value)) return true;
+                // Attempt to evaluate expression (e.g., succ chains) to WHNF and test again (guard against divergence with try/catch).
+                if (_interpreter != null)
+                {
+                    try
+                    {
+                        var evaluated = _interpreter.EvaluateCEK(expr);
+                        if (IsChurchNumeral(evaluated, intLit.Value)) return true;
+                    }
+                    catch { /* ignore evaluation failures for matching */ }
+                }
+                return false;
             case VariablePattern v when !v.IsRest:
                 bindings[v.Name] = expr; return true;
             case WildcardPattern:
@@ -223,7 +247,7 @@ internal sealed class MacroExpander
         return count == n;
     }
 
-    private static bool MatchApplicationSpine(Expr expr, IList<MacroPattern> patterns, Dictionary<string, Expr> bindings)
+    private bool MatchApplicationSpine(Expr expr, IList<MacroPattern> patterns, Dictionary<string, Expr> bindings)
     {
         if (patterns.Count == 0) return false;
         // Decompose expr into spine (left-assoc applications): collect from head outward.
