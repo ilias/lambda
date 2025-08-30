@@ -53,98 +53,10 @@ public partial class Interpreter
             return MakeChurchNumeral(new Random().Next(min, max + 1));
     }
 
-    internal Expr? IsArithmeticPrimitive(string opName, List<Expr> args, Dictionary<string, Expr> env)
-    {
-        if (args.Count < 1 || args.Count > 2) return null; // Invalid number of arguments
-
-        // Try to get the first argument as a Church numeral
-        if (!TryGetChurchInt(args[0], env, out int a)) return null;
-
-        // If there's a second argument, try to get it as well
-        int b = 0;
-        bool isArg2Number = false;
-        if (args.Count == 2 && TryGetChurchInt(args[1], env, out b))
-            isArg2Number = true;
-
-        // Check for known arithmetic primitives
-        var result = ArithmeticPrimitives(opName, a, b, args, isArg2Number);
-        if (result.HasValue) return MakeChurchNumeral(result.Value);
-
-        // Check for known comparison primitives
-        var comparisonResult = ComparisonPrimitives(opName, a, b, args, isArg2Number);
-        if (comparisonResult.HasValue) return MakeChurchBoolean(comparisonResult.Value);
-
-        return null; // Not an arithmetic or comparison primitive
-    }
-    // Intercept known arithmetic primitives
-    internal static int? ArithmeticPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
-        => (opName, args.Count, isArg2Number) switch
-        {
-            ("plus" or "+", 2, true) => a + b,
-            ("minus" or "-", 2, true) => Math.Max(0, a - b),
-            ("mult" or "*", 2, true) => a * b,
-            ("div" or "/", 2, true) => b == 0 ? 0 : a / b,
-            ("mod" or "%", 2, true) => b == 0 ? 0 : a % b,
-            ("exp" or "pow" or "^", 2, true) => (int)Math.Pow(a, b),
-            ("max", 2, true) => Math.Max(a, b),
-            ("min", 2, true) => Math.Min(a, b),
-
-            ("succ" or "++" or "inc", 1, _) => a + 1,
-            ("pred" or "--" or "decr", 1, _) => Math.Max(0, a - 1),
-            ("square", 1, _) => a * a,
-            ("half", 1, _) => a / 2,
-            ("sqrt", 1, _) => (int)Math.Sqrt(a),
-
-            _ => null
-        };
-
-    internal static bool? ComparisonPrimitives(string? opName, int a, int b, List<Expr> args, bool isArg2Number)
-        => (opName, args.Count, isArg2Number) switch
-        {
-            ("lt" or "<", 2, true) => a < b,
-            ("leq" or "<=", 2, true) => a <= b,
-            ("eq" or "==", 2, true) => a == b,
-            ("geq" or ">=", 2, true) => a >= b,
-            ("gt" or ">", 2, true) => a > b,
-            ("neq" or "!=", 2, true) => a != b,
-
-            ("iszero", 1, _) => a == 0,
-            ("even", 1, _) => a % 2 == 0,
-            ("odd", 1, _) => a % 2 != 0,
-
-            _ => null
-        };
-
     private void RegisterNativeFunctions()
     {
-        RegisterNativeFunction("random", IsRandom);
-        RegisterNativeFunction("alphaEq", AlphaEqNative);
-
-        List<string> nativeArithmeticOps =
-        [
-            "plus", "+",
-            "minus", "-",
-            "mult", "*",
-            "div", "/",
-            "mod", "%",
-            "exp", "pow", "^",
-            "max", "min",
-            "succ", "++", "inc",
-            "pred", "--", "decr",
-            "square", "half", "sqrt",
-
-            "lt", "<",
-            "leq", "<=",
-            "eq", "==",
-            "geq", ">=",
-            "gt", ">",
-            "neq", "!=",
-            "iszero", "even", "odd"
-        ];
-        // Arithmetic primitives
-        foreach (var op in nativeArithmeticOps)
-            RegisterNativeFunction(op, IsArithmeticPrimitive);
-
+    // Delegate to central registry (descriptor based) for clarity & discoverability
+    NativeRegistry.RegisterAll(this);
     }
 
 

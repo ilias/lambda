@@ -63,10 +63,27 @@ public partial class Interpreter
     private string ShowNativeOnly()
     {
         if (_nativeFunctions.Count == 0) return "No native functions registered.";
+        var infos = NativeRegistry.GetDescriptors()
+            .OrderBy(i => i.Category)
+            .ThenBy(i => i.Name)
+            .ToList();
+        var _count = infos.Count;
         _logger.Log("\n# NATIVE FUNCTIONS\n");
-        foreach (var kv in _nativeFunctions.OrderBy(k => k.Key))
-            _logger.Log($"  {kv.Key}");
-        return $"# Displayed {_nativeFunctions.Count} native function(s).";
+        string? currentCat = null;
+        foreach (var info in infos)
+        {
+            if (currentCat != info.Category)
+            {
+                currentCat = info.Category;
+                _logger.Log($"  # {currentCat.ToUpperInvariant()}");
+            }
+            var aliasPart = info.Aliases.Length > 0 ? $" {string.Join(" ", info.Aliases)}" : string.Empty;
+            _count += info.Aliases.Length;
+            var arity = info.MinArity == info.MaxArity ? info.MinArity.ToString() : $"{info.MinArity}-{info.MaxArity}";
+            var doc = string.IsNullOrWhiteSpace(info.Doc) ? "" : $"  # {info.Doc}";
+            _logger.Log($"  {info.Name}{aliasPart} : arity {arity}{doc}");
+        }
+        return $"# Displayed {infos.Count} or { _count} with alias native function descriptor(s).";
     }
 
     public string ShowInfixOperators()
