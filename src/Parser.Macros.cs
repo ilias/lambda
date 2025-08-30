@@ -53,12 +53,12 @@ internal sealed class MacroExpander
                 if (lit == "_") return MacroPattern.Wildcard();
                 return MacroPattern.Literal(lit);
             case TokenType.InfixOp when t.Value == "-":
-                // Negative integer literal pattern: '-' followed immediately by Integer token
-                if (i + 1 < tokens.Count && tokens[i+1].Type == TokenType.Integer && int.TryParse("-" + tokens[i+1].Value, out var negVal))
-                { i += 2; return MacroPattern.IntLiteral(negVal); }
+                // Pattern form using separate '-' token before digits (e.g., (negSpec -2))
+                if (i + 1 < tokens.Count && tokens[i+1].Type == TokenType.Integer && int.TryParse("-" + tokens[i+1].Value, out var negVal2))
+                { i += 2; return MacroPattern.IntLiteral(negVal2); }
                 throw new ParseException(TreeErrorType.IllegalAssignment, t.Position);
             case TokenType.Integer:
-                // Support integer literal patterns (match only exact numeral occurrences)
+                // Support positive or negative integer literal patterns (token already includes sign if unary)
                 if (!int.TryParse(t.Value, out var intVal)) throw new ParseException(TreeErrorType.IllegalAssignment, t.Position);
                 i++;
                 return MacroPattern.IntLiteral(intVal);
