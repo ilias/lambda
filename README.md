@@ -1238,19 +1238,47 @@ The macro system has been extended beyond simple one-clause textual substitution
    - Example shown in max2 above.
 
 4. Clause Ordering & Precedence
-   - Clauses are ordered primarily by arity (more specific = more fixed arguments before a rest parameter).
-   - Ties are broken by recency (most recently defined matching clause wins) to allow incremental refinement.
+     - Clauses are ranked by a specificity score so that **more constrained patterns win over generic ones**.
+     - Specificity factors (current heuristic):
+         - Literal symbol or integer literal = high weight
+         - Structural application/list subpattern adds weight (and recursively includes its children)
+         - Plain variable = neutral; wildcard `_` = neutral; rest variable `$xs...` = slight penalty
+         - Higher total score wins; ties broken by higher arity, then recency (last defined wins)
+     - Consequence: `(spec (cons 1 $t))` beats `(spec $x)`; `(arity2 ($f $x $y))` beats `(arity2 $z)`.
 
 5. Pattern Variable Placeholders
    - During parsing, occurrences of `$name` in transformation (and guard) bodies are internally converted to placeholders, ensuring capture-safe substitution.
    - Integer literals inside macro bodies are delayed (kept as integers) until normal expression building, supporting lightweight numeric macros.
 
 6. Rest Pattern Constraints
-   - At most one rest variable per pattern and it must appear at the end.
-   - Rest cannot appear in nested list subpatterns (future enhancement may relax this).
+    - At most one rest variable per top-level macro pattern and it must appear at the end.
+    - Rest capture currently disallowed inside nested structural subpatterns (planned relaxation).
 
-7. Display / Introspection
-    - `:env macros` lists every clause including its guard (if any) and a `...` marker for rest variables.
+7. Structural & Nested Application Patterns (NEW)
+    - You can match the *application spine* of an argument using a parenthesized pattern: `(f a b)` matches an expression shaped like `((f a) b)`.
+    - Patterns compose recursively, enabling nested destructuring of list constructors or curried function calls:
+
+      ```lambda
+      :macro (head (cons $h $t)) => $h
+      :macro (dropSecond (cons $x (cons _ $rest))) => (cons $x $rest)
+      :macro (wrap (plus 0 $x)) => $x   # structural match against (plus 0 x)
+      :macro (swapArgs ($f $a $b)) => ($f $b $a)
+      :macro (arity2 ($f $x $y)) => 2
+      :macro (arity2 $z) => 0          # fallback
+      ```
+
+    - Each component inside a structural subpattern can itself be a literal, variable, wildcard, or another structural list.
+
+8. Wildcard Pattern `_` (NEW)
+    - Use `_` in any pattern position to ignore that subexpression without binding it.
+    - Example: `:macro (ignoreMiddle (triple $a _ $c)) => (pair $a $c)`.
+
+9. Integer Literal Patterns (NEW)
+    - Integer tokens in patterns (e.g. `1`, `42`) match the corresponding Church numeral only.
+    - Enables precise rewrites like `:macro (spec (cons 1 $t)) => 1` while avoiding accidental matches on other numerals.
+
+10. Display / Introspection
+    - `:env macros` lists every clause including guard (if present), structural subpatterns, wildcards, and rest markers `...`.
 
 #### Example Putting It Together
 
@@ -1265,12 +1293,12 @@ The macro system has been extended beyond simple one-clause textual substitution
 These enhancements are on the roadmap to further strengthen the macro system:
 
 - Hygiene & gensym (automatic alpha-renaming to prevent variable capture).
-- Quasiquote / unquote / splicing for more ergonomic macro bodies.
-- Richer guard evaluation semantics (full interpretation with short-circuiting, pattern predicates).
-- Macro removal / redefinition controls (`:unmacro` or named groups).
+- Quasiquote / unquote / splicing for ergonomic macro bodies.
+- Richer guard semantics (full evaluation + boolean recognition beyond literal `false`).
+- Macro removal / replacement controls (`:unmacro`, groups, shadow listing).
 - Namespacing and selective macro importing.
-- Nested rest patterns and rest in sublists.
-- Compile-time evaluation blocks.
+- Nested rest patterns & rest inside structural subpatterns.
+- Compile-time evaluation blocks and macro-time assertions.
 
 ### Performance Metrics Reference
 

@@ -7,8 +7,62 @@
 #   - Ambiguous expectations were converted where a reasonable canonical form exists
 # =========================================================================
 
-:test clear
-:clear cache
+# Structural / wildcard macro tests (auto added)
+# Expect head (cons 1 (cons 2 nil)) => 1
+:macro (head (cons $h $t)) => $h
+:macro (head nil) => nil
+alphaEq (head (cons 1 (cons 2 nil))) 1
+alphaEq (head nil) nil
+
+# ---------------------------------------------------------------------------
+# Extended Structural Macro Pattern Tests
+# ---------------------------------------------------------------------------
+
+# Swap arguments of a binary application using nested structural pattern
+:macro (swapArgs ($f $a $b)) => ($f $b $a)
+alphaEq (swapArgs (plus 2 5)) (plus 5 2)
+
+# Drop the second list element: (cons x (cons _ rest)) -> (cons x rest)
+:macro (dropSecond (cons $x (cons _ $rest))) => (cons $x $rest)
+# Fallback: single element list remains unchanged
+:macro (dropSecond (cons $x nil)) => (cons $x nil)
+alphaEq (dropSecond [1,2,3,4]) [1,3,4]
+alphaEq (dropSecond [9]) [9]            # no match (pattern length mismatch) stays same
+
+# Specific structural match should win over generic variable match
+:macro (spec (cons 1 $t)) => 1
+:macro (spec $x) => 0
+alphaEq (spec (cons 1 nil)) 1
+alphaEq (spec 42) 0
+
+# Arity-sensitive structural match (function with exactly two args)
+:macro (arity2 ($f $x $y)) => 2
+:macro (arity2 $z) => 0
+alphaEq (arity2 (plus 1 2)) 2
+alphaEq (arity2 (plus 1 2 3)) 0   # chain has 3 args so pattern length mismatch
+
+# Wildcard inside structural pattern ignored
+:macro (ignoreMiddle (triple $a _ $c)) => (pair $a $c)
+# Define triple constructor via previously defined macro if absent; fallback pure lambda
+triple = λx y z.cons x (cons y (cons z nil))
+alphaEq (ignoreMiddle (triple 7 8 9)) (pair 7 9)
+
+# Nested capture reuse: (wrap (plus 0 x)) => x (tests nested structural + existing macro (plus 0 x)->x)
+:macro (wrap (plus 0 $x)) => $x
+alphaEq (wrap (plus 0 11)) 11
+
+# Composition style structural rewrite: (apply2 f a b) => (f a b) using pattern spine
+:macro (apply2 $f $a $b) => ($f $a $b)
+alphaEq (apply2 mult 3 4) 12
+
+
+# Wildcard pattern: ignore middle argument
+:macro (pick3 $a _ $c) => (pair $a $c)
+alphaEq (pick3 1 99 2) (pair 1 2)
+
+# Nested application pattern: (addZero x) => x when first arg is plus 0 x pattern
+:macro (plus 0 $x) => $x
+alphaEq (plus 0 5) 5
 
 # --- Boolean Logic ---
 alphaEq (true 1 0) 1

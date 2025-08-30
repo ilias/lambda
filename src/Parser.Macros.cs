@@ -49,7 +49,14 @@ internal sealed class MacroExpander
             case TokenType.LParen:
                 var nested = new List<MacroPattern>(); i++; while (i < tokens.Count && tokens[i].Type != TokenType.RParen) nested.Add(ParseMacroPattern(tokens, ref i)); if (i >= tokens.Count || tokens[i].Type != TokenType.RParen) throw new ParseException(TreeErrorType.UnclosedParen, t.Position); i++; return MacroPattern.List(nested);
             case TokenType.Term:
-                var lit = t.Value!; i++; return MacroPattern.Literal(lit);
+                var lit = t.Value!; i++;
+                if (lit == "_") return MacroPattern.Wildcard();
+                return MacroPattern.Literal(lit);
+            case TokenType.Integer:
+                // Support integer literal patterns (match only exact numeral occurrences)
+                if (!int.TryParse(t.Value, out var intVal)) throw new ParseException(TreeErrorType.IllegalAssignment, t.Position);
+                i++;
+                return MacroPattern.IntLiteral(intVal);
             default: throw new ParseException(TreeErrorType.IllegalAssignment, t.Position);
         }
     }
@@ -82,7 +89,13 @@ internal sealed class MacroExpander
         if (depth > 100) return expr;
         foreach (var entry in _parser._macros)
         {
-            var ordered = entry.Value.Select((m, idx) => (m, idx)).OrderByDescending(t => t.m.Pattern.Count).ThenByDescending(t => t.idx).Select(t => t.m);
+            // Order macros by a computed specificity score so structural / literal-rich patterns beat generic variable catch-alls.
+            var ordered = entry.Value
+                .Select((m, idx) => (m, idx, score: ComputeSpecificityScore(m)))
+                .OrderByDescending(t => t.score)          // most specific first
+                .ThenByDescending(t => t.m.Pattern.Count) // then by arity (more patterns first)
+                .ThenByDescending(t => t.idx)             // finally by recency (last defined wins ties)
+                .Select(t => t.m);
             foreach (var macro in ordered)
             {
                 var attempt = TryExpandMacro(expr, macro, depth);
@@ -99,6 +112,24 @@ internal sealed class MacroExpander
             _ => expr
         };
     }
+
+    private static int ComputeSpecificityScore(MacroDefinition macro)
+    {
+        // Sum of pattern specificities; higher means more constrained.
+        int total = 0;
+        foreach (var p in macro.Pattern) total += PatternSpecificity(p);
+        return total;
+    }
+
+    private static int PatternSpecificity(MacroPattern pattern) => pattern switch
+    {
+        LiteralPattern => 10,              // exact literal match
+        IntLiteralPattern => 10,           // exact integer literal (if used)
+        WildcardPattern => 0,              // matches anything, gives no specificity
+        VariablePattern v => v.IsRest ? -1 : 0, // rest capture is very generic; slight penalty
+        ListPattern lp => 3 + lp.Patterns.Sum(PatternSpecificity), // structural application spine
+        _ => 0
+    };
 
     private MacroExpansionResult TryExpandMacro(Expr expr, MacroDefinition macro, int depth)
     {
@@ -143,13 +174,74 @@ internal sealed class MacroExpander
         if (args.Count != patterns.Count) return false; for (int k = 0; k < patterns.Count; k++) if (!MatchSingle(args[k], patterns[k], bindings)) return false; return true;
     }
 
-    private static bool MatchSingle(Expr expr, MacroPattern pattern, Dictionary<string, Expr> bindings) => pattern switch
+    private static bool MatchSingle(Expr expr, MacroPattern pattern, Dictionary<string, Expr> bindings)
     {
-        LiteralPattern lit => expr.Type == ExprType.Var && expr.VarName == lit.Value,
-        VariablePattern v when !v.IsRest => (bindings[v.Name] = expr) == expr,
-        ListPattern list => false, // TODO: Support structural matching for list patterns
-        _ => false
-    };
+        switch (pattern)
+        {
+            case LiteralPattern lit:
+                return expr.Type == ExprType.Var && expr.VarName == lit.Value;
+            case IntLiteralPattern intLit:
+                // Numeral is Church encoded λf.λx.f(f(...x)) – detect by counting applications when pretty-printed? Simplest: re-normalize to numeral using interpreter's detection not available here.
+                // We'll structural match against the canonical Church numeral form produced by parser (λf.λx. f^n x)
+                return IsChurchNumeral(expr, intLit.Value);
+            case VariablePattern v when !v.IsRest:
+                bindings[v.Name] = expr; return true;
+            case WildcardPattern:
+                return true;
+            case ListPattern listPattern:
+                // Interpret listPattern.Patterns as an application spine pattern: (f a b) ≡ ((f a) b)
+                return MatchApplicationSpine(expr, listPattern.Patterns, bindings);
+            default:
+                return false;
+        }
+    }
+
+    private static bool IsChurchNumeral(Expr expr, int n)
+    {
+        // Expect λf.λx. f applied n times to x.
+        if (expr.Type != ExprType.Abs) return false;
+        var fVar = expr.AbsVarName!;
+        var body = expr.AbsBody!;
+        if (body.Type != ExprType.Abs) return false;
+        var xVar = body.AbsVarName!;
+        var inner = body.AbsBody!;
+        // Unroll applications: should be f (f (... (f x))) n times, or just x when n==0
+        int count = 0;
+        while (inner.Type == ExprType.App)
+        {
+            var left = inner.AppLeft!;
+            var right = inner.AppRight!;
+            if (left.Type == ExprType.Var && left.VarName == fVar)
+            {
+                count++;
+                inner = right;
+            }
+            else return false;
+        }
+        // Final must be xVar
+        if (!(inner.Type == ExprType.Var && inner.VarName == xVar)) return false;
+        return count == n;
+    }
+
+    private static bool MatchApplicationSpine(Expr expr, IList<MacroPattern> patterns, Dictionary<string, Expr> bindings)
+    {
+        if (patterns.Count == 0) return false;
+        // Decompose expr into spine (left-assoc applications): collect from head outward.
+        var nodes = new List<Expr>();
+        var cur = expr;
+        while (cur.Type == ExprType.App)
+        {
+            nodes.Insert(0, cur.AppRight!);
+            cur = cur.AppLeft!;
+        }
+        nodes.Insert(0, cur); // head variable or abstraction
+        if (nodes.Count != patterns.Count) return false;
+        for (int k = 0; k < patterns.Count; k++)
+        {
+            if (!MatchSingle(nodes[k], patterns[k], bindings)) return false;
+        }
+        return true;
+    }
 
     private Expr SubstituteMacroVariables(Expr transformation, Dictionary<string, Expr> bindings) => transformation.Type switch
     { ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_VAR_") => ExtractMacroVar(transformation.VarName, bindings) ?? transformation, ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_INT_") => ConvertMacroInt(transformation.VarName), ExprType.Var when transformation.VarName != null && bindings.TryGetValue(transformation.VarName, out var val) => val, ExprType.Abs => SubstituteInLambda(transformation, bindings), ExprType.App => Expr.App(SubstituteMacroVariables(transformation.AppLeft!, bindings), SubstituteMacroVariables(transformation.AppRight!, bindings)), _ => transformation };

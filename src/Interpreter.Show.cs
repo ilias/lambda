@@ -294,6 +294,22 @@ public partial class Interpreter
             f $ x $ y           =>  f x y  (right-assoc, lowest precedence)
             λ_._ or λ_,x._      =>  λα0.α1...  (anonymous fresh names ignored if unused)
 
+        -- Macro Patterns (extended) --
+                :macro (name <pat> ...) => body
+                    Pattern atoms:
+                        $x            Capture single argument
+                        $xs...        Rest capture (zero or more trailing args -> list)
+                        _             Wildcard (ignore, no binding)
+                        symbol        Literal (must match exactly)
+                        42            Integer literal (matches only Church 42)
+                        (f a b)       Structural application pattern over the application spine
+                    Ordering: higher specificity (literals, structure) beats generic vars; ties by arity then recency.
+                    Example:
+                        :macro (spec (cons 1 $t)) => 1
+                        :macro (spec $x) => 0    # fallback
+                        :macro (arity2 ($f $x $y)) => 2
+                        :macro (arity2 $z) => 0
+
         {multiLine}
         See README 'Formal Grammar' for precise grammar & full desugarings.
         """;
