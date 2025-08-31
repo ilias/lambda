@@ -17,10 +17,11 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Examples (Extended)](#examples-extended)
 - [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
+- [Structural Equivalence](#structural-equivalence)
 - [Building and Running](#building-and-running)
-    - [Web UI & Streaming Logs](#web-ui--streaming-logs)
-    - [Docker (Web UI)](#docker-web-ui)
-    - [Streaming Modes (Comparison)](#streaming-modes-comparison)
+  - [Web UI & Streaming Logs](#web-ui--streaming-logs)
+  - [Docker (Web UI)](#docker-web-ui)
+  - [Streaming Modes (Comparison)](#streaming-modes-comparison)
 - [Range Syntax Extensions](#range-syntax-extensions)
 - [Parser Errors & Diagnostics](#parser-errors--diagnostics)
 - [Unary Minus / Negative Literals](#unary-minus--negative-literals)
@@ -47,6 +48,7 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - **Infix Operators**: Define custom infix operators with precedence and associativity
 - **Macro System**: Powerful pattern-driven macro system (multi-clause, guards, variadic/rest arguments, precedence & shadowing)
 - **Native Arithmetic & User Primitives**: Optional native arithmetic optimizations for Church numerals, plus support for user-defined native primitives (see below)
+- **Structural Equivalence Natives Always-On**: `alphaEq`, `betaEq`, `hashEq`, `etaEq` remain available even when native arithmetic is disabled via `:native off` (only numeric/boolean arithmetic shortcuts are toggled)
 - **Pretty Printing**: Automatic formatting of Church numerals and lists
 - **Comprehensive Standard Library**: ~200 predefined functions and utilities (see sections below; count may evolve)
 - **General & Stepped Ranges**: Rich list range syntax `[a .. b]`, `[a, b .. c]` with lazy dynamic expansion (supports negative & descending ranges)
@@ -536,7 +538,7 @@ This summarizes the operational effect or syntactic desugaring performed by each
 | `x, y -> body`      | `x -> y -> body` |
 | `let x = A, y = B in C` | `let x = A in let y = B in C` |
 | `let rec f = E in B` | `let f = Y (λf.E) in B` |
-| `a |> f |> g`       | `g (f a)` (left-to-right pipeline) |
+| `a \|> f \|> g`     | `g (f a)` (left-to-right pipeline) |
 | `f . a . b` | `(f a) b` (application chaining; '.' is not composition) |
 | `f ∘ g` | `λx.f (g x)` (true composition, right-assoc) |
 | `f $ x $ y`         | `f x y` ( `$` is right-assoc, lowest precedence application operator ) |
@@ -550,11 +552,11 @@ This summarizes the operational effect or syntactic desugaring performed by each
 | `:clear ops`       | Removes custom infix operators; keeps predefined \|> . ∘ $ |
 | `:clear cache`      | Clears substitution/evaluation/analysis caches |
 | `:depth n`          | Sets recursion depth guard to `n` (10–10000) |
-| `:lazy on|off`      | Toggles lazy vs eager evaluation mode |
-| `:native on|off`    | Enables/disables native arithmetic & primitive optimizations |
+| `:lazy on\|off`     | Toggles lazy vs eager evaluation mode |
+| `:native on\|off`   | Enables/disables native arithmetic & primitive optimizations |
 | `:native show`      | Lists current native primitives |
-| `:pretty on|off`    | Toggles pretty printing for numerals, lists, booleans |
-| `:step on|off`      | Toggles CEK step trace emission |
+| `:pretty on\|off`   | Toggles pretty printing for numerals, lists, booleans |
+| `:step on\|off`     | Toggles CEK step trace emission |
 | `:stats`            | Prints performance & cache statistics report |
 | `:test clear`       | Resets structural equality counters |
 | `:test result`      | Displays structural equality counters |
@@ -1555,9 +1557,26 @@ max, min, sqrt, random             # Additional functions
 alphaEq                            # Alpha-equivalence (normalize both; binder names ignored)
 ```
 
+#### Structural Equivalence
+
+The interpreter provides an always-on suite of structural comparison helpers: `alphaEq`, `betaEq`, `hashEq`, `etaEq`. These remain active even when `:native off` disables arithmetic fast paths. See detailed table below in the alphaEq subsection.
+
 #### Alpha Equivalence (alphaEq)
 
 `alphaEq` is a native helper that returns a Church boolean (`true` / `false`) indicating whether two expressions are *semantically equal up to normalization and alpha-equivalence*.
+
+> Always-On Structural Equivalence Suite
+>
+> The interpreter ships with a family of structural comparison helpers that are **always enabled**, independent of the `:native on|off` setting (which only affects arithmetic & comparison speedups):
+>
+> | Helper  | Purpose |
+> |---------|---------|
+> | `alphaEq a b` | Normalize both expressions; compare modulo binder renaming |
+> | `betaEq a b`  | Beta-normalize both; then alpha compare (skips raw pre-normalization shortcut) |
+> | `hashEq a b`  | Beta-normalize; compare canonical De Bruijn structural hash (fast approximation) |
+> | `etaEq a b`   | Beta-normalize; eta-reduce; then alpha compare (captures more extensional equalities) |
+>
+> Use `hashEq` for a quick (possibly conservative) equality screen, and fall back to `betaEq` / `etaEq` for definitive logical equivalence checks depending on whether eta-extensionality matters.
 
 Current pipeline (implementation detail, but useful to know):
 

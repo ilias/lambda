@@ -315,6 +315,10 @@ public partial class Interpreter
             :test clear|result    Reset or show structural equality test counters
             :help                 Show this summary
 
+        -- Always-On Structural Natives --
+            alphaEq / betaEq / hashEq / etaEq remain available even when :native off
+            (Arithmetic & numeric comparisons are the parts disabled by :native off)
+
         -- Key Desugarings (Summary) --
             def f x y = body    =>  f = x,y -> body
             x, y -> body        =>  x -> y -> body
