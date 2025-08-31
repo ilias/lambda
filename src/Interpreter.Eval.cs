@@ -115,7 +115,7 @@ public partial class Interpreter
     }
 
     // Native primitives (arithmetic, comparisons, structural). Certain structural tests (alphaEq) remain active even when arithmetic disabled.
-    private static readonly HashSet<string> _alwaysEnabledNatives = new(StringComparer.Ordinal) { "alphaEq" };
+    private static readonly HashSet<string> _alwaysEnabledNatives = new(StringComparer.Ordinal) { "alphaEq", "betaEq", "hashEq", "etaEq" };
     private Expr? TryNativeArithmetic(Expr app, Dictionary<string, Expr> env)
     {
         // Decompose application spine to get operator head and argument list
