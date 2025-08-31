@@ -385,7 +385,8 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 
 # Built-in operators
 5 |> succ |> mult 2     # Pipeline operator: left-to-right data flow → 12
-(mult 2) . succ         # Composition operator: right-to-left function building
+(mult 2) ∘ succ         # True composition operator: right-to-left function building
+f . x . y               # Application chaining sugar: (f x) y ('.' no longer composition)
 3 + 4 * 5               # Infix arithmetic (when operators are defined) → 23
 
 # Application operator (predefined)
@@ -477,7 +478,7 @@ The interpreter provides numerous commands for managing your session:
 :clear                   # Clear everything (env + macros + infix ops + stats + caches)
 :clear defs              # Clear only definitions (env); keep macros & infix ops
 :clear macros            # Clear only macro clauses
-:clear ops               # Clear custom infix operators (restores defaults |>, .)
+:clear ops               # Clear custom infix operators (restores defaults |>, ., ∘, $)
 :clear cache             # Clear all memoization / analysis caches
 :clear all               # Same as bare :clear
 :env                     # Show environment (defs, macros, infix, natives)
@@ -536,7 +537,8 @@ This summarizes the operational effect or syntactic desugaring performed by each
 | `let x = A, y = B in C` | `let x = A in let y = B in C` |
 | `let rec f = E in B` | `let f = Y (λf.E) in B` |
 | `a |> f |> g`       | `g (f a)` (left-to-right pipeline) |
-| `f . g . h`         | `f (g (h x))` when applied; composition is right-associative |
+| `f . a . b` | `(f a) b` (application chaining; '.' is not composition) |
+| `f ∘ g` | `λx.f (g x)` (true composition, right-assoc) |
 | `f $ x $ y`         | `f x y` ( `$` is right-assoc, lowest precedence application operator ) |
 | `λx y.z`            | `λx.λy.z` |
 | `_` placeholders    | Each `_` becomes a fresh, unique parameter name (ignored if unused) |
@@ -545,7 +547,7 @@ This summarizes the operational effect or syntactic desugaring performed by each
 | `:clear`            | Clears env, macros, infix ops (except built-ins), stats & caches |
 | `:clear macros`     | Clears only macro clauses |
 | `:clear defs`       | Removes value bindings (definitions) |
-| `:clear ops`        | Removes custom infix operators (keeps predefined `|>`, `.`, `$`) |
+| `:clear ops`       | Removes custom infix operators; keeps predefined \|> . ∘ $ |
 | `:clear cache`      | Clears substitution/evaluation/analysis caches |
 | `:depth n`          | Sets recursion depth guard to `n` (10–10000) |
 | `:lazy on|off`      | Toggles lazy vs eager evaluation mode |
@@ -565,7 +567,7 @@ This summarizes the operational effect or syntactic desugaring performed by each
 | `:help`             | Displays help summary (includes these desugarings) |
 | `:exit` / `:quit`   | Terminates the interpreter |
 
-> Note: Built-in infix operators always available: `|>` (pipeline), `.` (composition), `$` (application). They may be redefined only by clearing operators and re-registering; pipeline / composition semantics are assumed by other documentation so overriding is discouraged.
+> Note: Built-in infix operators always available: `|>` (pipeline), `∘` (composition), `.` (application chaining), `$` (low-precedence application). Overriding them is discouraged; docs assume these semantics.
 
 ## Command / Expression Chaining
 
@@ -1122,7 +1124,7 @@ Define custom infix operators with precedence and associativity:
 
 ### Built-in Special Operators
 
-The interpreter includes two powerful built-in operators that provide essential functional programming patterns:
+The interpreter includes several built-in operators that provide essential functional programming patterns:
 
 #### Pipeline Operator (`|>`)
 
@@ -1144,27 +1146,26 @@ mult 2 (succ 5)                    # Same result, but less readable
 42 |> pred |> pred |> mult 3       # → mult 3 (pred (pred 42)) = 120
 ```
 
-#### Function Composition Operator (`.`)
+#### Function Composition Operator (`∘`)
 
-The composition operator enables right-to-left function composition:
+`∘` is the dedicated composition operator: `f ∘ g` ≡ `λx.f (g x)`. (The plain dot `.` is now only application chaining sugar: `f . a . b` ≡ `(f a) b`).
 
 ```lambda
-# Composition operator: f . g desugars to f (g x) when applied to x
 double = mult 2
 increment = succ
-doubleInc = double . increment      # → λx.double (increment x)
+doubleInc = double ∘ increment      # → λx.double (increment x)
 
 doubleInc 5                         # → double (increment 5) = 12
 
 # Multiple composition (right-associative)
-f . g . h                           # → f (g (h x)) when applied to x
+f ∘ g ∘ h                           # → f (g (h x)) when applied to x
 
 # Creating complex transformations
-processNumber = mult 3 . succ . mult 2
+processNumber = mult 3 ∘ succ ∘ mult 2
 processNumber 4                     # → mult 3 (succ (mult 2 4)) = 27
 
 # Function composition in higher-order functions
-map (mult 2 . succ) [1, 2, 3]       # → [4, 6, 8]
+map (mult 2 ∘ succ) [1, 2, 3]       # → [4, 6, 8]
 ```
 
 #### Pipeline vs Composition
@@ -1174,11 +1175,11 @@ map (mult 2 . succ) [1, 2, 3]       # → [4, 6, 8]
 data |> transform1 |> transform2 |> transform3
 
 # Composition: right-to-left function building (good for creating reusable functions)
-complexFunction = transform3 . transform2 . transform1
+complexFunction = transform3 ∘ transform2 ∘ transform1
 
 # Equivalent results:
 5 |> succ |> mult 2                # Pipeline
-(mult 2 . succ) 5                  # Composition
+(mult 2 ∘ succ) 5                  # Composition
 
 # Pipeline emphasizes the data flow
 # Composition emphasizes function building

@@ -413,12 +413,14 @@ public partial class Interpreter
                 lines.Add("");
             }
 
-            // Save user defined native functions
+            // Save native functions (detailed descriptors like :env native)
             if (_nativeFunctions.Count > 0)
             {
                 AddTitle("NATIVE FUNCTIONS");
-                foreach (var kv in _nativeFunctions.OrderBy(kv => kv.Key))
-                    lines.Add($"  # {kv.Key}");
+                int totalWithAliases;
+                var nativeLines = BuildNativeDescriptorLines(out totalWithAliases);
+                lines.AddRange(nativeLines);
+                lines.Add($"  # Total native names (incl aliases): {totalWithAliases}");
                 lines.Add("");
             }
 

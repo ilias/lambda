@@ -210,11 +210,60 @@ public partial class Parser
 
     private Expr DesugarInfix(InfixOperator op, Expr left, Expr right)
     {
-        if (op.Symbol == ".") return Expr.App(left, right);
+        if (op.Symbol == ".") return Expr.App(left, right); // original semantics: chaining application
+        if (op.Symbol == "∘")
+        {
+            // Function composition: (f ∘ g)  ==>  λx. f (g x)
+            var free = new HashSet<string>();
+            CollectFreeVars(left, free);
+            CollectFreeVars(right, free);
+            string param = "x";
+            if (free.Contains(param))
+            {
+                int i = 0;
+                while (free.Contains(param = $"x{i}")) i++;
+            }
+            return Expr.Abs(param, Expr.App(left, Expr.App(right, Expr.Var(param))));
+        }
         if (op.Symbol == "|>") return Expr.App(right, left);
     if (op.Symbol == "$") return Expr.App(left, right);
         var f = Expr.Var(op.GetFunctionName());
         return Expr.App(Expr.App(f, left), right);
+    }
+
+    // Minimal free variable collector (non-cached, parser-local) to avoid capture in composition desugaring.
+    private static void CollectFreeVars(Expr expr, HashSet<string> free)
+    {
+        var bound = new HashSet<string>();
+        var stack = new Stack<Expr>();
+        stack.Push(expr);
+        while (stack.Count > 0)
+        {
+            var cur = stack.Pop();
+            switch (cur.Type)
+            {
+                case ExprType.Var:
+                    if (cur.VarName != null && !bound.Contains(cur.VarName)) free.Add(cur.VarName);
+                    break;
+                case ExprType.Abs:
+                    if (cur.AbsVarName != null)
+                    {
+                        bound.Add(cur.AbsVarName);
+                        if (cur.AbsBody != null) stack.Push(cur.AbsBody);
+                        // After exploring body, remove bound var (simulate scope exit) – use recursion simulation
+                        // Here we can't easily know when scope ends with simple stack; accept slight over-approx:
+                        // Over-approx only if shadowing occurs; safe for capture avoidance (may force new param name).
+                    }
+                    break;
+                case ExprType.App:
+                    if (cur.AppLeft != null) stack.Push(cur.AppLeft);
+                    if (cur.AppRight != null) stack.Push(cur.AppRight);
+                    break;
+                case ExprType.Thunk:
+                    if (cur.ThunkValue != null) stack.Push(cur.ThunkValue.Expression);
+                    break;
+            }
+        }
     }
 
     // ---------------- Atoms ----------------

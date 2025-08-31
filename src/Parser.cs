@@ -67,9 +67,10 @@ public partial class Parser
     public Parser()
     {
         _logger = null;
-        DefineInfixOperator("|>", 1, "left");
+    DefineInfixOperator("|>", 1, "left");
     DefineInfixOperator("$", 1, "right");
-        DefineInfixOperator(".", 9, "right");
+    DefineInfixOperator(".", 9, "right"); // application chaining
+    DefineInfixOperator("∘", 9, "right"); // true composition
         _tokenizer = new Tokenizer(this);
         _macroExpander = new MacroExpander(this, null);
     }
@@ -77,9 +78,10 @@ public partial class Parser
     public Parser(Logger logger, Interpreter interpreter)
     {
         _logger = logger;
-        DefineInfixOperator("|>", 1, "left");
+    DefineInfixOperator("|>", 1, "left");
     DefineInfixOperator("$", 1, "right");
-        DefineInfixOperator(".", 9, "right");
+    DefineInfixOperator(".", 9, "right");
+    DefineInfixOperator("∘", 9, "right");
         _tokenizer = new Tokenizer(this);
         _macroExpander = new MacroExpander(this, logger, interpreter);
     }

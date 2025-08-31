@@ -47,10 +47,17 @@ C        = λx y z.x z y
 # Y        = λf.(λx.f (x x)) (λx.f (x x)) # The Y combinator is defined natively by the interpreter for recursion.
 
 # Built-in infix operators (predefined in parser):
-#   |>  (pipeline, precedence 1 left)   a |> f      ==> f a
-#   $   (application, precedence 1 right) f $ g $ x ==> f (g x)   (right-assoc chains remove parentheses)
-#   .   (composition, precedence 9 right) f . g . x ==> f (g x)   (implemented as left application chain)
-# You can still override or shadow with :infix if needed (not recommended for $ / |> / .).
+#   |>  (pipeline, precedence 1 left)      a |> f |> g   ==> g (f a)
+#   $   (application, precedence 1 right)  f $ g $ x     ==> f (g x)    (right-assoc; lowers paren noise)
+#   .   (application chaining, prec 9 r)   f . g x       ==> f (g x)    (right-assoc chaining)
+#   ∘   (true composition, prec 9 r)       f ∘ g         ==> λx. f (g x)
+# NOTE: '.' is NOT true composition; it only chains application when an argument arrives.
+#       '∘' builds a composed function value immediately.
+# ASCII fallbacks (so you don't need to type ∘):
+:infix o 9 right        # declare ASCII composition operator
+o = λf g x. f (g x)     # (f o g) x  ==> f (g x); f o g o h x ==> f (g (h x))
+compose = o             # named alias if you prefer a word
+# Now you can use either '∘' or 'o' for composition. The B combinator also composes: B f g x = f (g x).
 
 # -----------------------------------------------------------------------------
 # 1.2. Boolean Logic and Conditionals
