@@ -121,6 +121,19 @@ alphaEq (iszero 0) true
 alphaEq (iszero 1) false
 alphaEq (exp 2 3) 8
 
+# --- Non-native Arithmetic Verification (native primitives disabled) ---
+# Validate core Church arithmetic when native acceleration is off.
+# Representative subset keeps runtime reasonable.
+:native off
+alphaEq (plus 2 3) 5
+alphaEq (mult 3 4) 12
+alphaEq (pred 3) 2
+alphaEq (minus 5 2) 3
+alphaEq (exp 2 3) 8
+alphaEq (div 7 2) 3
+alphaEq (mod 7 2) 1
+:native on
+
 # --- Division and Modulo ---
 alphaEq (div 7 2) 3
 alphaEq (mod 7 2) 1

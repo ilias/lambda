@@ -114,36 +114,40 @@ public partial class Interpreter
         return cur.Type == ExprType.Var && cur.VarName == "alphaEq";
     }
 
-    // Native arithmetic for Church numerals
+    // Native primitives (arithmetic, comparisons, structural). Certain structural tests (alphaEq) remain active even when arithmetic disabled.
+    private static readonly HashSet<string> _alwaysEnabledNatives = new(StringComparer.Ordinal) { "alphaEq" };
     private Expr? TryNativeArithmetic(Expr app, Dictionary<string, Expr> env)
     {
-        if (!_useNativeArithmetic)
+        // Decompose application spine to get operator head and argument list
+        var rawArgs = new List<Expr>();
+        Expr? head = app;
+        while (head is { Type: ExprType.App, AppLeft: var l, AppRight: var r })
+        {
+            rawArgs.Insert(0, r!);
+            head = l;
+        }
+        if (head is not { Type: ExprType.Var, VarName: var opName })
             return null;
 
-        // Unroll left-associative applications: (((op a) b) c) ...
-        var args = new List<Expr>();
-        Expr? cur = app;
-        while (cur is { Type: ExprType.App, AppLeft: var l, AppRight: var r })
-        {
-            args.Insert(0, r!);
-            cur = l;
-        }
-        if (cur is not { Type: ExprType.Var, VarName: var opName })
-            return null;
+        bool isWhitelisted = _alwaysEnabledNatives.Contains(opName!);
+        if (!_useNativeArithmetic && !isWhitelisted)
+            return null; // arithmetic disabled and not in whitelist
 
-        // Recursively evaluate each argument to normal form for native arithmetic
-        for (int i = 0; i < args.Count; i++)
+        if (!_nativeFunctions.TryGetValue(opName!, out var nativeFunc))
+            return null; // not a registered native name
+
+        var args = rawArgs;
+        // Only pre-normalize arguments when arithmetic features are on (performance) or not whitelisted structural op.
+        if (_useNativeArithmetic && !isWhitelisted)
         {
-            args[i] = EvaluateToNormalForm(args[i], env);
+            for (int i = 0; i < args.Count; i++)
+                args[i] = EvaluateToNormalForm(args[i], env);
         }
 
-        // Helper: Recursively evaluate an expression to normal form (for native arithmetic only)
         Expr EvaluateToNormalForm(Expr expr, Dictionary<string, Expr> env)
         {
-            // Force thunks
             if (expr.Type == ExprType.Thunk)
                 expr = Force(expr);
-            // If it's an application, try to reduce it
             if (expr.Type == ExprType.App)
             {
                 var reduced = TryNativeArithmetic(expr, env);
@@ -153,15 +157,9 @@ public partial class Interpreter
             return expr;
         }
 
-        // Check extensible native function registry first
-        if (opName != null && _useNativeArithmetic && _nativeFunctions.TryGetValue(opName, out var nativeFunc))
-        {
-            _nativeArithmetic++;
-            _stats.NativeUsage[opName] = _stats.NativeUsage.GetValueOrDefault(opName) + 1;
-            return nativeFunc(opName, args, env);
-        }
-
-        return null; // Not a recognized native arithmetic or boolean operation
+        _nativeArithmetic++;
+        _stats.NativeUsage[opName!] = _stats.NativeUsage.GetValueOrDefault(opName!) + 1;
+        return nativeFunc(opName!, args, env);
     }
 
     // Force evaluation of a thunk (lazy value)
