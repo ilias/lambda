@@ -18,7 +18,8 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
 - [Native List Primitives](#native-list-primitives)
- - [Native List Primitives](#native-list-primitives)
+- [Operator Precedence & Associativity](#operator-precedence--associativity)
+- [Native List Primitives](#native-list-primitives)
 - [Structural Equivalence](#structural-equivalence)
 - [Building and Running](#building-and-running)
   - [Web UI & Streaming Logs](#web-ui--streaming-logs)
@@ -1130,6 +1131,56 @@ Define custom infix operators with precedence and associativity:
 <> = λx y.not (eq x y)
 3 <> 4                             # → <> 3 4 → (λx y.not (eq x y)) 3 4 → true
 ```
+## Operator Precedence & Associativity
+
+This section consolidates all precedence and associativity rules the parser applies (loosest → tightest). Higher numeric precedence binds tighter for user‑defined infix operators; application (juxtaposition) always outranks any infix; atoms (parenthesized / literals / identifiers / lambdas / lists) are the tightest units.
+
+Global precedence ladder:
+
+1. `;` (top‑level segment separator – not an expression operator, splits segments)
+2. `let … in …` (right‑associative: `let a = A in let b = B in C`)
+3. Arrow (`p1, p2 -> body`) (right‑associative: `x, y, z -> e` ⇒ `x -> (y -> (z -> e))`)
+4. Infix operators (Pratt parsed by numeric precedence; higher number = tighter)
+5. Application chaining / composition special operators at precedence 9 (`.`, `∘`) – same numeric tier; right‑associative
+6. Ordinary juxtaposition application (left‑associative) – conceptually tighter than any infix precedence tier
+7. Atom (identifiers, numerals, lambdas, bracketed lists, parenthesized expressions)
+
+Built‑in operator summary (expanded):
+
+| Operator | Kind | Prec | Assoc | Desugaring | Notes |
+|----------|------|------|-------|------------|-------|
+| `&#124;>` | pipeline | 1 | left  | `a &#124;> f` ⇒ `f a` | Reads left→right; chains as `g (f a)` |
+| `$`       | low-precedence app | 1 | right | `f $ x $ y` ⇒ `f x y` | Lowest precedence with pipeline; groups from right |
+| `.`       | app chaining | 9 | right | `f . a . b` ⇒ `(f a) b` | Not function composition; just repeated application |
+| `∘`       | composition | 9 | right | `f ∘ g` ⇒ `λx.f (g x)` | Shares precedence with `.`; prefer parens when mixing |
+| `+` (ex)  | user infix | 6 | decl | `x + y` ⇒ `plus x y` | Example (precedence 6) |
+| `*` (ex)  | user infix | 7 | decl | `x * y` ⇒ `mult x y` | Tighter than `+` |
+| `^` (ex)  | user infix | 8 | right | `a ^ b` ⇒ `exp a b` | Right-assoc exponent style |
+
+Guidelines / subtleties:
+
+- `$` and `|>` share the lowest precedence (1); right vs left associativity changes grouping: `f $ g $ x` ⇒ `f (g x)` while `x |> f |> g` ⇒ `g (f x)`.
+- `.` and `∘` intentionally share a high precedence (9) but differ: `f . a . b` applies; `f ∘ g` composes. They do **not** intermix without parentheses: `f . g ∘ h x` parses according to right‑associativity within the same precedence tier (explicit parens recommended for clarity).
+- Plain juxtaposition (application) binds tighter than any infix, so `f x + g y` ⇒ `(plus (f x) (g y))` when `+` defined.
+- Lambda bodies extend rightward: `λx.x + y * z` groups infix by their precedence after lambda parameter binding.
+- Ranges `[a .. b]` and list literals are atoms; elements inside respect the same precedence rules.
+- Composition associativity: `f ∘ g ∘ h` = `f ∘ (g ∘ h)`; chaining associativity: `f . g . x` = `f . (g . x)` ⇒ `f (g x)`.
+- To simulate Haskell style `$` for large expressions, rely on its lowest precedence: `succ $ mult 2 (plus 3 4)`.
+- When mixing pipeline with chaining, remember pipeline groups left first: `a |> f . g` parses as `(f g) a` *not* `g (f a)`; prefer `a |> f |> g` or parentheses.
+
+Examples:
+
+```lambda
+1 + 2 * 3         # => 1 + (2 * 3)
+f $ g x y         # => f (g x y)
+f . g . 5         # => f (g 5)
+(f ∘ g) x         # => f (g x)
+a |> f |> g       # => g (f a)
+a |> f $ g x      # => (f $ g x) a  (discouraged; add parens for clarity)
+```
+
+Parentheses always override; prefer them liberally when combining different precedence tiers.
+
 
 ### Built-in Special Operators
 
@@ -1598,8 +1649,8 @@ Characteristics:
 
 - Ignores superficial binder name differences: `alphaEq (λx.x) (λy.y)` → `true`.
 - Distinguishes genuinely different structure (no eta-reduction: `λx.f x` ≠ `f`).
- - Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
- - Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
+* Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
+* Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
 
 ## Native List Primitives
 

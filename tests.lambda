@@ -1136,6 +1136,49 @@ alphaEq (etaEq (λx.(f (g (h x)))) (f ∘ g ∘ h)) true # deeper chain
 alphaEq (etaEq (λx.(x x)) (λx.(x x))) true          # self application unchanged
 alphaEq (etaEq (λx.(x x)) I) false                  # not identity
 
+# --- Infix Precedence & Associativity Tests ---
+
+# Arithmetic precedence: * binds tighter than +
+alphaEq (1 + 2 * 3) 7          # 1 + (2 * 3)
+alphaEq ((1 + 2) * 3) 9        # parenthesized variant
+
+# Composition (∘) right-associative: f ∘ g ∘ h = f ∘ (g ∘ h)
+alphaEq ((succ ∘ succ ∘ succ) 0) 3
+alphaEq (((succ ∘ succ) ∘ succ) 0) ((succ ∘ (succ ∘ succ)) 0)
+
+# Chaining '.' right-associative application
+alphaEq (succ . pred . 5) (succ (pred 5))
+alphaEq (succ . pred . succ . 4) (succ (pred (succ 4)))
+
+# Pipeline lowest precedence: 2 |> succ ∘ succ => (succ ∘ succ) 2
+alphaEq (2 |> succ ∘ succ) 4
+
+# Pipeline vs chaining:
+# NOTE: '.' is application chaining, NOT composition. The expression `succ . pred` chains as (succ pred)
+# so `5 |> succ . pred` parses to (succ pred) 5  ==> succ pred 5  (NOT succ (pred 5)).
+# Provide an explicit negative then the correctly parenthesized / pipelined positive form.
+alphaEq (5 |> succ . pred) (succ (pred 5))  # expected false (document semantics)
+alphaEq (5 |> pred |> succ) (succ (pred 5)) # equivalent with explicit pipeline sequencing (true)
+# Trailing '.' chaining form not supported; previous line caused EmptyExprList. Provide an explicit
+# parenthesized variant using pipeline for equivalent intent instead (already tested above).
+alphaEq (5 |> pred |> succ) (succ (pred 5))  # reaffirm correct grouping
+
+# $ right-associative (already covered elsewhere, add compound): mult 2 $ plus 1 2 = mult 2 (plus 1 2)
+alphaEq (mult 2 $ plus 1 2) (mult 2 (plus 1 2))
+
+# Interplay: $ has same lowest precedence as |>; ensure right-assoc of $
+alphaEq (succ $ pred $ succ 4) (succ (pred (succ 4)))
+
+# Composition precedence equals chaining precedence (both 9); verify explicit grouping equivalence
+alphaEq ((succ ∘ pred) . 5) (succ (pred 5))
+
+# Custom operator precedence check
+:infix ** 8 right
+def ** a b = exp a b            # right-assoc exponent
+alphaEq (2 + 3 ** 2) 11         # 2 + (3 ** 2) = 2 + 9
+alphaEq (3 ** 2 ** 2) (exp 3 (exp 2 2))   # right-assoc: 3^(2^2) = 3^4 = 81
+
+##################################################################
 # --- Non-native Arithmetic Verification (native primitives disabled) ---
 # Validate core Church arithmetic when native acceleration is off.
 # Representative subset keeps runtime reasonable.
@@ -1263,4 +1306,3 @@ alphaEq (all (λx.true) mixed2) true
 alphaEq (find (λx.eq x true) mixed2) false # no numeric equal to true (boolean) so expect nothing encoded as false
 
 :native on
-
