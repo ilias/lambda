@@ -14,3 +14,4 @@ artifacts/
 .fake
 readme.html
 src-webui/wwwroot/readme.html
+src-webui/wwwroot/readme.css
