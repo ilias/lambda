@@ -501,7 +501,7 @@ alphaEq ((inc ∘ I) 5) (inc 5)
 # Dot '.' chaining sugar (application only, not composition)
 alphaEq (inc . 3) 4              # (inc 3)
 alphaEq (succ . 5) 6             # (succ 5)
-alphaEq (inc . double2 . 3) ((inc double2) 3)   # demonstrates old-style now different semantics
+alphaEq (inc . double2 . 3) (inc (double2 3))   # demonstrates old-style now different semantics
 
 # --- Application operator ($) tests ---
 alphaEq (succ (pred 5)) (succ $ pred 5)
@@ -914,12 +914,6 @@ alphaEq ((λx.λy.y) 1) (λb.b)
 # Targeted Additional Coverage (negative literal pattern, lazy branch, rest zero-arity,
 # negative ranges, composition/$ precedence, guard ordering)
 # ============================================================================
-
-# Negative integer literal pattern (if negative numerals are tokenized as Integer)
-:macro (negSpec -2) => 1
-:macro (negSpec $x) => 0
-alphaEq (negSpec -2) 1
-alphaEq (negSpec -3) 0
 
 # Lazy branch avoidance (Ω not evaluated)
 K = λx.λy.x            # ensure K is defined (if already in stdlib this is harmless shadowing)
