@@ -1181,5 +1181,70 @@ alphaEq (double 8) 16
 alphaEq (half 9) 4
 alphaEq (pow 2 5) 32
 
+# length (empty, singleton, nested construction)
+alphaEq (length nil) 0
+alphaEq (length [5]) 1
+alphaEq (length [1,2,3,4]) 4
+
+# append / concat (empty identities, associativity exemplar)
+alphaEq (append nil [1,2]) [1,2]
+alphaEq (append [1,2] nil) [1,2]
+alphaEq (append (append [1] [2]) [3]) (append [1] (append [2] [3]))
+
+# reverse (involution)
+alphaEq (reverse (reverse [1,2,3])) [1,2,3]
+alphaEq (reverse nil) nil
+
+# map (identity + fusion exemplar)
+alphaEq (map (λx.x) [1,2,3]) [1,2,3]
+alphaEq (map (λx.succ (succ x)) [1,2]) (map succ (map succ [1,2]))
+
+# filter (all pass / none pass)
+alphaEq (filter (λ_.true) [1,2,3]) [1,2,3]
+alphaEq (filter (λ_.false) [1,2,3]) []
+
+# take / drop (bounds)
+alphaEq (take 0 [1,2,3]) []
+alphaEq (take 5 [1,2,3]) [1,2,3]
+alphaEq (drop 0 [1,2,3]) [1,2,3]
+alphaEq (drop 5 [1,2,3]) []
+
+# any / all (short-circuit shape)
+alphaEq (any (λx.eq x 2) [1,2,3]) true
+alphaEq (any (λx.eq x 5) [1,2,3]) false
+alphaEq (all (λ_.true) [1,2,3]) true
+alphaEq (all (λx.lt x 3) [1,2,3]) false
+
+# find (hit / miss)
+alphaEq (find (λx.eq x 3) [1,2,3,4]) 3
+alphaEq (find (λx.eq x 9) [1,2,3]) nothing
+
+# sum / product (empty, early product zero)
+alphaEq (sum []) 0
+alphaEq (sum [1,2,3,4]) 10
+alphaEq (product []) 1
+alphaEq (product [2,3,4]) 24
+alphaEq (product [0,2,3,4]) 0
+
+# Additional edge cases (non-native list primitives)
+alphaEq (append nil nil) []                 # append identity both sides empty
+alphaEq (reverse [42]) [42]                 # reverse singleton
+alphaEq (map (λx.succ x) []) []             # map over empty
+alphaEq (filter (λ_.true) []) []            # filter over empty (keeps empty)
+alphaEq (filter (λ_.false) []) []           # filter over empty (rejects empty)
+alphaEq (take 3 [1,2,3]) [1,2,3]            # take exactly length
+alphaEq (drop 3 [1,2,3]) []                 # drop exactly length
+alphaEq (take 2 nil) []                     # take from empty
+alphaEq (drop 0 nil) []                     # drop zero from empty
+alphaEq (any (λ_.true) []) false            # any on empty should be false
+alphaEq (all (λ_.false) []) true            # all on empty should be true (vacuous truth)
+alphaEq (find (λx.eq x 1) []) nothing       # find in empty
+alphaEq (sum [5]) 5                         # sum singleton
+alphaEq (product [5]) 5                     # product singleton
+alphaEq (product [1]) 1                     # product neutral singleton
+alphaEq (length (append [1,2] [3,4])) 4     # length after append sanity
+alphaEq (length (take 0 [1,2,3])) 0         # length of empty take
+alphaEq (length (drop 99 [1,2,3])) 0        # drop beyond length yields empty
+
 :native on
 

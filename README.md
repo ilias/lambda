@@ -17,6 +17,8 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Examples (Extended)](#examples-extended)
 - [Advanced Usage](#advanced-usage)
 - [Performance Features](#performance-features)
+- [Native List Primitives](#native-list-primitives)
+ - [Native List Primitives](#native-list-primitives)
 - [Structural Equivalence](#structural-equivalence)
 - [Building and Running](#building-and-running)
   - [Web UI & Streaming Logs](#web-ui--streaming-logs)
@@ -1596,8 +1598,39 @@ Characteristics:
 
 - Ignores superficial binder name differences: `alphaEq (λx.x) (λy.y)` → `true`.
 - Distinguishes genuinely different structure (no eta-reduction: `λx.f x` ≠ `f`).
-- Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
-- Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
+ - Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
+ - Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
+
+## Native List Primitives
+
+The interpreter provides a set of optional native (host-implemented) list helpers for performance. They are enabled/disabled together with arithmetic via `:native on|off` (structural equality natives remain always-on). Each native attempts a fast-path structural pattern-match on a concrete `cons`/`nil` chain. If the argument does not match the expected shape or any element fails conversion (for numeric folds), the native returns `null` so that a pure lambda version (from `stdlib.lambda`) can run instead.
+
+| Name | Aliases | Arity | Behavior | Notes |
+|------|---------|-------|----------|-------|
+| `length xs` | – | 1 | Returns Church numeral length | O(n) eager traversal |
+| `append a b` | `concat` | 2 | Concatenate two lists | Rebuilds new list (no mutation) |
+| `reverse xs` | – | 1 | Reverse list | Uses accumulator (O(n)) |
+| `map f xs` | – | 2 | Apply `f` to each element | Eager; may allocate new list |
+| `filter p xs` | – | 2 | Keep elements where `p x` is Church true | Predicate coerced via Church boolean shape (λt.λf.t/f) |
+| `take n xs` | – | 2 | First `n` elements | If `n` > length returns whole list |
+| `drop n xs` | – | 2 | Remove first `n` elements | If `n` > length returns `nil` |
+| `any p xs` | – | 2 | Church true if any element passes | Short-circuits on first true |
+| `all p xs` | – | 2 | Church true if all pass | Short-circuits on first false |
+| `find p xs` | `findFirst` | 2 | Returns `(just x)` for first match else `nothing` | Uses maybe constructors from stdlib |
+| `sum xs` | – | 1 | Sum of numeric elements | Fallback if any non-numeric element |
+| `product xs` | – | 1 | Product of elements (empty => 1) | Early-exits on 0 |
+
+Failure / Fallback (native returns null -> pure stdlib variant used):
+
+- Non `cons`/`nil` structure encountered
+- Arity mismatch (pre-checked)
+- For `map`/`filter`/`any`/`all`/`find`: predicate result not a Church boolean (shape probe fails)
+- For `sum`/`product`: element not a Church numeral
+
+Design Rationale: Returning null instead of throwing keeps semantics extensible—user code can shadow or augment behavior with alternative representations (e.g., Church lists, lazy streams) without losing functionality.
+
+Inspection: `:env native` and `:native show` enumerate these under category `list` with aliases and doc.
+
 - Safe for recursive definitions via Y so long as expansion reaches a stable normalized comparison within the configured limits.
 
 Instrumentation:
@@ -1625,7 +1658,7 @@ Notes & Limits:
 
 If you require different equivalence semantics (e.g. eta-equivalence or observational equivalence), layer a custom checker on top of normalized forms.
 
-#### Structural Equality Helper Families
+### Structural Equality Helper Families
 
 For standard encodings you can use lighter-weight structural comparators instead of full normalization:
 
