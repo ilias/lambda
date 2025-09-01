@@ -22,9 +22,10 @@ A high-performance lambda calculus interpreter written in C# featuring lazy eval
 - [Native List Primitives](#native-list-primitives)
 - [Structural Equivalence](#structural-equivalence)
 - [Building and Running](#building-and-running)
-  - [Web UI & Streaming Logs](#web-ui--streaming-logs)
-  - [Docker (Web UI)](#docker-web-ui)
-  - [Streaming Modes (Comparison)](#streaming-modes-comparison)
+        - [Documentation Generation (Pandoc)](#documentation-generation-pandoc)
+        - [Web UI & Streaming Logs](#web-ui--streaming-logs)
+        - [Docker (Web UI)](#docker-web-ui)
+        - [Streaming Modes (Comparison)](#streaming-modes-comparison)
 - [Range Syntax Extensions](#range-syntax-extensions)
 - [Parser Errors & Diagnostics](#parser-errors--diagnostics)
 - [Unary Minus / Negative Literals](#unary-minus--negative-literals)
@@ -1131,6 +1132,7 @@ Define custom infix operators with precedence and associativity:
 <> = λx y.not (eq x y)
 3 <> 4                             # → <> 3 4 → (λx y.not (eq x y)) 3 4 → true
 ```
+
 ## Operator Precedence & Associativity
 
 This section consolidates all precedence and associativity rules the parser applies (loosest → tightest). Higher numeric precedence binds tighter for user‑defined infix operators; application (juxtaposition) always outranks any infix; atoms (parenthesized / literals / identifiers / lambdas / lists) are the tightest units.
@@ -1649,8 +1651,8 @@ Characteristics:
 
 - Ignores superficial binder name differences: `alphaEq (λx.x) (λy.y)` → `true`.
 - Distinguishes genuinely different structure (no eta-reduction: `λx.f x` ≠ `f`).
-* Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
-* Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
+- Reduces common combinator compositions so higher-order identities hold (e.g. `(S K K) v` equals `v`).
+- Treats Church-encoded lists and their explicit `cons`/`nil` forms uniformly only after normalization; distinct encodings that do not normalize to the same shape still differ.
 
 ## Native List Primitives
 
@@ -1894,6 +1896,40 @@ Observability: subscribe to `Logger.Subscribe(line => Forward(line));` to pipe l
 
 
 ## Building and Running
+
+### Documentation Generation (Pandoc)
+
+The build script can generate a styled `readme.html` (and optionally other docs like `help.html`) for the Web UI. This requires **Pandoc** to be installed and available on your `PATH`.
+
+Pandoc is NOT bundled. If it is missing the script will emit an error and skip HTML generation.
+
+Install options (choose one):
+
+Windows (Chocolatey):
+```
+choco install pandoc
+```
+Windows (Winget):
+```
+winget install --id JohnMacFarlane.Pandoc -e
+```
+macOS (Homebrew):
+```
+brew install pandoc
+```
+Linux (Debian/Ubuntu):
+```
+sudo apt-get update && sudo apt-get install -y pandoc
+```
+
+Verify:
+```
+pandoc --version
+```
+
+Generation happens automatically during `build.ps1` execution; output is copied into `src-webui/wwwroot/readme.html` (and CSS if present). Customize styling via `readme.css` (expected beside `build.ps1`).
+
+If you change `README.md`, re-run the build script (or manually invoke `pandoc` with the same flags) to refresh the Web UI copy.
 
 ### Prerequisites (Build & Run)
 
