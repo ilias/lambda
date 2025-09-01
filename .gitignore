@@ -12,3 +12,5 @@ artifacts/
 **/publish/
 
 .fake
+readme.html
+src-webui/wwwroot/readme.html

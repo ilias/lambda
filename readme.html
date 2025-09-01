@@ -269,6 +269,8 @@ API</a></li>
 Strategies</a></li>
 <li><a href="#building-and-running" id="toc-building-and-running">Building and Running</a>
 <ul>
+<li><a href="#documentation-generation-pandoc" id="toc-documentation-generation-pandoc">Documentation Generation
+(Pandoc)</a></li>
 <li><a href="#prerequisites-build--run" id="toc-prerequisites-build--run">Prerequisites (Build &amp;
 Run)</a></li>
 <li><a href="#building" id="toc-building">Building</a></li>
@@ -352,14 +354,9 @@ Chaining</a></li>
 &amp; Associativity</a></li>
 <li><a href="#native-list-primitives">Native List Primitives</a></li>
 <li><a href="#structural-equivalence">Structural Equivalence</a></li>
-<li><a href="#building-and-running">Building and Running</a>
-<ul>
-<li><a href="#web-ui--streaming-logs">Web UI &amp; Streaming
-Logs</a></li>
-<li><a href="#docker-web-ui">Docker (Web UI)</a></li>
-<li><a href="#streaming-modes-comparison">Streaming Modes
-(Comparison)</a></li>
-</ul></li>
+<li><a href="#building-and-running">Building and Running</a> - <a href="#documentation-generation-pandoc">Documentation Generation
+(Pandoc)</a> - <a href="#web-ui--streaming-logs">Web UI &amp; Streaming
+Logs</a> - <a href="#docker-web-ui">Docker (Web UI)</a> - <a href="#streaming-modes-comparison">Streaming Modes (Comparison)</a></li>
 <li><a href="#range-syntax-extensions">Range Syntax Extensions</a></li>
 <li><a href="#parser-errors--diagnostics">Parser Errors &amp;
 Diagnostics</a></li>
@@ -2675,8 +2672,6 @@ diagnostics.</li>
 <code>alphaEq (λx.x) (λy.y)</code> → <code>true</code>.</li>
 <li>Distinguishes genuinely different structure (no eta-reduction:
 <code>λx.f x</code> ≠ <code>f</code>).</li>
-</ul>
-<ul>
 <li>Reduces common combinator compositions so higher-order identities
 hold (e.g. <code>(S K K) v</code> equals <code>v</code>).</li>
 <li>Treats Church-encoded lists and their explicit
@@ -3223,6 +3218,34 @@ structured telemetry (ensure async, non-blocking).</p>
 </section>
 <section id="building-and-running" class="level2">
 <h2>Building and Running</h2>
+<section id="documentation-generation-pandoc" class="level3">
+<h3>Documentation Generation (Pandoc)</h3>
+<p>The build script can generate a styled <code>readme.html</code> (and
+optionally other docs like <code>help.html</code>) for the Web UI. This
+requires <strong>Pandoc</strong> to be installed and available on your
+<code>PATH</code>.</p>
+<p>Pandoc is NOT bundled. If it is missing the script will emit an error
+and skip HTML generation.</p>
+<p>Install options (choose one):</p>
+<p>Windows (Chocolatey):</p>
+<pre><code>choco install pandoc</code></pre>
+<p>Windows (Winget):</p>
+<pre><code>winget install --id JohnMacFarlane.Pandoc -e</code></pre>
+<p>macOS (Homebrew):</p>
+<pre><code>brew install pandoc</code></pre>
+<p>Linux (Debian/Ubuntu):</p>
+<pre><code>sudo apt-get update &amp;&amp; sudo apt-get install -y pandoc</code></pre>
+<p>Verify:</p>
+<pre><code>pandoc --version</code></pre>
+<p>Generation happens automatically during <code>build.ps1</code>
+execution; output is copied into
+<code>src-webui/wwwroot/readme.html</code> (and CSS if present).
+Customize styling via <code>readme.css</code> (expected beside
+<code>build.ps1</code>).</p>
+<p>If you change <code>README.md</code>, re-run the build script (or
+manually invoke <code>pandoc</code> with the same flags) to refresh the
+Web UI copy.</p>
+</section>
 <section id="prerequisites-build--run" class="level3">
 <h3>Prerequisites (Build &amp; Run)</h3>
 <ul>
@@ -3232,26 +3255,26 @@ structured telemetry (ensure async, non-blocking).</p>
 </section>
 <section id="building" class="level3">
 <h3>Building</h3>
-<div class="sourceCode" id="cb83"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build the project</span></span>
-<span id="cb83-2"><a href="#cb83-2" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> build</span>
-<span id="cb83-3"><a href="#cb83-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb83-4"><a href="#cb83-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run in development mode</span></span>
-<span id="cb83-5"><a href="#cb83-5" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> run</span>
-<span id="cb83-6"><a href="#cb83-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb83-7"><a href="#cb83-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Build release version</span></span>
-<span id="cb83-8"><a href="#cb83-8" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> build <span class="at">-c</span> Release</span></code></pre></div>
+<div class="sourceCode" id="cb88"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb88-1"><a href="#cb88-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build the project</span></span>
+<span id="cb88-2"><a href="#cb88-2" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> build</span>
+<span id="cb88-3"><a href="#cb88-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-4"><a href="#cb88-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run in development mode</span></span>
+<span id="cb88-5"><a href="#cb88-5" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> run</span>
+<span id="cb88-6"><a href="#cb88-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-7"><a href="#cb88-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Build release version</span></span>
+<span id="cb88-8"><a href="#cb88-8" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> build <span class="at">-c</span> Release</span></code></pre></div>
 </section>
 <section id="running" class="level3">
 <h3>Running</h3>
-<div class="sourceCode" id="cb84"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Start interactive mode</span></span>
-<span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./lambda-cek</span></span>
-<span id="cb84-3"><a href="#cb84-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb84-4"><a href="#cb84-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Load specific files</span></span>
-<span id="cb84-5"><a href="#cb84-5" aria-hidden="true" tabindex="-1"></a><span class="ex">./lambda-cek</span> stdlib.lambda tests.lambda</span>
-<span id="cb84-6"><a href="#cb84-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb84-7"><a href="#cb84-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Run with native arithmetic enabled by default</span></span>
-<span id="cb84-8"><a href="#cb84-8" aria-hidden="true" tabindex="-1"></a><span class="ex">./lambda-cek</span></span>
-<span id="cb84-9"><a href="#cb84-9" aria-hidden="true" tabindex="-1"></a><span class="ex">:native</span> on</span></code></pre></div>
+<div class="sourceCode" id="cb89"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb89-1"><a href="#cb89-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Start interactive mode</span></span>
+<span id="cb89-2"><a href="#cb89-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./lambda-cek</span></span>
+<span id="cb89-3"><a href="#cb89-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb89-4"><a href="#cb89-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Load specific files</span></span>
+<span id="cb89-5"><a href="#cb89-5" aria-hidden="true" tabindex="-1"></a><span class="ex">./lambda-cek</span> stdlib.lambda tests.lambda</span>
+<span id="cb89-6"><a href="#cb89-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb89-7"><a href="#cb89-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Run with native arithmetic enabled by default</span></span>
+<span id="cb89-8"><a href="#cb89-8" aria-hidden="true" tabindex="-1"></a><span class="ex">./lambda-cek</span></span>
+<span id="cb89-9"><a href="#cb89-9" aria-hidden="true" tabindex="-1"></a><span class="ex">:native</span> on</span></code></pre></div>
 <p>The interpreter automatically loads <code>stdlib.lambda</code> if it
 exists in the current directory, providing access to the full standard
 library.</p>
@@ -3470,9 +3493,9 @@ operations, and more.</li>
 <p>Contributions are welcome! To get started:</p>
 <ol type="1">
 <li><p><strong>Clone the repository and build:</strong></p>
-<div class="sourceCode" id="cb87"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb87-1"><a href="#cb87-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>repo-url<span class="op">&gt;</span></span>
-<span id="cb87-2"><a href="#cb87-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> lambda-cek-Y</span>
-<span id="cb87-3"><a href="#cb87-3" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> build</span></code></pre></div></li>
+<div class="sourceCode" id="cb92"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb92-1"><a href="#cb92-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>repo-url<span class="op">&gt;</span></span>
+<span id="cb92-2"><a href="#cb92-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> lambda-cek-Y</span>
+<span id="cb92-3"><a href="#cb92-3" aria-hidden="true" tabindex="-1"></a><span class="ex">dotnet</span> build</span></code></pre></div></li>
 <li><p><strong>Run tests:</strong></p>
 <ul>
 <li>(Add instructions here if you have a test suite, e.g.,
@@ -3589,22 +3612,22 @@ build; ignore preview warning if not needed.</li>
 <section id="1-core-library-nuget-package" class="level3">
 <h3>1. Core Library (NuGet Package)</h3>
 <p>Build only:</p>
-<div class="sourceCode" id="cb88"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb88-1"><a href="#cb88-1" aria-hidden="true" tabindex="-1"></a>dotnet build src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release</span></code></pre></div>
+<div class="sourceCode" id="cb93"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb93-1"><a href="#cb93-1" aria-hidden="true" tabindex="-1"></a>dotnet build src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release</span></code></pre></div>
 <p>Pack (produces <code>.nupkg</code> in <code>artifacts</code>):</p>
-<div class="sourceCode" id="cb89"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb89-1"><a href="#cb89-1" aria-hidden="true" tabindex="-1"></a>dotnet pack src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release <span class="op">-</span>o artifacts</span></code></pre></div>
+<div class="sourceCode" id="cb94"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb94-1"><a href="#cb94-1" aria-hidden="true" tabindex="-1"></a>dotnet pack src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release <span class="op">-</span>o artifacts</span></code></pre></div>
 <p>Override version:</p>
-<div class="sourceCode" id="cb90"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb90-1"><a href="#cb90-1" aria-hidden="true" tabindex="-1"></a>dotnet pack src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release <span class="op">-</span>o artifacts <span class="op">/</span>p<span class="op">:</span>PackageVersion<span class="op">=</span><span class="dv">0.1</span><span class="op">.</span><span class="dv">1</span></span></code></pre></div>
+<div class="sourceCode" id="cb95"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb95-1"><a href="#cb95-1" aria-hidden="true" tabindex="-1"></a>dotnet pack src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release <span class="op">-</span>o artifacts <span class="op">/</span>p<span class="op">:</span>PackageVersion<span class="op">=</span><span class="dv">0.1</span><span class="op">.</span><span class="dv">1</span></span></code></pre></div>
 <p>Consume in another project:</p>
-<div class="sourceCode" id="cb91"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb91-1"><a href="#cb91-1" aria-hidden="true" tabindex="-1"></a>dotnet add package LambdaCalculus<span class="op">.</span><span class="fu">Interpreter</span> <span class="op">--</span>version <span class="dv">0.1</span><span class="op">.</span><span class="dv">0</span></span></code></pre></div>
+<div class="sourceCode" id="cb96"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb96-1"><a href="#cb96-1" aria-hidden="true" tabindex="-1"></a>dotnet add package LambdaCalculus<span class="op">.</span><span class="fu">Interpreter</span> <span class="op">--</span>version <span class="dv">0.1</span><span class="op">.</span><span class="dv">0</span></span></code></pre></div>
 </section>
 <section id="2-cli-repl-src-cli" class="level3">
 <h3>2. CLI REPL (<code>src-cli</code>)</h3>
 <p>Run (Debug):</p>
-<div class="sourceCode" id="cb92"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb92-1"><a href="#cb92-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
+<div class="sourceCode" id="cb97"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb97-1"><a href="#cb97-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
 <p>Run (Release):</p>
-<div class="sourceCode" id="cb93"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb93-1"><a href="#cb93-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">-</span>c Release <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
+<div class="sourceCode" id="cb98"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb98-1"><a href="#cb98-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">-</span>c Release <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
 <p>Load extra lambda files at startup:</p>
-<div class="sourceCode" id="cb94"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb94-1"><a href="#cb94-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> mydefs<span class="op">.</span><span class="fu">lambda</span> tests<span class="op">.</span><span class="fu">lambda</span></span></code></pre></div>
+<div class="sourceCode" id="cb99"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb99-1"><a href="#cb99-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> mydefs<span class="op">.</span><span class="fu">lambda</span> tests<span class="op">.</span><span class="fu">lambda</span></span></code></pre></div>
 <p>Inside REPL: use <code>:help</code>, exit with <code>:quit</code> /
 <code>:exit</code>.</p>
 </section>
@@ -3612,44 +3635,44 @@ build; ignore preview warning if not needed.</li>
 <h3>3. Web API (<code>src-web</code>)</h3>
 <p>Starts a minimal HTTP host (e.g., evaluation endpoints if
 implemented):</p>
-<div class="sourceCode" id="cb95"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb95-1"><a href="#cb95-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-web<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">web</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
+<div class="sourceCode" id="cb100"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb100-1"><a href="#cb100-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-web<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">web</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
 <p>If HTTPS dev cert not trusted:</p>
-<div class="sourceCode" id="cb96"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb96-1"><a href="#cb96-1" aria-hidden="true" tabindex="-1"></a>dotnet dev-certs https <span class="op">--</span>trust</span></code></pre></div>
+<div class="sourceCode" id="cb101"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb101-1"><a href="#cb101-1" aria-hidden="true" tabindex="-1"></a>dotnet dev-certs https <span class="op">--</span>trust</span></code></pre></div>
 <p>Override URL/port:</p>
-<div class="sourceCode" id="cb97"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb97-1"><a href="#cb97-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-web<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">web</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> <span class="op">--</span>urls http<span class="op">://</span>localhost<span class="op">:</span><span class="dv">5055</span></span></code></pre></div>
+<div class="sourceCode" id="cb102"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb102-1"><a href="#cb102-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-web<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">web</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> <span class="op">--</span>urls http<span class="op">://</span>localhost<span class="op">:</span><span class="dv">5055</span></span></code></pre></div>
 </section>
 <section id="4-web-ui-src-webui" class="level3">
 <h3>4. Web UI (<code>src-webui</code>)</h3>
 <p>Interactive browser-based REPL with multi-tab output, search,
 filters.</p>
 <p>Run:</p>
-<div class="sourceCode" id="cb98"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb98-1"><a href="#cb98-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-webui<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">webui</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
+<div class="sourceCode" id="cb103"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb103-1"><a href="#cb103-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-webui<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">webui</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
 <p>Navigate to the printed local URL (commonly <a href="http://localhost:5000">http://localhost:5000</a>).</p>
 <section id="docker-build-web-ui" class="level4">
 <h4>Docker Build (Web UI)</h4>
 <p>Using the build script (includes Docker unless
 <code>-NoDocker</code>):</p>
-<div class="sourceCode" id="cb99"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb99-1"><a href="#cb99-1" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span></span></code></pre></div>
+<div class="sourceCode" id="cb104"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb104-1"><a href="#cb104-1" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span></span></code></pre></div>
 <p>Manual build &amp; run:</p>
-<div class="sourceCode" id="cb100"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb100-1"><a href="#cb100-1" aria-hidden="true" tabindex="-1"></a>docker build <span class="op">-</span>t lambda-cek-webui <span class="op">-</span>f src-webui<span class="op">/</span>Dockerfile <span class="op">.</span></span>
-<span id="cb100-2"><a href="#cb100-2" aria-hidden="true" tabindex="-1"></a>docker run <span class="op">-</span>p <span class="dv">8080</span><span class="op">:</span><span class="dv">8080</span> <span class="op">--</span>name lambda-cek-webui lambda-cek-webui</span></code></pre></div>
+<div class="sourceCode" id="cb105"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb105-1"><a href="#cb105-1" aria-hidden="true" tabindex="-1"></a>docker build <span class="op">-</span>t lambda-cek-webui <span class="op">-</span>f src-webui<span class="op">/</span>Dockerfile <span class="op">.</span></span>
+<span id="cb105-2"><a href="#cb105-2" aria-hidden="true" tabindex="-1"></a>docker run <span class="op">-</span>p <span class="dv">8080</span><span class="op">:</span><span class="dv">8080</span> <span class="op">--</span>name lambda-cek-webui lambda-cek-webui</span></code></pre></div>
 <p>Open <a href="http://localhost:8080">http://localhost:8080</a>.</p>
 </section>
 </section>
 <section id="5-unified-build-script-buildps1" class="level3">
 <h3>5. Unified Build Script (<code>build.ps1</code>)</h3>
 <p>Examples:</p>
-<div class="sourceCode" id="cb101"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb101-1"><a href="#cb101-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build everything + pack NuGet + build Docker image</span></span>
-<span id="cb101-2"><a href="#cb101-2" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack</span>
-<span id="cb101-3"><a href="#cb101-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb101-4"><a href="#cb101-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Skip Docker</span></span>
-<span id="cb101-5"><a href="#cb101-5" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack <span class="op">-</span>NoDocker</span>
-<span id="cb101-6"><a href="#cb101-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb101-7"><a href="#cb101-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Validate package content &amp; abort if missing files</span></span>
-<span id="cb101-8"><a href="#cb101-8" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack <span class="op">-</span>Validate</span>
-<span id="cb101-9"><a href="#cb101-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb101-10"><a href="#cb101-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Continue pack even if validation fails</span></span>
-<span id="cb101-11"><a href="#cb101-11" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack <span class="op">-</span>Validate <span class="op">-</span>SkipPackOnError</span></code></pre></div>
+<div class="sourceCode" id="cb106"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb106-1"><a href="#cb106-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build everything + pack NuGet + build Docker image</span></span>
+<span id="cb106-2"><a href="#cb106-2" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack</span>
+<span id="cb106-3"><a href="#cb106-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb106-4"><a href="#cb106-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Skip Docker</span></span>
+<span id="cb106-5"><a href="#cb106-5" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack <span class="op">-</span>NoDocker</span>
+<span id="cb106-6"><a href="#cb106-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb106-7"><a href="#cb106-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Validate package content &amp; abort if missing files</span></span>
+<span id="cb106-8"><a href="#cb106-8" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack <span class="op">-</span>Validate</span>
+<span id="cb106-9"><a href="#cb106-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb106-10"><a href="#cb106-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Continue pack even if validation fails</span></span>
+<span id="cb106-11"><a href="#cb106-11" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack <span class="op">-</span>Validate <span class="op">-</span>SkipPackOnError</span></code></pre></div>
 <p>Outputs:</p>
 <ul>
 <li>NuGet package → <code>artifacts/*.nupkg</code></li>
@@ -3660,7 +3683,7 @@ filters.</p>
 <section id="7-running-testslambda" class="level3">
 <h3>7. Running <code>tests.lambda</code></h3>
 <p>CLI:</p>
-<div class="sourceCode" id="cb102"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb102-1"><a href="#cb102-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> tests<span class="op">.</span><span class="fu">lambda</span></span></code></pre></div>
+<div class="sourceCode" id="cb107"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb107-1"><a href="#cb107-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> tests<span class="op">.</span><span class="fu">lambda</span></span></code></pre></div>
 <p>In REPL: <code>:load tests.lambda</code></p>
 </section>
 <section id="8-troubleshooting" class="level3">
