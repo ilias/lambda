@@ -1,0 +1,513 @@
+<h1 id="interpreter-language-guide">Interpreter Language Guide</h1>
+<p>Concise, task‑oriented reference to the lambda‑calculus dialect
+implemented by this interpreter. Progresses from practical usage to
+formal grammar. Skip to a later section as needed.</p>
+<h2 id="contents">Contents</h2>
+<ol type="1">
+<li>Quick Start</li>
+<li>Core Constructs</li>
+<li>Functions &amp; Parameters</li>
+<li>Binding &amp; Recursion</li>
+<li>Numbers &amp; Booleans</li>
+<li>Lists &amp; Ranges</li>
+<li>Operators (Infix &amp; Special)</li>
+<li>Precedence Ladder</li>
+<li>Macros (Essentials)</li>
+<li>Structural Equivalence Helpers</li>
+<li>Interpreter Commands (<code>:</code>)</li>
+<li>Common Parser Errors</li>
+<li>Formal Grammar (Appendix)</li>
+<li>Cheat Sheet</li>
+</ol>
+<hr />
+<h2 id="quick-start">1. Quick Start</h2>
+<pre class="lambda"><code># Simple arithmetic (assuming stdlib loaded)
+plus 2 3                 # 5
+
+# Lambda forms
+λx.x                     # identity
+\x.x                     # backslash alternative
+x -&gt; x                   # arrow sugar
+x, y -&gt; plus x y         # multi-parameter sugar
+
+# Let bindings
+let x = 3, y = 4 in x + y
+
+# Recursion
+let rec fact = n -&gt; if (iszero n) 1 (mult n (fact (pred n))) in fact 5
+
+# Lists and ranges
+[1,2,3]
+[1 .. 5]
+[1,3 .. 11]
+
+# Pipeline / application control
+5 |&gt; succ |&gt; succ        # 7
+succ $ succ 5            # 7 (right-assoc low precedence)
+
+# Composition (if declared) / chaining
+f ∘ g                    # λx.f (g x)
+f . a . b                # (f a) b (chaining, not composition)</code></pre>
+<hr />
+<h2 id="core-constructs">2. Core Constructs</h2>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 48%" />
+<col style="width: 22%" />
+</colgroup>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Syntax / Form</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Variable</td>
+<td><code>name</code></td>
+<td>Letters/digits/_/? (not starting with digit)</td>
+</tr>
+<tr>
+<td>Lambda</td>
+<td><code>λx.x</code> / <code>\x.x</code> / <code>x -&gt; x</code></td>
+<td>Arrow allows comma list: <code>x, y -&gt; ...</code></td>
+</tr>
+<tr>
+<td>Multi-parameter sugar</td>
+<td><code>x, y, z -&gt; body</code></td>
+<td>Desugars to nested lambdas</td>
+</tr>
+<tr>
+<td>Application</td>
+<td><code>f a b</code></td>
+<td>Left-associative <code>(f a) b</code></td>
+</tr>
+<tr>
+<td>Grouping</td>
+<td><code>(expr)</code></td>
+<td>Overrides precedence</td>
+</tr>
+<tr>
+<td>Definition</td>
+<td><code>id = expr</code></td>
+<td>Top-level binding / overwrite</td>
+</tr>
+<tr>
+<td>Comment</td>
+<td><code># ...</code></td>
+<td>To end of line</td>
+</tr>
+</tbody>
+</table>
+<p>Desugaring examples:</p>
+<pre class="lambda"><code>x, y -&gt; body        # ≡ x -&gt; (y -&gt; body)
+if p a b            # ≡ p a b (Church boolean)</code></pre>
+<hr />
+<h2 id="functions-parameters">3. Functions &amp; Parameters</h2>
+<p>Parameter list forms:</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr>
+<th>Form</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>x -&gt; e</code></td>
+<td>Single parameter lambda</td>
+</tr>
+<tr>
+<td><code>x, y -&gt; e</code></td>
+<td>Multi-parameter sugar</td>
+</tr>
+<tr>
+<td><code>_ -&gt; e</code></td>
+<td>Ignored single parameter</td>
+</tr>
+<tr>
+<td><code>x, _, z -&gt; body</code></td>
+<td>Ignore middle argument</td>
+</tr>
+<tr>
+<td><code>_ + _ -&gt; mult _ _</code></td>
+<td>Creates fresh variables for each <code>_</code> in list order</td>
+</tr>
+</tbody>
+</table>
+<p>Rules:</p>
+<ul>
+<li>Each <code>_</code> in the parameter list becomes a fresh unique
+binder.</li>
+<li>Reusing <code>_</code> in the body refers to the corresponding
+generated binder by position.</li>
+<li>Underscore inside the body (not in parameter list) refers to that
+generated binder if in scope.</li>
+</ul>
+<p>Examples:</p>
+<pre class="lambda"><code>_ -&gt; 42                  # constant function
+(x, _, z -&gt; x + z) 5 9 2 # 5 + 2
+_ + _ -&gt; mult _ _        # (a,b) -&gt; mult (a + b) (a + b)</code></pre>
+<hr />
+<h2 id="binding-recursion">4. Binding &amp; Recursion</h2>
+<p>Multiple bindings share a single <code>let</code> and scope
+left‑to‑right:</p>
+<pre class="lambda"><code>let x = 2, y = succ x in plus x y    # y sees x</code></pre>
+<p>Recursion uses <code>let rec</code> (identifier only on LHS):</p>
+<pre class="lambda"><code>let rec fib = n -&gt; if (iszero n)
+    0
+    (if (iszero (pred n)) 1 (plus (fib (pred n)) (fib (pred (pred n)))))
+in fib 5</code></pre>
+<p><code>let rec</code> is clearer than the raw fixed-point
+(<code>Y</code>) combinator (still available if defined in stdlib).</p>
+<hr />
+<h2 id="numbers-booleans">5. Numbers &amp; Booleans</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0</code>, <code>1</code>, <code>42</code>,
+<code>-7</code></td>
+<td>Church numeral (negative literal is a single token)</td>
+</tr>
+<tr>
+<td><code>true</code>, <code>false</code></td>
+<td>Church booleans (from stdlib)</td>
+</tr>
+<tr>
+<td><code>if p a b</code></td>
+<td>Desugars to <code>p a b</code></td>
+</tr>
+<tr>
+<td>Core arithmetic</td>
+<td><code>succ</code>, <code>pred</code>, <code>plus</code>,
+<code>mult</code>, <code>exp</code>, <code>iszero</code></td>
+</tr>
+</tbody>
+</table>
+<p>Notes:</p>
+<ul>
+<li>Numerals print in decimal but evaluate as Church encodings.</li>
+<li>Negative literals are atomic; no implicit unary minus function.</li>
+</ul>
+<hr />
+<h2 id="lists-ranges">6. Lists &amp; Ranges</h2>
+<p>List literal: <code>[e1, e2, e3]</code>; empty list: <code>[]</code>
+(<code>nil</code>).</p>
+<p>Stepped / ranged forms (Haskell style):</p>
+<pre class="lambda"><code>[1 .. 5]          # 1,2,3,4,5
+[10 .. 5]         # 10,9,8,7,6,5 (descending)
+[1,3 .. 11]       # 1,3,5,7,9,11 (step +2)
+[10,7 .. -2]      # 10,7,4,1,-2 (step -3)
+[-3 .. 3]         # negatives allowed</code></pre>
+<p>Non-literal endpoints produce a lazy range call (you must provide
+<code>range</code> / <code>range2</code> e.g. via stdlib):</p>
+<pre class="lambda"><code>[f x .. g y]      # -&gt; range (f x) (g y)
+[a, b .. c]       # -&gt; range2 a b c</code></pre>
+<p>Common helpers: <code>cons</code>, <code>nil</code>,
+<code>head</code>, <code>tail</code>, <code>length</code>,
+<code>map</code>, <code>filter</code>, <code>foldl</code>,
+<code>foldr</code>, <code>append</code>, <code>take</code>,
+<code>drop</code>, <code>reverse</code>, <code>sum</code>,
+<code>product</code>.</p>
+<hr />
+<h2 id="operators-infix-special">7. Operators (Infix &amp; Special)</h2>
+<p>Declare infix operators (REPL/file command):</p>
+<pre class="text"><code>:infix &lt;symbol&gt; &lt;precedence:int&gt; &lt;assoc:left|right&gt;</code></pre>
+<p>Examples:</p>
+<pre class="text"><code>:infix + 6 left
+:infix * 7 left
+:infix ^ 8 right</code></pre>
+<p>Typical custom declarations:</p>
+<pre class="text"><code>:infix ++ 5 left      # list/sequence append
+:infix |&gt; 1 left      # pipeline (already provided in stdlib)
+:infix $ 1 right      # low-precedence application (already provided)
+:infix ∘ 9 right      # composition (ensure font supports symbol)
+:infix .. 8 right     # (if redefining range operator behaviour)</code></pre>
+<p>Removal / redefinition: re‑issuing <code>:infix</code> with the same
+symbol updates its precedence/associativity for future parses; previous
+parsed code is unaffected.</p>
+<p>Associativity applies among same-precedence operators.</p>
+<p>Special built-in symbols (pre-declared or reserved semantics):</p>
+<ul>
+<li><code>|&gt;</code> (pipeline) – left / 1 – a |&gt; f ⇒ f a (forward
+pipeline)</li>
+<li><code>$</code> (low application) – right / 1 – f $ x $ y ⇒ f x
+y</li>
+<li><code>.</code> (chaining) – right / 9 – f . a . b ⇒ (f a) b (NOT
+composition)</li>
+<li><code>∘</code> (composition) – right / 9 – f ∘ g ⇒ λx.f (g x)</li>
+</ul>
+<p>Guideline: Avoid <code>a |&gt; f . g</code>; it parses as
+<code>(f g) a</code>. Prefer <code>a |&gt; f |&gt; g</code> or
+parenthesize.</p>
+<hr />
+<h2 id="precedence-ladder">8. Precedence Ladder</h2>
+<p>Loosest → tightest conceptual order:</p>
+<ol type="1">
+<li>Segment separator <code>;</code></li>
+<li><code>let</code> / <code>let rec</code></li>
+<li>Arrow parameter grouping</li>
+<li>Infix operators (higher numeric precedence binds tighter)</li>
+<li>Chaining / composition (<code>.</code>, <code>∘</code> at 9,
+right-assoc)</li>
+<li>Juxtaposition application</li>
+<li>Atom (identifier, numeral, lambda, list, parenthesized)</li>
+</ol>
+<p>Key guidance:</p>
+<ul>
+<li><code>$</code> and <code>|&gt;</code> share precedence 1 but differ
+in associativity.</li>
+<li>Application outranks all infix: <code>f x + g y</code> ⇒
+<code>(plus (f x) (g y))</code>.</li>
+<li>Composition (<code>∘</code>) and chaining (<code>.</code>) share
+precedence; both right-associative, but semantics differ.</li>
+<li>Parentheses always override.</li>
+</ul>
+<hr />
+<h2 id="macros-essentials">9. Macros (Essentials)</h2>
+<p>Pattern-driven rewrites applied before evaluation.</p>
+<p>Basic clause:</p>
+<pre class="lambda"><code>:macro (square $x) =&gt; (mult $x $x)</code></pre>
+<p>Guarded multi-clause:</p>
+<pre class="lambda"><code>:macro (max2 $a $b) when (geq $a $b) =&gt; $a
+:macro (max2 $a $b) =&gt; $b
+max2 5 3  # 5</code></pre>
+<p>Variadic (rest) pattern (captures trailing args as list):</p>
+<pre class="lambda"><code>:macro (list $xs ...) =&gt; $xs
+list 1 2 3 4   # [1,2,3,4]</code></pre>
+<p>Structural / nested application patterns:</p>
+<pre class="lambda"><code>:macro (head (cons $h $t)) =&gt; $h
+:macro (swapArgs ($f $a $b)) =&gt; ($f $b $a)</code></pre>
+<p>Wildcards: <code>_</code> ignores a subexpression. Integer literal
+pattern matches only that numeral.</p>
+<p>Specificity ordering: structural &gt; literal &gt; variable; ties
+break by arity then recency.</p>
+<p>Limitations: At most one rest variable and only at the tail; not
+(yet) permitted inside nested subpatterns.</p>
+<hr />
+<h2 id="structural-equivalence-helpers">10. Structural Equivalence
+Helpers</h2>
+<p>Always available (independent of <code>:native</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Helper</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>alphaEq a b</code></td>
+<td>Alpha-equivalence (ignore binder renaming)</td>
+</tr>
+<tr>
+<td><code>betaEq a b</code></td>
+<td>Beta-normalize then alpha compare</td>
+</tr>
+<tr>
+<td><code>etaEq a b</code></td>
+<td>Beta + eta reduce then alpha compare</td>
+</tr>
+<tr>
+<td><code>hashEq a b</code></td>
+<td>Fast structural hash pre-screen</td>
+</tr>
+</tbody>
+</table>
+<p>Use in tests/assertions; they do not alter evaluation semantics.</p>
+<hr />
+<h2 id="interpreter-commands">11. Interpreter Commands
+(<code>:</code>)</h2>
+<p>All REPL/file commands start with a colon. Omit optional arguments to
+display current configuration or a usage summary.</p>
+<p>Commands:</p>
+<ul>
+<li><code>:help</code> — show help summary</li>
+<li><code>:infix [op prec assoc]</code> — define (or list if omitted)
+infix operator (assoc: left / right)</li>
+<li><code>:macro (&lt;pattern&gt;) =&gt; &lt;body&gt;</code> — add macro
+clause (guards, rest <code>...</code> supported)</li>
+<li><code>:load &lt;file&gt;</code> — load a <code>.lambda</code>
+file</li>
+<li><code>:save &lt;file&gt;</code> — save current environment
+snapshot</li>
+<li><code>:env [defs|macros|infix|native|all]</code> — show environment
+subsets (default all)</li>
+<li><code>:clear [macros|defs|ops|cache|all]</code> — clear specific
+state (default all)</li>
+<li><code>:depth [n]</code> — get/set max recursion depth
+(10–10000)</li>
+<li><code>:lazy on|off</code> — toggle lazy evaluation</li>
+<li><code>:native on|off|show</code> — toggle native arithmetic or list
+native ops</li>
+<li><code>:pretty on|off</code> — toggle pretty printing (lists,
+numerals, booleans)</li>
+<li><code>:log &lt;file|off|clear&gt;</code> — append log to file,
+disable, or clear</li>
+<li><code>:stats</code> — display performance &amp; cache
+statistics</li>
+<li><code>:step on|off</code> — toggle CEK step trace</li>
+<li><code>:test clear</code> / <code>:test result</code> — reset or show
+structural test counters</li>
+<li><code>:exit</code> / <code>:quit</code> — exit interpreter</li>
+</ul>
+<p>List current infix operators:</p>
+<pre class="text"><code>:infix
+# + 6 left
+# * 7 left
+# ^ 8 right
+# |&gt; 1 left
+# $ 1 right</code></pre>
+<p>Define a new operator:</p>
+<pre class="text"><code>:infix ++ 5 left</code></pre>
+<p>Redefining an operator replaces its precedence/associativity for
+future parses.</p>
+<hr />
+<h2 id="common-parser-errors">12. Common Parser Errors</h2>
+<table>
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 31%" />
+<col style="width: 44%" />
+</colgroup>
+<thead>
+<tr>
+<th>Error</th>
+<th>Meaning</th>
+<th>Typical Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UnexpectedToken</td>
+<td>Token not valid here</td>
+<td>Check prior grouping / missing delimiter</td>
+</tr>
+<tr>
+<td>MissingLetEquals</td>
+<td>Missing <code>=</code> in let binding</td>
+<td>Insert <code>=</code></td>
+</tr>
+<tr>
+<td>UnexpectedArrow</td>
+<td><code>-&gt;</code> outside a lambda / arrow form</td>
+<td>Reposition or remove</td>
+</tr>
+<tr>
+<td>UnexpectedComma</td>
+<td>Stray comma</td>
+<td>Remove or adjust list/params</td>
+</tr>
+<tr>
+<td>EmptyExprList</td>
+<td>Required element missing</td>
+<td>Provide element / remove brackets</td>
+</tr>
+<tr>
+<td>UnexpectedSemicolon</td>
+<td><code>;</code> where not top-level</td>
+<td>Remove or lift</td>
+</tr>
+<tr>
+<td>IllegalAssignment</td>
+<td>Left side not identifier</td>
+<td>Use identifier name</td>
+</tr>
+<tr>
+<td>UnexpectedDot</td>
+<td>Misused <code>.</code> or <code>..</code></td>
+<td>Correct range or chaining</td>
+</tr>
+<tr>
+<td>UnterminatedList</td>
+<td>Missing closing <code>]</code></td>
+<td>Add <code>]</code></td>
+</tr>
+<tr>
+<td>MacroPatternError</td>
+<td>Pattern or guard invalid</td>
+<td>Fix syntax / guard</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="formal-grammar-appendix">13. Formal Grammar (Appendix)</h2>
+<p>Simplified (see README for exhaustive form):</p>
+<pre class="ebnf"><code>Program       ::= Segment (&#39;;&#39; Segment)*
+Segment       ::= (Command | Definition | Expression)?
+Definition    ::= Identifier &#39;=&#39; Expression
+Expression    ::= LetExpr | ArrowExpr | InfixExpr
+LetExpr       ::= &#39;let&#39; (&#39;rec&#39;)? LetBinding (&#39;,&#39; LetBinding)* &#39;in&#39; Expression
+LetBinding    ::= Identifier &#39;=&#39; Expression | Identifier ParamList &#39;-&gt;&#39; Expression
+ArrowExpr     ::= ParamList &#39;-&gt;&#39; Expression
+ParamList     ::= Param (&#39;,&#39; Param)* | &#39;(&#39; Param (&#39;,&#39; Param)* &#39;)&#39;
+Param         ::= Identifier | &#39;_&#39;
+InfixExpr     ::= Application (InfixOp Application)*
+Application   ::= Atom+
+Atom          ::= Integer | Identifier | Lambda | List | &#39;(&#39; Expression &#39;)&#39;
+Lambda        ::= (&#39;λ&#39; | &#39;\\&#39;) Param+ &#39;.&#39; Expression
+List          ::= &#39;[&#39; ListBody? &#39;]&#39;
+ListBody      ::= Elements | RangeSpec | SteppedRangeSpec
+RangeSpec     ::= Expression &#39;..&#39; Expression
+SteppedRangeSpec ::= Expression &#39;,&#39; Expression &#39;..&#39; Expression</code></pre>
+<p>Associativity &amp; precedence resolved dynamically from the runtime
+infix table (Pratt parser).</p>
+<hr />
+<h2 id="cheat-sheet">14. Cheat Sheet</h2>
+<p>Precedence (loose → tight): <code>;</code>, let, arrow grouping,
+infix (by number), chaining/composition (9), application, atom.</p>
+<p>Pipelines / application:</p>
+<pre class="lambda"><code>a |&gt; f |&gt; g        # g (f a)
+f . a . b          # (f a) b (chaining)
+(f ∘ g) x          # f (g x)</code></pre>
+<p>Ranges &amp; lists:</p>
+<pre class="lambda"><code>[1 .. 4]           # 1,2,3,4
+[1,3 .. 9]         # 1,3,5,7,9
+[f x .. g y]       # range (f x) (g y)</code></pre>
+<p>Macros:</p>
+<pre class="lambda"><code>:macro (inc $x) =&gt; (succ $x)
+inc 4</code></pre>
+<p>Desugaring rules (informal → core):</p>
+<pre class="text"><code>x, y, z -&gt; body      =&gt; x -&gt; (y -&gt; (z -&gt; body))
+if p a b             =&gt; p a b                      # Church booleans
+_ -&gt; e               =&gt; freshVar1 -&gt; e             # underscore becomes generated name
+x, _, z -&gt; body      =&gt; x -&gt; freshVar2 -&gt; z -&gt; body (with freshVar2 ignored if unused)
+_ + _ -&gt; mult _ _    =&gt; a -&gt; b -&gt; mult (a + b) (a + b)
+[a .. b]             =&gt; (eager expansion) OR range a b (if non-literal endpoints)
+[a, c .. b]          =&gt; (eager stepped expansion) OR range2 a c b
+[f x .. g y]         =&gt; range (f x) (g y)
+[a, b .. c]          =&gt; range2 a b c
+f . a . b            =&gt; (f a) b                    # chaining, not composition
+f ∘ g                =&gt; λx.f (g x)                 # composition
+a |&gt; f |&gt; g          =&gt; g (f a)                    # linear left pipeline
+f $ x $ y            =&gt; f x y                      # right-assoc low application
+let x = e1, y = e2 in e3 =&gt; (λx. (λy. e3) e2) e1   # sequential let (conceptual)
+let rec f = body in e  =&gt; (Y (λf. body)) substituted into e (conceptually)</code></pre>
+<p>Operator associativity (selected):</p>
+<pre class="text"><code>Pipeline      (|&gt;) left  prec 1
+Low apply     ($)  right prec 1
+User +         left prec 6  (example)
+User *         left prec 7  (example)
+User ^         right prec 8 (example exponent)
+Chaining       (.)  right prec 9
+Composition    (∘) right prec 9
+Application         (implicit tighter than any infix)</code></pre>
+<p>Key evaluation helpers: <code>alphaEq</code>, <code>betaEq</code>,
+<code>etaEq</code>, <code>hashEq</code> (for structural tests).</p>
+<p>End of guide. Happy evaluating!</p>

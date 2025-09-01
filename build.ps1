@@ -24,6 +24,22 @@ if(-not $NoBuild){
 	Write-Host "[build] Skipping dotnet build (NoBuild flag)." -ForegroundColor Yellow
 }
 
+Write-Host "[help] Generating HTML documentation." -ForegroundColor Cyan
+if(Test-Path HELP.md){
+	try {
+		pandoc HELP.md -o help.html
+		if(Test-Path 'src-webui/wwwroot'){
+			Copy-Item help.html src-webui/wwwroot/help.html -Force
+			Remove-Item help.html -Force
+			Write-Host "[help] Copied help.html to web UI wwwroot." -ForegroundColor DarkCyan
+		}
+	} catch {
+		Write-Host "[help][warn] pandoc failed: $($_.Exception.Message)" -ForegroundColor Yellow
+	}
+} else {
+	Write-Host "[help][warn] HELP.md not found; skipping HTML generation." -ForegroundColor Yellow
+}
+
 if($Pack){
 	if(-not (Test-Path $Output)) { New-Item -ItemType Directory -Path $Output | Out-Null }
 
