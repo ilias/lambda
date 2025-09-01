@@ -11,37 +11,62 @@ Param(
 
 $ErrorActionPreference = 'Stop'
 
-if($CleanArtifacts -and (Test-Path $Output)){
+if ($CleanArtifacts -and (Test-Path $Output)) {
 	Write-Host "[clean] Removing '$Output'" -ForegroundColor Yellow
 	Remove-Item -Recurse -Force $Output
 }
 
-if(-not $NoBuild){
+if (-not $NoBuild) {
 	Write-Host "[build] Restoring & compiling solution (Release)" -ForegroundColor Cyan
 	dotnet restore | Out-Null
 	dotnet build lambda-cek.sln --configuration Release --no-restore
-} else {
+}
+else {
 	Write-Host "[build] Skipping dotnet build (NoBuild flag)." -ForegroundColor Yellow
 }
 
-Write-Host "[help] Generating HTML documentation." -ForegroundColor Cyan
-if(Test-Path HELP.md){
-	try {
-		pandoc HELP.md -o help.html
-		if(Test-Path 'src-webui/wwwroot'){
-			Copy-Item help.html src-webui/wwwroot/help.html -Force
-			Remove-Item help.html -Force
-			Write-Host "[help] Copied help.html to web UI wwwroot." -ForegroundColor DarkCyan
+Write-Host "[readme] Generating styled readme.html (pandoc)." -ForegroundColor Cyan
+if (Test-Path README.md) {
+	$cssPath = Join-Path $PSScriptRoot 'readme.css'
+	if (-not (Test-Path $cssPath)) {
+		Write-Host "[readme][warn] readme.css not found; proceeding without custom stylesheet." -ForegroundColor Yellow
+	}
+	$pandocAvailable = Get-Command pandoc -ErrorAction SilentlyContinue
+	if (-not $pandocAvailable) {
+		Write-Host "[readme][error] pandoc not found on PATH. Install pandoc to generate readme.html." -ForegroundColor Red
+	} else {
+		try {
+			$pandocArgs = @(
+				'README.md',
+				'--from','gfm',
+				'--standalone',
+				'--toc','--toc-depth=3',
+				'--metadata','title=Lambda Calculus Interpreter',
+				'--metadata','lang=en',
+				'--highlight-style','pygments',
+				'--embed-resources',
+				'--section-divs',
+				'-V','viewport=width=device-width,initial-scale=1',
+				'--output','readme.html'
+			)
+			if (Test-Path $cssPath) { $pandocArgs += @('--css','readme.css') }
+			pandoc @pandocArgs
+			if (Test-Path 'src-webui/wwwroot') {
+				Copy-Item readme.html src-webui/wwwroot/readme.html -Force
+				if (Test-Path $cssPath) { Copy-Item $cssPath src-webui/wwwroot/readme.css -Force }
+				Write-Host "[readme] Copied readme.html (and css if present) to web UI wwwroot." -ForegroundColor DarkCyan
+			}
 		}
-	} catch {
-		Write-Host "[help][warn] pandoc failed: $($_.Exception.Message)" -ForegroundColor Yellow
+		catch {
+			Write-Host "[readme][warn] pandoc error: $($_.Exception.Message)" -ForegroundColor Yellow
+		}
 	}
 } else {
-	Write-Host "[help][warn] HELP.md not found; skipping HTML generation." -ForegroundColor Yellow
+	Write-Host "[readme][warn] README.md not found; skipping HTML generation." -ForegroundColor Yellow
 }
 
-if($Pack){
-	if(-not (Test-Path $Output)) { New-Item -ItemType Directory -Path $Output | Out-Null }
+if ($Pack) {
+	if (-not (Test-Path $Output)) { New-Item -ItemType Directory -Path $Output | Out-Null }
 
 	# Validation of expected files for pack (README, stdlib, tests)
 	$expected = @(
@@ -50,11 +75,11 @@ if($Pack){
 		'tests.lambda'
 	)
 	$missing = @()
-	foreach($f in $expected){ if(-not (Test-Path $f)){ $missing += $f } }
+	foreach ($f in $expected) { if (-not (Test-Path $f)) { $missing += $f } }
 
-	if($missing.Count -gt 0){
+	if ($missing.Count -gt 0) {
 		Write-Host "[pack][warn] Missing expected files at repo root: $($missing -join ', ')" -ForegroundColor Yellow
-		if(-not $SkipPackOnError){
+		if (-not $SkipPackOnError) {
 			Write-Host "[pack][error] Aborting pack due to missing files (use -SkipPackOnError to continue)." -ForegroundColor Red
 			exit 1
 		} else {
@@ -63,13 +88,13 @@ if($Pack){
 	}
 
 	# Construct pack args
-	$packArgs = @('pack','src/lambda-cek.csproj','-c','Release','-o',$Output,'--no-build')
-	if($Version){ $packArgs += "/p:PackageVersion=$Version" }
+	$packArgs = @('pack', 'src/lambda-cek.csproj', '-c', 'Release', '-o', $Output, '--no-build')
+	if ($Version) { $packArgs += "/p:PackageVersion=$Version" }
 	Write-Host "[pack] dotnet $($packArgs -join ' ')" -ForegroundColor Cyan
 	dotnet @packArgs
 }
 
-if(-not $NoDocker){
+if (-not $NoDocker) {
 	$name = 'lambda-cek-webui'
 	$altName = 'lambda-webui'
 
@@ -83,7 +108,7 @@ if(-not $NoDocker){
 	}
 
 	$existingImage = docker images -q $name 2>$null
-	if($existingImage){
+	if ($existingImage) {
 		Write-Host "[docker] Removing existing image $existingImage" -ForegroundColor Yellow
 		docker rmi -f $existingImage | Out-Null
 	} else {
