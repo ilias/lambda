@@ -385,6 +385,11 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 [f x .. g y]            # Desugars to (range (f x) (g y)) and is produced lazily
 [a, a+2 .. b]           # Desugars to (range2 a (a+2) b) when any part is non-literal
 
+# NOTE: The identifiers `range` and `range2` are not auto-injected by the interpreter anymore.
+# They must be provided (e.g. via `stdlib.lambda`). Desugaring of non-literal ranges relies on
+# these names. If you omit them and use `[a .. b]` or `[a, b .. c]` with non-literal endpoints,
+# you'll get an unbound variable error.
+
 # Built-in operators
 5 |> succ |> mult 2     # Pipeline operator: left-to-right data flow → 12
 (mult 2) ∘ succ         # True composition operator: right-to-left function building

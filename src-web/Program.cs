@@ -6,7 +6,6 @@ var app = builder.Build();
 // Simple in-memory singleton interpreter instance
 var interpreter = new Interpreter(logger: new());
 await interpreter.LoadFileIfExistsAsync("stdlib.lambda");
-await interpreter.EnsureRangeBuiltinsAsync();
 
 // Health endpoints: new namespaced path plus legacy root for backward compatibility
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));

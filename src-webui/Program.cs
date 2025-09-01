@@ -30,7 +30,6 @@ services.AddSingleton<Interpreter>(_ =>
             break;
         }
     }
-    interp.EnsureRangeBuiltinsAsync().GetAwaiter().GetResult();
     return interp;
 });
 

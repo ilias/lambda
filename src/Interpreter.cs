@@ -154,19 +154,6 @@ public partial class Interpreter
     /// Ensures built-in range producing functions (range / range2) are present. They are defined lazily
     /// only if not already in the environment so user overrides are respected.
     /// </summary>
-    public async Task EnsureRangeBuiltinsAsync()
-    {
-        bool needRange = !_context.ContainsKey("range");
-        bool needRange2 = !_context.ContainsKey("range2");
-        if (!needRange && !needRange2) return;
-        var defs = new List<string>();
-        if (needRange)
-            defs.Add(":let range = (fix (lambda r. lambda a. lambda b. (if (= a b) (cons a nil) (if (< a b) (cons a (r (succ a) b)) (cons a (r (pred a) b))))))");
-        if (needRange2)
-            defs.Add(":let range2 = (lambda a. lambda b. lambda c. ((lambda step. (if (= step 0) (cons a nil) ((fix (lambda r. lambda x. (if (if (> step 0) (<= x c) (>= x c)) (cons x (r ((if (> step 0) succ pred) x))) nil))) a))) (- b a)))");
-        var joined = string.Join("; ", defs);
-        await ProcessInputAsync(joined);
-    }
 
     /// <summary>
     /// Emits the standard CLI-style output lines (Name / Time / result lines) into the logger buffer.
