@@ -381,21 +381,30 @@
       if(s.includes('>>')) return 'log-fileresult';
       return '';
     }
+    // Decode JavaScript-style Unicode escape sequences (e.g. \u03BB) in a line.
+    function decodeUnicodeEscapes(str){
+      if(!str || str.indexOf('\\u') === -1) return str; // fast path
+      // Replace \uXXXX (exactly 4 hex digits). This preserves other backslashes.
+      return str.replace(/\\u([0-9a-fA-F]{4})/g, (m, hex)=>{
+        try { return String.fromCharCode(parseInt(hex,16)); } catch { return m; }
+      });
+    }
     function append(text){
       const outEl = currentOutEl();
       if(!outEl) return;
-      const cls = classify(text);
-      if(text.startsWith('Test:') && (/\bpassed\b/.test(text) || /\bfailed\b/.test(text))){
+      const decoded = decodeUnicodeEscapes(text);
+      const cls = classify(decoded);
+      if(decoded.startsWith('Test:') && (/\bpassed\b/.test(decoded) || /\bfailed\b/.test(decoded))){
         testStats.total++;
-        if(/\bpassed\b/.test(text)) testStats.passed++;
+        if(/\bpassed\b/.test(decoded)) testStats.passed++;
         updateTestIndicator();
       }
       // If no explicit classification (other than maybe result/etc) and line has an inline '#', split & color comment.
-      if(!text.trimStart().startsWith('#') && text.includes('#')){
-        const hashIdx = text.indexOf('#');
+      if(!decoded.trimStart().startsWith('#') && decoded.includes('#')){
+        const hashIdx = decoded.indexOf('#');
         if(hashIdx > 0){
-          const before = text.slice(0, hashIdx).replace(/\s+$/,'');
-          const comment = text.slice(hashIdx); // include '#'
+          const before = decoded.slice(0, hashIdx).replace(/\s+$/,'');
+          const comment = decoded.slice(hashIdx); // include '#'
           const container = document.createElement('span');
           if(cls) container.className = cls; // preserve any existing class (e.g., log-result)
           const beforeNode = document.createTextNode(before + ' ');
@@ -410,14 +419,14 @@
         } else {
           const span = document.createElement('span');
           if(cls) span.className = cls;
-          span.textContent = text + '\n';
+          span.textContent = decoded + '\n';
           if(isFilteredSpan(span)) span.classList.add('hidden-log');
           outEl.appendChild(span);
         }
       } else {
         const span = document.createElement('span');
         if(cls) span.className = cls;
-        span.textContent = text + '\n';
+        span.textContent = decoded + '\n';
         if(isFilteredSpan(span)) span.classList.add('hidden-log');
         outEl.appendChild(span);
       }

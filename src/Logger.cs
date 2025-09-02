@@ -98,6 +98,22 @@ public class Logger
         _ => RESET                                       // Default
     };
 
+    // Matches literal sequences like \u03BB
+    private static readonly Regex UnicodeEscapeRegex = new("\\\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+    private static string DecodeUnicodeEscapes(string s)
+    {
+        if (string.IsNullOrEmpty(s) || !s.Contains("\\u")) return s;
+        return UnicodeEscapeRegex.Replace(s, m =>
+        {
+            try
+            {
+                var code = Convert.ToInt32(m.Groups[1].Value, 16);
+                return char.ConvertFromUtf32(code);
+            }
+            catch { return m.Value; }
+        });
+    }
+
     static readonly List<string> commands =
     [
         ":clear ", ":infix ", ":lazy ", ":load ", ":log ",
@@ -160,14 +176,14 @@ public class Logger
             {
                 try { s(line); } catch { /* ignore subscriber errors */ }
             }
-            if (toConsole && ConsoleOutputEnabled) LogToConsole(line);
+        if (toConsole && ConsoleOutputEnabled) LogToConsole(DecodeUnicodeEscapes(line));
             if (!string.IsNullOrWhiteSpace(_logFile))
             {
                 await _logFileLock.WaitAsync();
                 try
                 {
                     _logWriter ??= new StreamWriter(_logFile, append: true, encoding: System.Text.Encoding.UTF8);
-                    await _logWriter.WriteLineAsync(line);
+            await _logWriter.WriteLineAsync(DecodeUnicodeEscapes(line));
                 }
                 catch (Exception ex)
                 {
