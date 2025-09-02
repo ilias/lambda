@@ -312,7 +312,7 @@ public partial class Interpreter
             :save file            Persist current defs/macros/infix to file
             :stats                Display performance metrics & cache sizes
             :step on|off          Enable CEK machine step trace output
-            :test clear|result    Reset or show structural equality test counters
+            :test clear|result|json|text  Reset / show counters or switch test result output mode
             :help                 Show this summary
 
         -- Always-On Structural Natives --

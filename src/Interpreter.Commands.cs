@@ -22,7 +22,7 @@ public partial class Interpreter
         new(":save", ":save <file>", "Persist current environment to a file"),
         new(":stats", ":stats", "Show performance statistics & cache metrics"),
         new(":step", ":step on|off", "Toggle step-by-step CEK trace output"),
-        new(":test", ":test clear | :test result", "Reset or display structural equality test counters"),
+    new(":test", ":test clear | :test result | :test json | :test text", "Reset counters, show results, or change result output mode (text/json)"),
     // :commands removed (integrated into :help output)
     };
 

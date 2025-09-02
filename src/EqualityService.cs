@@ -183,6 +183,8 @@ internal sealed class EqualityService
         var total = equal ? _interp._stats.StructEqSuccesses : _interp._stats.StructEqCalls - _interp._stats.StructEqSuccesses;
         var totalPercent = (double)total / _interp._stats.StructEqCalls * 100;
         _logger.Log($"Test: {kind,-5} {(equal ? "passed" : "failed")} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
+    // Record test for JSON mode consumers
+    _interp.RecordTestResult(kind, equal, leftNorm, rightNorm);
         return equal;
     }
 

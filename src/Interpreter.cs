@@ -23,6 +23,15 @@ public partial class Interpreter
     private bool _useNativeArithmetic = true;
     private bool _usedRandom = false;
     internal EqualityService Equality { get; private set; } = null!;
+    // Test output mode & records (for :test json/text)
+    private enum TestOutputMode { Text, Json }
+    private TestOutputMode _testOutputMode = TestOutputMode.Text;
+    private readonly List<TestRecord> _testRecords = new();
+    private sealed record TestRecord(string Kind, bool Passed, string Left, string Right, int CallIndex, double SuccessRate, string? Line, string? File, int? FileLine);
+    internal string? _currentInputLine = null; // latest raw input segment being processed
+    internal string? _currentSourceFile = null; // file path when loading, else null
+    internal int? _currentSourceLine = null; // 1-based line number when loading
+    private bool _isLoadingFile = false; // guard to keep file context during batch load
 
     public Interpreter(Logger logger, Statistics? stats = null)
     {
@@ -56,6 +65,11 @@ public partial class Interpreter
         {
             _stats.Iterations = 0;
             _usedRandom = false;
+            if (!_isLoadingFile)
+            {
+                _currentSourceFile = null; // interactive resets file context
+                _currentSourceLine = null;
+            }
             if (string.IsNullOrWhiteSpace(input)) return (null, "");
             input = input.TrimEnd('\\');
             // Comments (whole-line)
@@ -75,6 +89,7 @@ public partial class Interpreter
             {
                 var trimmed = seg.Trim();
                 if (trimmed.Length == 0) continue;
+                _currentInputLine = trimmed; // capture segment for test recording
                 if (trimmed.StartsWith('#')) continue; // skip comment segment
 
                 if (trimmed.StartsWith(':'))
@@ -224,6 +239,8 @@ public partial class Interpreter
         {
             ":test" when arg.Equals("clear", StringComparison.OrdinalIgnoreCase) => TestClear(),
             ":test" when arg.Equals("result", StringComparison.OrdinalIgnoreCase) => TestResult(),
+            ":test" when arg.Equals("json", StringComparison.OrdinalIgnoreCase) => SetTestOutputMode(TestOutputMode.Json),
+            ":test" when arg.Equals("text", StringComparison.OrdinalIgnoreCase) => SetTestOutputMode(TestOutputMode.Text),
             ":log" => await _logger.HandleLogCommandAsync(arg),
             ":load" => await LoadFileAsync(arg),
             ":save" => await SaveFileAsync(arg),
@@ -344,12 +361,56 @@ public partial class Interpreter
     {
         _stats.StructEqCalls = 0;
         _stats.StructEqSuccesses = 0;
+        _testRecords.Clear();
         return "Test counters cleared (structural equality).";
     }
 
     private string TestResult()
     {
+        if (_testOutputMode == TestOutputMode.Json)
+        {
+            // Derive pass/fail counts. _stats.StructEqSuccesses doesn't accurately track passes for non-alpha kinds (by design),
+            // so prefer counting recorded test objects when available.
+            int passCount = _testRecords.Count > 0 ? _testRecords.Count(r => r.Passed) : _stats.StructEqSuccesses;
+            int failCount = _stats.StructEqCalls - passCount;
+            var obj = new
+            {
+                mode = "json",
+                totalCalls = _stats.StructEqCalls,
+                successes = _stats.StructEqSuccesses,
+                passCount,
+                failCount,
+                successRate = _stats.StructEqCalls == 0 ? 0 : (100.0 * _stats.StructEqSuccesses / _stats.StructEqCalls),
+                tests = _testRecords.Select(r => new
+                {
+                    kind = r.Kind,
+                    passed = r.Passed,
+                    left = r.Left,
+                    right = r.Right,
+                    callIndex = r.CallIndex,
+                    successRate = r.SuccessRate,
+                    line = r.Line,
+                    file = r.File,
+                    fileLine = r.FileLine
+                }).ToArray()
+            };
+            return System.Text.Json.JsonSerializer.Serialize(obj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
         return $"Test results: structural equality calls={_stats.StructEqCalls}, successes={_stats.StructEqSuccesses}, success rate={( _stats.StructEqCalls==0 ? 0 : (100.0*_stats.StructEqSuccesses/_stats.StructEqCalls)):F1}%";
+    }
+
+    private string SetTestOutputMode(TestOutputMode mode)
+    {
+        _testOutputMode = mode;
+        return $"Test output mode set to {mode.ToString().ToLowerInvariant()}";
+    }
+
+    internal void RecordTestResult(string kind, bool passed, Expr leftNorm, Expr rightNorm)
+    {
+        if (_testOutputMode != TestOutputMode.Json) return; // Only store details when JSON mode
+        var callIndex = _stats.StructEqCalls; // already incremented before logging summary
+        var successRate = _stats.StructEqCalls == 0 ? 0 : (100.0 * _stats.StructEqSuccesses / _stats.StructEqCalls);
+    _testRecords.Add(new TestRecord(kind, passed, FormatWithNumerals(leftNorm), FormatWithNumerals(rightNorm), callIndex, successRate, _currentInputLine, _currentSourceFile, _currentSourceLine));
     }
 
     internal Expr NormalizeExpression(Expr expr)

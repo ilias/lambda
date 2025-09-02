@@ -29,8 +29,11 @@ public partial class Interpreter
         var total = lines.Length;
         var currentInput = new System.Text.StringBuilder();
         int lastProgress = -1;
+        _currentSourceFile = path;
+    _isLoadingFile = true;
         foreach (var line in lines)
         {
+            _currentSourceLine = lineCount + 1; // 1-based line number
             await ProcessLineWithContinuation(line, currentInput, ProcessAndDisplayInputAsync, true, lineCount++);
             var pct = (int)((long)lineCount * 100 / total);
             if (pct != lastProgress && (pct == 100 || pct - lastProgress >= 5)) // every 5% + final
@@ -39,6 +42,9 @@ public partial class Interpreter
                 lastProgress = pct;
             }
         }
+        _currentSourceFile = null;
+        _currentSourceLine = null;
+    _isLoadingFile = false;
         if (currentInput.Length > 0)
             await ProcessAndDisplayInputAsync(currentInput.ToString());
         if (lastProgress < 100)
