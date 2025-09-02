@@ -163,7 +163,7 @@ public partial class Interpreter
     }
 
     // Force evaluation of a thunk (lazy value)
-    private Expr Force(Expr expr)
+    internal Expr Force(Expr expr)
     {
         if (expr.Type != ExprType.Thunk || expr.ThunkValue is null)
             return expr;

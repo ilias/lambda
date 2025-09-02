@@ -36,7 +36,7 @@ internal static class NativeRegistry
             Aliases: [],
             MinArity: 2,
             MaxArity: 2,
-            Impl: (interp, name, args, env) => interp.AlphaEqNative(name, args, env),
+            Impl: (interp, name, args, env) => interp.Equality.AlphaEq(name, args, env),
             Category: "equality",
             Doc: "alphaEq a b -> Church boolean whether expressions are alpha-equivalent after normalization"),
         new(
@@ -44,7 +44,7 @@ internal static class NativeRegistry
             Aliases: [],
             MinArity: 2,
             MaxArity: 2,
-            Impl: (interp, name, args, env) => interp.BetaEqNative(name, args, env),
+            Impl: (interp, name, args, env) => interp.Equality.BetaEq(name, args, env),
             Category: "equality",
             Doc: "betaEq a b -> normalize both then alphaEq"),
         new(
@@ -52,7 +52,7 @@ internal static class NativeRegistry
             Aliases: [],
             MinArity: 2,
             MaxArity: 2,
-            Impl: (interp, name, args, env) => interp.HashEqNative(name, args, env),
+            Impl: (interp, name, args, env) => interp.Equality.HashEq(name, args, env),
             Category: "equality",
             Doc: "hashEq a b -> compare canonical beta-normal form hashes (fast approximate equivalence)"),
         new(
@@ -60,7 +60,7 @@ internal static class NativeRegistry
             Aliases: [],
             MinArity: 2,
             MaxArity: 2,
-            Impl: (interp, name, args, env) => interp.EtaEqNative(name, args, env),
+            Impl: (interp, name, args, env) => interp.Equality.EtaEq(name, args, env),
             Category: "equality",
             Doc: "etaEq a b -> beta-normalize then eta-reduce then alphaEq"),
         // Arithmetic (binary)

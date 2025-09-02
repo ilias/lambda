@@ -23,7 +23,7 @@ public partial class Interpreter
     }
 
     // Expression interning for memory efficiency
-    private HashSet<string> FreeVars(Expr expr, string? skipVar = null)
+    internal HashSet<string> FreeVars(Expr expr, string? skipVar = null)
     {
         if (expr is null) return [];
 

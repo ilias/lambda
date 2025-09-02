@@ -19,9 +19,10 @@ public partial class Interpreter
     private bool _showStep = false;
     private bool _lazyEvaluation = true;
     private bool _prettyPrint = true;
-    private int _nativeArithmetic = 0;
+    internal int _nativeArithmetic = 0; // internal for services
     private bool _useNativeArithmetic = true;
     private bool _usedRandom = false;
+    internal EqualityService Equality { get; private set; } = null!;
 
     public Interpreter(Logger logger, Statistics? stats = null)
     {
@@ -29,6 +30,7 @@ public partial class Interpreter
         _stats = stats ?? new Statistics();
         _parser = new Parser(logger, this); // Pass logger to parser
         _evaluator = new CEKEvaluator(this); // default strategy
+        Equality = new EqualityService(this);
         RegisterNativeFunctions();
     }
 
@@ -37,6 +39,9 @@ public partial class Interpreter
     /// hosting layers (CLI / Web) to adjust buffering or retrieve captured logs without reflection.
     /// </summary>
     public Logger Logger => _logger;
+    internal Logger LoggerInstance => _logger; // service access
+
+    // Expose selected helpers for service classes (kept minimal surface)
 
     /// <summary>
     /// Processes a raw REPL input line which may contain multiple semicolon-separated statements
@@ -347,7 +352,7 @@ public partial class Interpreter
         return $"Test results: structural equality calls={_stats.StructEqCalls}, successes={_stats.StructEqSuccesses}, success rate={( _stats.StructEqCalls==0 ? 0 : (100.0*_stats.StructEqSuccesses/_stats.StructEqCalls)):F1}%";
     }
 
-    private Expr NormalizeExpression(Expr expr)
+    internal Expr NormalizeExpression(Expr expr)
     {
         if (_normalizationCache.TryGetValue(expr, out var cached))
             return cached;
