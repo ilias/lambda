@@ -2,39 +2,68 @@
 
 A high-performance lambda calculus interpreter written in C# featuring lazy evaluation, comprehensive standard library, infix operators, macros, and native arithmetic optimizations.
 
-## Table of Contents
+## Table of Contents (Reorganized)
+
+Quick Start & Overview
 
 - [Features](#features)
-- [Getting Started](#getting-started)
+- [Quick Start](#quick-start)
+- [Project Layout](#getting-started)
+
+Language & Syntax
+
 - [Core Language](#core-language)
-- [Formal Grammar](#formal-grammar)
 - [Advanced Syntax Features](#advanced-syntax-features)
-- [Interactive Commands](#interactive-commands)
 - [Command / Expression Chaining](#command--expression-chaining)
-- [Standard Library](#standard-library)
 - [Infix Operators](#infix-operators)
+- [Operator Precedence & Associativity](#operator-precedence--associativity)
 - [Macro System](#macro-system)
-- [Examples (Extended)](#examples-extended)
-- [Advanced Usage](#advanced-usage)
+- [Range Syntax Extensions](#range-syntax-extensions)
+- [Formal Grammar](#formal-grammar)
+
+Runtime & Tooling
+
+- [Interactive Commands](#interactive-commands)
+- [Standard Library](#standard-library)
+- [Pretty Printing](#pretty-printing)
+- [Parser Errors & Diagnostics](#parser-errors--diagnostics)
+- [Step Tracing & Debugging](#step-tracing--debugging)
+
+Performance & Internals
+
 - [Performance Features](#performance-features)
 - [Native List Primitives](#native-list-primitives)
-- [Operator Precedence & Associativity](#operator-precedence--associativity)
-- [Native List Primitives](#native-list-primitives)
 - [Structural Equivalence](#structural-equivalence)
-- [Building and Running](#building-and-running)
-        - [Documentation Generation (Pandoc)](#documentation-generation-pandoc)
-        - [Web UI & Streaming Logs](#web-ui--streaming-logs)
-        - [Docker (Web UI)](#docker-web-ui)
-        - [Streaming Modes (Comparison)](#streaming-modes-comparison)
-- [Range Syntax Extensions](#range-syntax-extensions)
-- [Parser Errors & Diagnostics](#parser-errors--diagnostics)
-- [Unary Minus / Negative Literals](#unary-minus--negative-literals)
-- [Either Type (Error Handling)](#either-type-error-handling)
-- [Pretty Printing](#pretty-printing)
-- [Step Tracing & Debugging](#step-tracing--debugging)
 - [Performance Cookbook](#performance-cookbook)
+
+Usage Patterns
+
+- [Examples (Extended)](#examples-extended)
+- [Advanced Usage](#advanced-usage)
 - [Embedding & Programmatic API](#embedding--programmatic-api)
 - [Multi-user & Deployment Strategies](#multi-user--deployment-strategies)
+
+Build, Deploy & Distribution
+
+- [Building and Running](#building-and-running)
+    - [Documentation Generation (Pandoc)](#documentation-generation-pandoc)
+    - [Web UI & Streaming Logs](#web-ui--streaming-logs)
+    - [Docker (Web UI)](#docker-web-ui)
+    - [Streaming Modes (Comparison)](#streaming-modes-comparison)
+
+Appendices
+
+- [Unary Minus / Negative Literals](#unary-minus--negative-literals)
+- [Either Type (Error Handling)](#either-type-error-handling)
+
+Meta
+
+- [Contributing](#contributing)
+- [Troubleshooting & FAQ](#troubleshooting--faq)
+- [Design Decisions](#design-decisions)
+- [License](#license)
+
+> The README is intentionally comprehensive. Consider splitting into smaller docs if publishing to NuGet with a shorter front-page overview.
 
 ## Features
 
@@ -80,6 +109,30 @@ Enhancements to the Web UI (`src-webui`):
 - Wrapped Output: Long lines wrap; horizontal scroll removed.
 
 Tip: Extend filtering or log classification via `classify()` and `FILTER_CONFIG` in `wwwroot/index.html`.
+
+## Quick Start
+
+```powershell
+dotnet build
+dotnet run --project src-cli
+succ 41  # → 42
+```
+
+Web UI
+```powershell
+dotnet run --project src-webui
+```
+Open <http://localhost:5000> then evaluate `succ 41`.
+
+Embed (C#):
+```csharp
+var it = new LambdaCalculus.Interpreter(logger: new LambdaCalculus.Logger());
+await it.LoadFileIfExistsAsync("stdlib.lambda");
+var (_, r) = await it.ProcessInputAsync("succ 41");
+Console.WriteLine(r); // 42
+```
+
+---
 
 ## Getting Started
 
@@ -389,10 +442,9 @@ let rec factorial = n -> if (iszero n) 1 (mult n (factorial (pred n))) in factor
 [f x .. g y]            # Desugars to (range (f x) (g y)) and is produced lazily
 [a, a+2 .. b]           # Desugars to (range2 a (a+2) b) when any part is non-literal
 
-# NOTE: The identifiers `range` and `range2` are not auto-injected by the interpreter anymore.
-# They must be provided (e.g. via `stdlib.lambda`). Desugaring of non-literal ranges relies on
-# these names. If you omit them and use `[a .. b]` or `[a, b .. c]` with non-literal endpoints,
-# you'll get an unbound variable error.
+# NOTE (Updated): `range` and `range2` are lazily auto-injected if a non-literal range form
+# requires them and they are not already defined. Provide your own earlier to override.
+# Literal ranges with only integer endpoints expand eagerly and do not depend on these names.
 
 # Built-in operators
 5 |> succ |> mult 2     # Pipeline operator: left-to-right data flow → 12
@@ -836,9 +888,6 @@ Lists are implemented as right-folded structures:
 [10 .. 5]               # [10, 9, 8, 7, 6, 5] (descending)
 
 #### Range Syntax Extensions
-```
-
-#### Range Syntax Extensions
 
 The interpreter supports an expressive Haskell‑style range family:
 
@@ -860,11 +909,11 @@ Expansion Rules:
 3. A zero step (e.g. `[5,5 .. 10]`) yields a singleton `[5]`.
 4. Stepped progression stops before crossing the target bound (inclusive if exactly hits it).
 
-These built-ins are injected automatically if not already defined:
+These helper names are injected lazily by the interpreter (unless you define them first):
 
 ```lambda
-range a b         # (Built-in injected) generates numbers from a to b (ascending or descending) lazily
-range2 a b c      # Stepped; b supplies a+step; works both directions lazily
+range a b         # Generates numbers from a to b (ascending or descending) lazily
+range2 a b c      # Stepped form; b supplies a+step; works both directions lazily
 ```
 
 Practical examples:
@@ -1984,7 +2033,6 @@ id = λx.x
 compose = λf g x.f (g x)
 
 # Define infix operators
-```lambda
 :infix ∘ 9 right
 ∘ = compose
 
