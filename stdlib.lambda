@@ -729,8 +729,8 @@ times    = λn.λf.λx.n f x
 # -----------------------------------------------------------------------------
 curry    = λf x y.f (pair x y)
 uncurry  = λf p.f (first p) (second p)
-partial  = λf.λx.λy.f x y   # eta-expanded to avoid multi-param parsing ambiguity
-partial2 = λf.λx.λy.λz.f x y z
+partial  = λf.λx.λy.f x y   # Creates a unary function awaiting final arg when called as (partial f a)
+partial2 = λf.λx.λy.λz.f x y z  # Fix first two args when used as (partial2 f a b)
 # 3-arity curry helpers used in tests
 curry3   = λf x y z.f (pair x (pair y z))
 uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
@@ -865,7 +865,12 @@ gcd1 = λa b. if (or (iszero a) (iszero b)) (if (iszero a) b a) \
 # -----------------------------------------------------------------------------
 nothing   = nil
 just      = λx.pair true x
-isNothing = isnil
+# NOTE: Original impl used `isnil`, but `just x` is encoded as a Church pair, not a list.
+# Using `isnil` on a pair produced the identity function (λb.b) instead of `false`.
+# New encoding: apply the structure to a two-arg function that always returns false; for lists
+# this function is ignored by `nil` which returns the second argument (true). For a pair it
+# is invoked, reducing to false.
+isNothing = λm.m (λx.λy.false) true
 isJust    = λm.not (isNothing m)
 fromJust  = second
 maybe     = λdef f m.if (isNothing m) def (f (fromJust m))

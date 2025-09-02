@@ -200,6 +200,7 @@ alphaEq (4 >= 4) true
 alphaEq (just 42) (just 42)
 alphaEq nothing nil
 alphaEq (isJust (just 1)) true
+alphaEq (isNothing (just 1)) false
 alphaEq (isNothing nothing) true
 alphaEq (fromJust (just 7)) 7
 alphaEq (fromMaybe 99 (just 5)) 5
@@ -247,7 +248,7 @@ alphaEq (flip minus 2 5) 3
 alphaEq (on plus succ 2 3) 7
 alphaEq (apply succ 4) 5
 alphaEq (partial plus 2 3) 5
-alphaEq (partial2 plus 2 3 4) 1024
+alphaEq ((partial2 plus 2 3) 4) 9
 alphaEq (memoize succ 10) 11
 alphaEq (id2 123) 123
 alphaEq (const2 7 8) 7
