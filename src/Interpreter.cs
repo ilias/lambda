@@ -32,6 +32,7 @@ public partial class Interpreter
     internal string? _currentSourceFile = null; // file path when loading, else null
     internal int? _currentSourceLine = null; // 1-based line number when loading
     private bool _isLoadingFile = false; // guard to keep file context during batch load
+    // macroExpandedLine removed
 
     public Interpreter(Logger logger, Statistics? stats = null)
     {
@@ -391,7 +392,8 @@ public partial class Interpreter
                     successRate = r.SuccessRate,
                     line = r.Line,
                     file = r.File,
-                    fileLine = r.FileLine
+                    fileLine = r.FileLine,
+                    // macroExpandedLine removed
                 }).ToArray()
             };
             return System.Text.Json.JsonSerializer.Serialize(obj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });

@@ -144,31 +144,38 @@ public class Logger
     /// <summary>Logs a message asynchronously (buffer, console, file as configured).</summary>
     public async Task LogAsync(string message, bool toConsole = true)
     {
-        if (EnableBuffering)
+        if (message is null) return;
+        var lines = message.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        foreach (var rawLine in lines)
         {
-            lock (_bufferLock) _buffer.Add(message);
+            var line = rawLine; // preserve empty string lines
+            if (EnableBuffering)
+            {
+                lock (_bufferLock) _buffer.Add(line);
+            }
+            // Notify subscribers per line (web UI expects one logical line at a time)
+            Action<string>[] subs;
+            lock (_subLock) subs = _subscribers.ToArray();
+            foreach (var s in subs)
+            {
+                try { s(line); } catch { /* ignore subscriber errors */ }
+            }
+            if (toConsole && ConsoleOutputEnabled) LogToConsole(line);
+            if (!string.IsNullOrWhiteSpace(_logFile))
+            {
+                await _logFileLock.WaitAsync();
+                try
+                {
+                    _logWriter ??= new StreamWriter(_logFile, append: true, encoding: System.Text.Encoding.UTF8);
+                    await _logWriter.WriteLineAsync(line);
+                }
+                catch (Exception ex)
+                {
+                    LogToConsole($"Error: writing to log file: {ex.Message}");
+                }
+                _logFileLock.Release();
+            }
         }
-        // Notify subscribers (non-blocking best-effort)
-        Action<string>[] subs;
-        lock (_subLock) subs = _subscribers.ToArray();
-        foreach (var s in subs)
-        {
-            try { s(message); } catch { /* ignore subscriber errors */ }
-        }
-        if (toConsole && ConsoleOutputEnabled) LogToConsole(message);
-        if (string.IsNullOrWhiteSpace(_logFile)) return;
-
-        await _logFileLock.WaitAsync();
-        try
-        {
-            _logWriter ??= new StreamWriter(_logFile, append: true, encoding: System.Text.Encoding.UTF8);
-            await _logWriter.WriteLineAsync(message);
-        }
-        catch (Exception ex)
-        {
-            LogToConsole($"Error: writing to log file: {ex.Message}");
-        }
-        _logFileLock.Release();
     }
 
     /// <summary>Synchronous wrapper for <see cref="LogAsync"/>.</summary>
