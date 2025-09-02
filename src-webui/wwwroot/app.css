@@ -93,6 +93,7 @@ button.tiny { font-size:.6rem; padding:.3rem .5rem; }
 .bar-results { align-items:flex-start; }
 .label-small.mt-aligned { margin-top:.4rem; }
 .push-right { margin-left:auto; }
+#testIndicator { margin-left:.75rem; font-weight:600; letter-spacing:.05em; }
 /* Input panes */
 .input-pane { height:130px; width:100%; margin-top:.5rem; margin-bottom:0; display:none; background:#0f141a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.6rem .7rem; font-family:ui-monospace,Consolas,monospace; font-size:.95rem; resize:vertical; }
 .input-pane.active { display:block; }

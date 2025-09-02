@@ -95,6 +95,7 @@
       <div class="bar bar-results">
         <label for="output" class="label-small mt-aligned">Result / Log</label>
         <div id="outputTabs" class="inline-tabs"></div>
+  <div id="testIndicator" class="inline small">Tests: 0/0 (0%)</div>
         <div class="inline small max-lines-wrap">
           <label for="maxLinesInput">Max Lines</label>
           <input id="maxLinesInput" type="number" min="100" max="200000" step="100" value="4000" title="Maximum lines retained per log tab" />
@@ -299,6 +300,22 @@
     createTab('Session 1');
     function getOutEl(){ return activeTab? activeTab.preEl : null; }
     function clearActiveOutput(){ const o=getOutEl(); if(o) o.textContent=''; }
+    // --- Test indicator state ---
+    const testIndicatorEl = document.getElementById('testIndicator');
+    const testStats = { passed:0, total:0 };
+    function updateTestIndicator(){
+      if(!testIndicatorEl) return;
+      const pct = testStats.total ? ((testStats.passed / testStats.total) * 100).toFixed(2) : '0';
+      testIndicatorEl.textContent = `Tests: ${testStats.passed}/${testStats.total} (${pct}%)`;
+      if(testStats.total === 0){ testIndicatorEl.style.color=''; }
+      else if(testStats.passed === testStats.total){ testIndicatorEl.style.color='var(--good)'; }
+      else { testIndicatorEl.style.color='#e3b341'; }
+    }
+    function resetTestStats(){ testStats.passed=0; testStats.total=0; updateTestIndicator(); }
+    // Wrap original clearActiveOutput to also reset stats
+    const __origClear = clearActiveOutput;
+    function clearActiveOutput(){ const o=getOutEl(); if(o) o.textContent=''; resetTestStats(); }
+    updateTestIndicator();
     // Backwards compatibility variable referencing current output element
     function currentOutEl(){ return getOutEl(); }
     const runBtn = document.getElementById('runBtn');
@@ -368,6 +385,11 @@
       const outEl = currentOutEl();
       if(!outEl) return;
       const cls = classify(text);
+      if(text.startsWith('Test:') && (/\bpassed\b/.test(text) || /\bfailed\b/.test(text))){
+        testStats.total++;
+        if(/\bpassed\b/.test(text)) testStats.passed++;
+        updateTestIndicator();
+      }
       // If no explicit classification (other than maybe result/etc) and line has an inline '#', split & color comment.
       if(!text.trimStart().startsWith('#') && text.includes('#')){
         const hashIdx = text.indexOf('#');
