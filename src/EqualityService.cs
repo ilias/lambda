@@ -37,8 +37,8 @@ internal sealed class EqualityService
         if (args.Count != 2) return null;
         var left = _interp.EvaluateCEK(args[0], env);
         var right = _interp.EvaluateCEK(args[1], env);
-        if (left.Type == ExprType.Thunk) left = _interp.Force(left);
-        if (right.Type == ExprType.Thunk) right = _interp.Force(right);
+    left = ForceFully(left);
+    right = ForceFully(right);
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
     var equal = Expr.AlphaEquivalent(nL, nR);
@@ -50,8 +50,8 @@ internal sealed class EqualityService
         if (args.Count != 2) return null;
         var left = _interp.EvaluateCEK(args[0], env);
         var right = _interp.EvaluateCEK(args[1], env);
-        if (left.Type == ExprType.Thunk) left = _interp.Force(left);
-        if (right.Type == ExprType.Thunk) right = _interp.Force(right);
+    left = ForceFully(left);
+    right = ForceFully(right);
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
     // Logging will be handled by helper after computing equality outcome
@@ -113,69 +113,87 @@ internal sealed class EqualityService
         if (args.Count != 2) return null;
         var l = _interp.EvaluateCEK(args[0], env);
         var r = _interp.EvaluateCEK(args[1], env);
-        if (l.Type == ExprType.Thunk) l = _interp.Force(l);
-        if (r.Type == ExprType.Thunk) r = _interp.Force(r);
+        l = ForceFully(l);
+        r = ForceFully(r);
         l = _interp.NormalizeExpression(l);
         r = _interp.NormalizeExpression(r);
-        l = EtaReduce(l, 64);
-        r = EtaReduce(r, 64);
-    var etaEq = Expr.AlphaEquivalent(l, r);
-    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("eta", l, r, etaEq));
 
-        Expr EtaReduce(Expr expr, int budget)
+        // Iterative eta reduction to a fixed point (up to budget) allowing multi-arg chains
+        l = EtaNormalize(l, 64);
+        r = EtaNormalize(r, 64);
+        var etaEq = Expr.AlphaEquivalent(l, r);
+        return _interp.MakeChurchBoolean(LogAndUpdateStructEq("eta", l, r, etaEq));
+
+        Expr EtaNormalize(Expr expr, int budget)
         {
-            if (budget <= 0) return expr;
+            var current = expr;
+            int remaining = budget;
+            while (remaining-- > 0)
+            {
+                var reduced = EtaStep(current);
+                if (Expr.AlphaEquivalent(reduced, current)) break;
+                current = reduced;
+            }
+            return current;
+        }
+
+        Expr EtaStep(Expr expr)
+        {
             return expr.Type switch
             {
-                ExprType.Abs when expr.AbsBody is { Type: ExprType.App, AppLeft: var f, AppRight: { Type: ExprType.Var, VarName: var v } arg }
+                ExprType.Abs when expr.AbsBody is { Type: ExprType.App, AppLeft: var fNode, AppRight: { Type: ExprType.Var, VarName: var v } }
                                    && expr.AbsVarName != null && v == expr.AbsVarName
-                                   && !_interp.FreeVars(f!).Contains(expr.AbsVarName!)
-                                   && CountVarOccurrences(f!, expr.AbsVarName!) == 0
-                    => EtaReduce(f!, budget - 1),
-                ExprType.Abs => Expr.Abs(expr.AbsVarName!, EtaReduce(expr.AbsBody!, budget - 1)),
-                ExprType.App => Expr.App(EtaReduce(expr.AppLeft!, budget - 1), EtaReduce(expr.AppRight!, budget - 1)),
+                                   && EtaSafeToReduce(fNode!, expr.AbsVarName!)
+                    => fNode!, // single eta contraction
+                ExprType.Abs => Expr.Abs(expr.AbsVarName!, EtaStep(expr.AbsBody!)),
+                ExprType.App => Expr.App(EtaStep(expr.AppLeft!), EtaStep(expr.AppRight!)),
                 ExprType.Thunk => expr.ThunkValue!.IsForced && expr.ThunkValue.ForcedValue is not null
-                                    ? EtaReduce(expr.ThunkValue.ForcedValue!, budget - 1)
-                                    : EtaReduce(expr.ThunkValue.Expression, budget - 1),
+                                        ? EtaStep(expr.ThunkValue.ForcedValue!)
+                                        : EtaStep(expr.ThunkValue.Expression),
                 _ => expr
             };
         }
 
-        int CountVarOccurrences(Expr e, string varName)
+        bool EtaSafeToReduce(Expr fExpr, string binder)
         {
-            int count = 0;
-            var stack = new Stack<Expr>();
-            stack.Push(e);
-            while (stack.Count > 0)
+            // Prevent reduction if binder appears free AFTER expanding a leading abstraction chain of fExpr (transitive safety heuristic)
+            // Directly ensure binder not free in fExpr (current rule) AND not free in any immediate lambda bodies of fExpr.
+            if (_interp.FreeVars(fExpr).Contains(binder)) return false;
+            // If fExpr is a lambda chain, walk lambdas collecting bodies until non-abs; if binder becomes free inside body, block.
+            var cur = fExpr;
+            int depth = 0; // avoid pathological loops
+            while (cur.Type == ExprType.Abs && depth++ < 32)
             {
-                var cur = stack.Pop();
-                switch (cur.Type)
-                {
-                    case ExprType.Var when cur.VarName == varName: count++; break;
-                    case ExprType.Abs when cur.AbsBody is not null && cur.AbsVarName != varName:
-                        stack.Push(cur.AbsBody); break;
-                    case ExprType.App:
-                        stack.Push(cur.AppLeft!); stack.Push(cur.AppRight!); break;
-                    case ExprType.Thunk:
-                        if (cur.ThunkValue != null)
-                            stack.Push(cur.ThunkValue.IsForced && cur.ThunkValue.ForcedValue is not null ? cur.ThunkValue.ForcedValue! : cur.ThunkValue.Expression);
-                        break;
-                }
+                if (cur.AbsBody is null) break;
+                if (_interp.FreeVars(cur.AbsBody).Contains(binder)) return false;
+                cur = cur.AbsBody;
             }
-            return count;
+            return true;
         }
+
     }
 
     private bool LogAndUpdateStructEq(string kind, Expr leftNorm, Expr rightNorm, bool equal)
     {
-        _logger.Log($"Test: {kind} left:  {_interp.FormatWithNumerals(leftNorm)}");
-        _logger.Log($"Test: {kind} right: {_interp.FormatWithNumerals(rightNorm)}");
+        _logger.Log($"Test: {kind,-5} left:  {_interp.FormatWithNumerals(leftNorm)}");
+        _logger.Log($"Test: {kind,-5} right: {_interp.FormatWithNumerals(rightNorm)}");
         _interp._nativeArithmetic++;
         _interp._stats.StructEqCalls++;
         if (kind != "alpha" || equal) _interp._stats.StructEqSuccesses++;
         var total = equal ? _interp._stats.StructEqSuccesses : _interp._stats.StructEqCalls - _interp._stats.StructEqSuccesses;
         var totalPercent = (double)total / _interp._stats.StructEqCalls * 100;
-        _logger.Log($"Test: {kind} {(equal ? "passed" : "failed")} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
+        _logger.Log($"Test: {kind,-5} {(equal ? "passed" : "failed")} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
         return equal;
+    }
+
+    private Expr ForceFully(Expr e)
+    {
+        int guard = 128;
+        var cur = e;
+        while (cur.Type == ExprType.Thunk && guard-- > 0)
+        {
+            cur = _interp.Force(cur);
+        }
+        return cur;
     }
 }

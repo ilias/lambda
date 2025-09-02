@@ -1178,6 +1178,35 @@ alphaEq (2 + 3 ** 2) 11         # 2 + (3 ** 2) = 2 + 9
 alphaEq (3 ** 2 ** 2) (exp 3 (exp 2 2))   # right-assoc: 3^(2^2) = 3^4 = 81
 
 
+# --- Additional Equality Edge Cases (added 2025-09) ---
+
+# Eta non-reducible (λx.f) ≠ f since body not (f x)
+alphaEq (etaEq (λx.f) f) false
+
+# Eta blocked by free variable inside definition (f closes over free x)
+alphaEq (let f = λy.x in etaEq (λx.(f x)) f) false
+
+# Eta blocked when argument also appears elsewhere in body
+alphaEq (etaEq (λx.(pair (f x) x)) f) false
+
+# Multi-arg eta chain reduces fully (λx.λy.f x y) ~ f
+alphaEq (etaEq (λx.(λy.(f x y))) f) true
+
+# Beta equivalence extra reductions
+alphaEq (betaEq (delay 5) 5) true
+alphaEq (betaEq ((λx.x) ((λy.y) 7)) 7) true
+alphaEq (betaEq ((λf.f 1) (λx.x)) ((λf.f 2) (λx.x))) false
+
+# Hash equivalence distinguishes different application association
+alphaEq (hashEq (f (g x)) ((f g) x)) false
+
+# Eta after beta (wrapper lambda returning applied function)
+alphaEq (etaEq ((λf. λx. f x) succ) succ) true
+
+# Beta equivalence recognises eta-redex style variant
+alphaEq (betaEq (λx.(succ x)) succ) true
+
+
 ##################################################################
 # Additional Core Correctness Tests (added 2025-09)
 ##################################################################
