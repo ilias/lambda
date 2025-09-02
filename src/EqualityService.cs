@@ -28,16 +28,8 @@ internal sealed class EqualityService
         if (rightVal.Type == ExprType.Thunk) rightVal = _interp.Force(rightVal);
         var normLeft = _interp.NormalizeExpression(leftVal);
         var normRight = _interp.NormalizeExpression(rightVal);
-        var equal = Expr.AlphaEquivalent(normLeft, normRight) || (!Expr.AlphaEquivalent(normLeft, normRight) && Expr.AlphaEquivalent(leftVal, rightVal));
-        _logger.Log($"Test: alpha left:  {_interp.FormatWithNumerals(normLeft)}");
-        _logger.Log($"Test: alpha right: {_interp.FormatWithNumerals(normRight)}");
-        _interp._nativeArithmetic++;
-        _interp._stats.StructEqCalls++;
-        if (equal) _interp._stats.StructEqSuccesses++;
-        var total = equal ? _interp._stats.StructEqSuccesses : _interp._stats.StructEqCalls - _interp._stats.StructEqSuccesses;
-        var totalPercent = (double)total / _interp._stats.StructEqCalls * 100;
-        _logger.Log($"Test: alpha {(equal ? "passed" : "failed")} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
-        return _interp.MakeChurchBoolean(equal);
+    var equal = Expr.AlphaEquivalent(normLeft, normRight) || (!Expr.AlphaEquivalent(normLeft, normRight) && Expr.AlphaEquivalent(leftVal, rightVal));
+    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("alpha", normLeft, normRight, equal));
     }
 
     internal Expr? BetaEq(string op, List<Expr> args, Dictionary<string, Expr> env)
@@ -49,7 +41,8 @@ internal sealed class EqualityService
         if (right.Type == ExprType.Thunk) right = _interp.Force(right);
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
-        return _interp.MakeChurchBoolean(Expr.AlphaEquivalent(nL, nR));
+    var equal = Expr.AlphaEquivalent(nL, nR);
+    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("beta", nL, nR, equal));
     }
 
     internal Expr? HashEq(string op, List<Expr> args, Dictionary<string, Expr> env)
@@ -61,6 +54,7 @@ internal sealed class EqualityService
         if (right.Type == ExprType.Thunk) right = _interp.Force(right);
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
+    // Logging will be handled by helper after computing equality outcome
         string CanonicalHash(Expr expr)
         {
             var sb = new System.Text.StringBuilder();
@@ -110,7 +104,8 @@ internal sealed class EqualityService
         }
         var hL = CanonicalHash(nL);
         var hR = CanonicalHash(nR);
-        return _interp.MakeChurchBoolean(hL == hR);
+    var hashEq = hL == hR;
+    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("hash", nL, nR, hashEq));
     }
 
     internal Expr? EtaEq(string op, List<Expr> args, Dictionary<string, Expr> env)
@@ -124,7 +119,8 @@ internal sealed class EqualityService
         r = _interp.NormalizeExpression(r);
         l = EtaReduce(l, 64);
         r = EtaReduce(r, 64);
-        return _interp.MakeChurchBoolean(Expr.AlphaEquivalent(l, r));
+    var etaEq = Expr.AlphaEquivalent(l, r);
+    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("eta", l, r, etaEq));
 
         Expr EtaReduce(Expr expr, int budget)
         {
@@ -168,5 +164,18 @@ internal sealed class EqualityService
             }
             return count;
         }
+    }
+
+    private bool LogAndUpdateStructEq(string kind, Expr leftNorm, Expr rightNorm, bool equal)
+    {
+        _logger.Log($"Test: {kind} left:  {_interp.FormatWithNumerals(leftNorm)}");
+        _logger.Log($"Test: {kind} right: {_interp.FormatWithNumerals(rightNorm)}");
+        _interp._nativeArithmetic++;
+        _interp._stats.StructEqCalls++;
+        if (kind != "alpha" || equal) _interp._stats.StructEqSuccesses++;
+        var total = equal ? _interp._stats.StructEqSuccesses : _interp._stats.StructEqCalls - _interp._stats.StructEqSuccesses;
+        var totalPercent = (double)total / _interp._stats.StructEqCalls * 100;
+        _logger.Log($"Test: {kind} {(equal ? "passed" : "failed")} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
+        return equal;
     }
 }
