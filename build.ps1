@@ -25,17 +25,34 @@ else {
 	Write-Host "[build] Skipping dotnet build (NoBuild flag)." -ForegroundColor Yellow
 }
 
-Write-Host "[readme] Generating styled readme.html (pandoc)." -ForegroundColor Cyan
+Write-Host "[readme] Generating styled readme.html (pandoc) into docs/ and copying to webui." -ForegroundColor Cyan
 if (Test-Path README.md) {
-	$cssPath = Join-Path $PSScriptRoot 'readme.css'
+	$docsDir = Join-Path $PSScriptRoot 'docs'
+	if (-not (Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir | Out-Null }
+	$cssPath = Join-Path $docsDir 'readme.css'
+	# Detect and warn about legacy root copies (will remove automatically if identical)
+	$rootCss = Join-Path $PSScriptRoot 'readme.css'
+	$rootHtml = Join-Path $PSScriptRoot 'readme.html'
+	if ((Test-Path $rootCss) -and -not (Test-Path $cssPath)) {
+		Write-Host "[readme][migrate] Moving legacy root readme.css -> docs/readme.css" -ForegroundColor DarkGray
+		Move-Item $rootCss $cssPath -Force
+	} elseif (Test-Path $rootCss) {
+		# Always remove legacy root copy; docs/ is authoritative now.
+		try { Remove-Item $rootCss -Force; Write-Host "[readme][cleanup] Removed legacy root readme.css (docs version authoritative)" -ForegroundColor DarkGray } catch { Write-Host "[readme][warn] Could not remove legacy root readme.css: $($_.Exception.Message)" -ForegroundColor Yellow }
+	}
+	if (Test-Path $rootHtml) {
+		# Always remove stale root readme.html; new one generated under docs
+		try { Remove-Item $rootHtml -Force; Write-Host "[readme][cleanup] Removed stale root readme.html" -ForegroundColor DarkGray } catch {}
+	}
 	if (-not (Test-Path $cssPath)) {
-		Write-Host "[readme][warn] readme.css not found; proceeding without custom stylesheet." -ForegroundColor Yellow
+		Write-Host "[readme][warn] docs/readme.css not found; proceeding without custom stylesheet." -ForegroundColor Yellow
 	}
 	$pandocAvailable = Get-Command pandoc -ErrorAction SilentlyContinue
 	if (-not $pandocAvailable) {
-		Write-Host "[readme][error] pandoc not found on PATH. Install pandoc to generate readme.html." -ForegroundColor Red
+		Write-Host "[readme][error] pandoc not found on PATH. Install pandoc to generate docs/readme.html." -ForegroundColor Red
 	} else {
 		try {
+			$outputHtml = Join-Path $docsDir 'readme.html'
 			$pandocArgs = @(
 				'README.md',
 				'--from','gfm',
@@ -47,14 +64,14 @@ if (Test-Path README.md) {
 				'--embed-resources',
 				'--section-divs',
 				'-V','viewport=width=device-width,initial-scale=1',
-				'--output','readme.html'
+				'--output',$outputHtml
 			)
-			if (Test-Path $cssPath) { $pandocArgs += @('--css','readme.css') }
+			if (Test-Path $cssPath) { $pandocArgs += @('--css',(Resolve-Path $cssPath)) }
 			pandoc @pandocArgs
 			if (Test-Path 'src-webui/wwwroot') {
-				Copy-Item readme.html src-webui/wwwroot/readme.html -Force
+				Copy-Item $outputHtml src-webui/wwwroot/readme.html -Force
 				if (Test-Path $cssPath) { Copy-Item $cssPath src-webui/wwwroot/readme.css -Force }
-				Write-Host "[readme] Copied readme.html (and css if present) to web UI wwwroot." -ForegroundColor DarkCyan
+				Write-Host "[readme] Copied docs/readme.html & docs/readme.css to web UI wwwroot." -ForegroundColor DarkCyan
 			}
 		}
 		catch {
