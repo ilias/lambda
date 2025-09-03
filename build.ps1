@@ -11,6 +11,9 @@ Param(
 
 $ErrorActionPreference = 'Stop'
 
+# Common paths
+$docsDir = Join-Path $PSScriptRoot 'docs'
+
 if ($CleanArtifacts -and (Test-Path $Output)) {
 	Write-Host "[clean] Removing '$Output'" -ForegroundColor Yellow
 	Remove-Item -Recurse -Force $Output
@@ -27,7 +30,6 @@ else {
 
 Write-Host "[readme] Generating styled readme.html (pandoc) into docs/ and copying to webui." -ForegroundColor Cyan
 if (Test-Path README.md) {
-	$docsDir = Join-Path $PSScriptRoot 'docs'
 	if (-not (Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir | Out-Null }
 	$cssPath = Join-Path $docsDir 'readme.css'
 	# Detect and warn about legacy root copies (will remove automatically if identical)
@@ -69,6 +71,53 @@ if (Test-Path README.md) {
 			if (Test-Path $cssPath) { $pandocArgs += @('--css',(Resolve-Path $cssPath)) }
 			pandoc @pandocArgs
 			if (Test-Path 'src-webui/wwwroot') {
+
+			# ---------------------------------------------------------------------------
+			# Generate HTML for every markdown file under docs/ (excluding existing html)
+			# ---------------------------------------------------------------------------
+			if (Test-Path $docsDir) {
+				$pandocAvailable = Get-Command pandoc -ErrorAction SilentlyContinue
+				if (-not $pandocAvailable) {
+					Write-Host "[docs][warn] pandoc not found; skipping docs/*.md HTML generation." -ForegroundColor Yellow
+				}
+				else {
+					$cssPath = Join-Path $docsDir 'readme.css'
+					$mdFiles = Get-ChildItem -Path $docsDir -Filter *.md -File | Where-Object { $_.Name -notmatch '^readme\.md$' }
+					if ($mdFiles.Count -eq 0) {
+						Write-Host "[docs] No additional markdown files to convert." -ForegroundColor DarkGray
+					}
+					else {
+						foreach ($md in $mdFiles) {
+							$outHtml = [System.IO.Path]::ChangeExtension($md.FullName, '.html')
+							Write-Host "[docs] pandoc $($md.Name) -> $(Split-Path -Leaf $outHtml)" -ForegroundColor Cyan
+							$pandocArgs = @(
+								$md.FullName,
+								'--from','gfm',
+								'--standalone',
+								'--toc','--toc-depth=3',
+								'--metadata',"title=$([System.IO.Path]::GetFileNameWithoutExtension($md.Name))",
+								'--metadata','lang=en',
+								'--highlight-style','pygments',
+								'--embed-resources',
+								'--section-divs',
+								'-V','viewport=width=device-width,initial-scale=1',
+								'--output',$outHtml
+							)
+							if (Test-Path $cssPath) { $pandocArgs += @('--css',(Resolve-Path $cssPath)) }
+							try { pandoc @pandocArgs } catch { Write-Host "[docs][warn] pandoc failed for $($md.Name): $($_.Exception.Message)" -ForegroundColor Yellow }
+
+							# Copy to web UI if present
+							if (Test-Path 'src-webui/wwwroot') {
+								try {
+									Copy-Item $outHtml (Join-Path 'src-webui/wwwroot' (Split-Path -Leaf $outHtml)) -Force
+									if (Test-Path $cssPath) { Copy-Item $cssPath 'src-webui/wwwroot/readme.css' -Force }
+								} catch { Write-Host "[docs][warn] copy to webui failed: $($_.Exception.Message)" -ForegroundColor Yellow }
+							}
+						}
+						Write-Host "[docs] Completed markdown to HTML conversion." -ForegroundColor DarkCyan
+					}
+				}
+			}
 				Copy-Item $outputHtml src-webui/wwwroot/readme.html -Force
 				if (Test-Path $cssPath) { Copy-Item $cssPath src-webui/wwwroot/readme.css -Force }
 				Write-Host "[readme] Copied docs/readme.html & docs/readme.css to web UI wwwroot." -ForegroundColor DarkCyan

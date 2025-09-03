@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>COMMANDS</title>
+  <style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <style type="text/css">:root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#c9d1d9; --fg-soft:#a5b1bd; --accent:#58a6ff; --radius:8px; }html { scroll-behavior:smooth; }body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; margin:0 auto; max-width:980px; padding:2.2rem 1.6rem 4rem; line-height:1.55; background:var(--bg); color:var(--fg); }h1,h2,h3,h4,h5 { line-height:1.15; font-weight:600; }h1 { font-size:2.25rem; margin-top:0; }h2 { margin-top:2.4rem; padding-top:.4rem; border-top:1px solid var(--border); font-size:1.6rem; }h3 { margin-top:1.8rem; font-size:1.25rem; }p { margin:1rem 0; }pre,code { font-family: ui-monospace,Consolas,"Cascadia Code",monospace; font-size:.85rem; }pre { background:var(--panel); padding:1rem 1.1rem; border:1px solid var(--border); border-radius:var(--radius); overflow:auto; position:relative; }code { background:var(--panel); padding:.15rem .4rem; border:1px solid var(--border); border-radius:5px; }pre code { background:transparent; padding:0; border:none; }table { border-collapse:collapse; width:100%; margin:1.25rem 0; }th,td { border:1px solid var(--border); padding:.55rem .7rem; text-align:left; vertical-align:top; }tr:nth-child(even) { background:#1b2230; }a { color:var(--accent); text-decoration:none; }a:hover { text-decoration:underline; }blockquote { margin:1.2rem 0; padding:.75rem 1rem; background:#132032; border-left:4px solid var(--accent); border-radius:4px; color:#fff; }hr { border:none; border-top:1px solid var(--border); margin:3rem 0 2.2rem; }nav#toc { background:var(--panel); border:1px solid var(--border); padding:1rem 1.25rem 1.1rem; border-radius:var(--radius); font-size:.85rem; line-height:1.35; }nav#toc strong { display:block; font-size:.75rem; letter-spacing:.08em; font-weight:700; text-transform:uppercase; margin-bottom:.35rem; opacity:.85; }nav#toc ul { list-style:none; margin:0; padding-left:0; }nav#toc ul ul { margin-left:1rem; }nav#toc a { text-decoration:none; }nav#toc a:hover { text-decoration:underline; }.title-block { margin-bottom:1.5rem; }.title-block h1 { margin-bottom:.25rem; }.meta { color:var(--fg-soft); font-size:.85rem; }.footnotes { font-size:.85rem; opacity:.92; }.highlight table { border:none; }.highlight td { border:none; padding:0; }.highlight pre { margin:0; }@media (max-width:760px){ body{padding:1.4rem .95rem 3rem;} h1{font-size:1.9rem;} }</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">COMMANDS</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#repl-commands--operational-guide" id="toc-repl-commands--operational-guide">REPL Commands &amp;
+Operational Guide</a>
+<ul>
+<li><a href="#1-command-categories" id="toc-1-command-categories">1.
+Command Categories</a></li>
+<li><a href="#2-effects--desugarings-summary" id="toc-2-effects--desugarings-summary">2. Effects &amp; Desugarings
+Summary</a></li>
+<li><a href="#3-full-command-reference-table" id="toc-3-full-command-reference-table">3. Full Command Reference
+Table</a></li>
+<li><a href="#4-step-tracing--debugging" id="toc-4-step-tracing--debugging">4. Step Tracing &amp;
+Debugging</a></li>
+<li><a href="#5-performance-statistics--caches" id="toc-5-performance-statistics--caches">5. Performance Statistics
+&amp; Caches</a></li>
+<li><a href="#6-structural-equality--test-counters" id="toc-6-structural-equality--test-counters">6. Structural Equality /
+Test Counters</a></li>
+<li><a href="#7-practical-workflows" id="toc-7-practical-workflows">7.
+Practical Workflows</a></li>
+<li><a href="#8-multisegment-lines" id="toc-8-multisegment-lines">8.
+Multi‑segment Lines</a></li>
+</ul></li>
+</ul>
+</nav>
+<section id="repl-commands--operational-guide" class="level1">
+<h1>REPL Commands &amp; Operational Guide</h1>
+<p>This document catalogs all colon (<code>:</code>) commands, their
+effects, related debugging / performance features, and structural
+equivalence tooling.</p>
+<p>Sections</p>
+<ul>
+<li>Command Categories</li>
+<li>Effects &amp; Desugarings Summary</li>
+<li>Full Command Reference Table</li>
+<li>Step Tracing &amp; Debugging</li>
+<li>Performance Statistics &amp; Caches</li>
+<li>Structural Equality / Test Counters</li>
+<li>Practical Workflows</li>
+</ul>
+<hr />
+<section id="1-command-categories" class="level3">
+<h3>1. Command Categories</h3>
+<p>Environment</p>
+<pre><code>:clear                  # Clear env + macros + infix + stats + caches
+:clear defs             # Only definitions
+:clear macros           # Only macro clauses
+:clear ops              # Only custom infix (keeps |&gt; . ∘ $)
+:clear cache            # Memoization / analysis caches
+:env [defs|macros|infix|native|all]
+:load &lt;file&gt;
+:save &lt;file&gt;</code></pre>
+<p>Evaluation / Mode</p>
+<pre><code>:lazy on|off            # Lazy (default) vs eager evaluation
+:native on|off|show     # Toggle numeric &amp; list native fast paths / list natives
+:pretty on|off          # Pretty printing of Church encodings
+:step on|off            # CEK step trace output
+:depth [n]              # Get/set recursion depth guard (10–10000)</code></pre>
+<p>Debug / Performance / Logging</p>
+<pre><code>:stats                  # Performance &amp; cache metrics
+:test clear             # Reset structural equality counters
+:test result            # Show structural equality counters
+:log &lt;file|off|clear&gt;   # Append to file / disable / truncate</code></pre>
+<p>Language Extension</p>
+<pre><code>:infix &lt;op&gt; &lt;prec&gt; &lt;assoc&gt;
+:macro (pattern) =&gt; body</code></pre>
+<p>Help &amp; Session</p>
+<pre><code>:help                   # Summary help (abbreviated)
+:exit | :quit           # Terminate session</code></pre>
+<hr />
+</section>
+<section id="2-effects--desugarings-summary" class="level3">
+<h3>2. Effects &amp; Desugarings Summary</h3>
+<table>
+<thead>
+<tr>
+<th>Construct / Command</th>
+<th>Effect / Desugaring</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>def f x y = body</code></td>
+<td><code>f = x,y -&gt; body</code></td>
+</tr>
+<tr>
+<td><code>x, y -&gt; body</code></td>
+<td><code>x -&gt; (y -&gt; body)</code></td>
+</tr>
+<tr>
+<td><code>let x = A, y = B in C</code></td>
+<td>Nested lets / lambdas chaining</td>
+</tr>
+<tr>
+<td><code>let rec f = E in B</code></td>
+<td><code>let f = Y (λf.E) in B</code></td>
+</tr>
+<tr>
+<td>`a</td>
+<td>&gt; f</td>
+</tr>
+<tr>
+<td><code>f . a . b</code></td>
+<td><code>(f a) b</code></td>
+</tr>
+<tr>
+<td><code>f ∘ g</code></td>
+<td><code>λx.f (g x)</code></td>
+</tr>
+<tr>
+<td><code>f $ x $ y</code></td>
+<td><code>f x y</code> (low precedence)</td>
+</tr>
+<tr>
+<td><code>_</code> param</td>
+<td>Fresh ignored variable</td>
+</tr>
+<tr>
+<td><code>:infix op p a</code></td>
+<td>Registers infix precedence / associativity</td>
+</tr>
+<tr>
+<td><code>:macro (pat) =&gt; body</code></td>
+<td>Adds macro clause (pattern → expansion)</td>
+</tr>
+<tr>
+<td>`:native on</td>
+<td>off`</td>
+</tr>
+<tr>
+<td><code>:clear</code></td>
+<td>Full reset (env, macros, infix, stats, caches)</td>
+</tr>
+<tr>
+<td>`:pretty on</td>
+<td>off`</td>
+</tr>
+<tr>
+<td>`:step on</td>
+<td>off`</td>
+</tr>
+<tr>
+<td><code>:log file</code></td>
+<td>Start appending log lines to file</td>
+</tr>
+<tr>
+<td><code>:log off</code></td>
+<td>Stop logging</td>
+</tr>
+<tr>
+<td><code>:log clear</code></td>
+<td>Truncate log file</td>
+</tr>
+<tr>
+<td><code>:stats</code></td>
+<td>Print runtime statistics</td>
+</tr>
+<tr>
+<td><code>:test result</code></td>
+<td>Show structural equality counters</td>
+</tr>
+</tbody>
+</table>
+<hr />
+</section>
+<section id="3-full-command-reference-table" class="level3">
+<h3>3. Full Command Reference Table</h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Syntax</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>:clear</td>
+<td>`:clear [macros</td>
+<td>defs</td>
+</tr>
+<tr>
+<td>:depth</td>
+<td><code>:depth [n]</code></td>
+<td>Show or set max recursion depth (guard)</td>
+</tr>
+<tr>
+<td>:env</td>
+<td>`:env [defs</td>
+<td>macros</td>
+</tr>
+<tr>
+<td>:exit</td>
+<td>`:exit</td>
+<td>:quit`</td>
+</tr>
+<tr>
+<td>:help</td>
+<td><code>:help</code></td>
+<td>Show quick help (not full docs)</td>
+</tr>
+<tr>
+<td>:infix</td>
+<td><code>:infix [op prec assoc]</code></td>
+<td>Define/list infix operators</td>
+</tr>
+<tr>
+<td>:lazy</td>
+<td>`:lazy on</td>
+<td>off`</td>
+</tr>
+<tr>
+<td>:load</td>
+<td><code>:load &lt;file&gt;</code></td>
+<td>Load a .lambda file line-by-line</td>
+</tr>
+<tr>
+<td>:log</td>
+<td>`:log &lt;file</td>
+<td>off</td>
+</tr>
+<tr>
+<td>:macro</td>
+<td><code>:macro (&lt;pattern&gt;) =&gt; &lt;body&gt;</code></td>
+<td>Define macro clause (structural, guarded, rest)</td>
+</tr>
+<tr>
+<td>:native</td>
+<td>`:native on</td>
+<td>off</td>
+</tr>
+<tr>
+<td>:pretty</td>
+<td>`:pretty on</td>
+<td>off`</td>
+</tr>
+<tr>
+<td>:save</td>
+<td><code>:save &lt;file&gt;</code></td>
+<td>Persist current env (defs, macros, infix)</td>
+</tr>
+<tr>
+<td>:stats</td>
+<td><code>:stats</code></td>
+<td>Performance &amp; cache metrics</td>
+</tr>
+<tr>
+<td>:step</td>
+<td>`:step on</td>
+<td>off`</td>
+</tr>
+<tr>
+<td>:test</td>
+<td>`:test clear</td>
+<td>:test result`</td>
+</tr>
+</tbody>
+</table>
+<p>Tip: To restore a clean baseline without losing macros/infix, use
+<code>:clear defs</code> then <code>:load stdlib.lambda</code>.</p>
+<hr />
+</section>
+<section id="4-step-tracing--debugging" class="level3">
+<h3>4. Step Tracing &amp; Debugging</h3>
+<p>Enable with <code>:step on</code> to emit per‑reduction CEK step
+lines (<code>log-step</code>). Combine with <code>:pretty off</code> for
+raw lambda structures. Typical isolation procedure:</p>
+<pre><code>:clear all; :load stdlib.lambda; :step on; :pretty off
+&lt;expression&gt;</code></pre>
+<p>Disable via <code>:step off</code> promptly to reduce output
+overhead.</p>
+<hr />
+</section>
+<section id="5-performance-statistics--caches" class="level3">
+<h3>5. Performance Statistics &amp; Caches</h3>
+<p><code>:stats</code> exposes counters (selection):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CacheHits / CacheMisses</td>
+<td>Evaluation cache effectiveness</td>
+</tr>
+<tr>
+<td>TimeInSubstitution</td>
+<td>Beta-reduction substitution overhead</td>
+</tr>
+<tr>
+<td>TimeInEvaluation</td>
+<td>CEK core loop time</td>
+</tr>
+<tr>
+<td>TimeInForcing</td>
+<td>Lazy thunk forcing cost</td>
+</tr>
+<tr>
+<td>NormalizeCEKCount</td>
+<td>Number of normalization passes</td>
+</tr>
+<tr>
+<td>Iterations</td>
+<td>Machine steps for last eval</td>
+</tr>
+<tr>
+<td>TotalIterations</td>
+<td>Cumulative machine steps</td>
+</tr>
+<tr>
+<td>ThunkForceCount</td>
+<td>Thunks forced total</td>
+</tr>
+<tr>
+<td>VarCounter</td>
+<td>Fresh variable generation counter</td>
+</tr>
+</tbody>
+</table>
+<p>Use cases:</p>
+<ul>
+<li>Compare implementations (e.g., naive vs tail recursion) via
+<code>Iterations</code>.</li>
+<li>Gauge caching by rising hit ratio after repeated calls.</li>
+<li>Detect runaway expansions (surging <code>Iterations</code> / large
+substitution counts).</li>
+</ul>
+<p>Reset environment + caches: <code>:clear cache</code> (caches only)
+or full <code>:clear</code>.</p>
+<section id="5a-performance-metrics-reference-extended" class="level4">
+<h4>5a. Performance Metrics Reference (Extended)</h4>
+<p>The <code>:stats</code> command exposes fine‑grained timers and
+counters beyond the abbreviated list above:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TimeInCacheLookup</td>
+<td>Elapsed ticks spent checking the evaluation cache</td>
+</tr>
+<tr>
+<td>TimeInSubstitution</td>
+<td>Time spent performing variable substitution / beta prep</td>
+</tr>
+<tr>
+<td>TimeInEvaluation</td>
+<td>Core CEK loop time (excludes forcing &amp; cache lookups)</td>
+</tr>
+<tr>
+<td>TimeInForcing</td>
+<td>Time forcing thunks in lazy mode</td>
+</tr>
+<tr>
+<td>NormalizeCEKCount</td>
+<td>Number of top‑level normalization passes</td>
+</tr>
+<tr>
+<td>CacheHits</td>
+<td>Successful evaluation cache lookups</td>
+</tr>
+<tr>
+<td>CacheMisses</td>
+<td>Evaluations that were not cached</td>
+</tr>
+<tr>
+<td>TotalIterations</td>
+<td>Cumulative CEK machine steps this session</td>
+</tr>
+<tr>
+<td>Iterations</td>
+<td>CEK steps for the last evaluation</td>
+</tr>
+<tr>
+<td>SubstitutionExprCount</td>
+<td>Expressions traversed during substitution</td>
+</tr>
+<tr>
+<td>ThunkForceCount</td>
+<td>Thunks forced (realized) total</td>
+</tr>
+<tr>
+<td>VarCounter</td>
+<td>Fresh variable generation counter</td>
+</tr>
+<tr>
+<td>MaxRecursionDepth</td>
+<td>Configured recursion guard limit</td>
+</tr>
+</tbody>
+</table>
+<p>Notes:</p>
+<ul>
+<li>Timings are raw .NET tick counts (convert with
+<code>TimeSpan.FromTicks</code>). Treat them comparatively, not as
+absolute wall time.</li>
+<li>A low <code>CacheHits</code> / high <code>CacheMisses</code> ratio
+indicates little sharing (unique expressions) or cold caches after a
+reset.</li>
+<li>Rapid growth in <code>SubstitutionExprCount</code> or
+<code>Iterations</code> signals heavy beta-reduction; consider
+refactoring or enabling natives.</li>
+<li>Hitting <code>MaxRecursionDepth</code> repeatedly often means
+missing base cases; increase only after verifying logic.</li>
+</ul>
+<p>Workflow patterns:</p>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Steps</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Measure memoization</td>
+<td>Evaluate same expression repeatedly; watch hit ratio climb</td>
+</tr>
+<tr>
+<td>Compare impls</td>
+<td>Run fast &amp; slow versions; contrast <code>Iterations</code> /
+<code>TimeInEvaluation</code></td>
+</tr>
+<tr>
+<td>Tune laziness</td>
+<td>Toggle `:lazy on</td>
+</tr>
+<tr>
+<td>Identify hot path</td>
+<td>High <code>TimeInSubstitution</code> suggests substitution
+dominates; inline or reduce duplication</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="5b-caching--memoization-layers" class="level4">
+<h4>5b. Caching &amp; Memoization Layers</h4>
+<p>Multiple layers cooperate for performance:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Purpose</th>
+<th>Key Metric(s)</th>
+<th>Clear Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Substitution cache</td>
+<td>Reuse results of repeated variable substitutions</td>
+<td>TimeInSubstitution, SubstitutionExprCount</td>
+<td><code>:clear cache</code> / <code>:clear</code></td>
+</tr>
+<tr>
+<td>Evaluation cache</td>
+<td>Memoize normalized expression results</td>
+<td>CacheHits / CacheMisses</td>
+<td><code>:clear cache</code> / <code>:clear</code></td>
+</tr>
+<tr>
+<td>Free variable cache</td>
+<td>Avoid recomputing free variable sets</td>
+<td>(indirect) lower substitution cost</td>
+<td><code>:clear cache</code> / <code>:clear</code></td>
+</tr>
+<tr>
+<td>Expression interning</td>
+<td>Structural sharing &amp; reduced allocations</td>
+<td>(indirect) all timings</td>
+<td><code>:clear</code> (full reset)</td>
+</tr>
+</tbody>
+</table>
+<p>Guidelines:</p>
+<ol type="1">
+<li>Use <code>:clear cache</code> before micro-benchmarks to start from
+a cold state.</li>
+<li>For pedagogy (pure reductions) keep <code>:native off</code> to see
+genuine lambda costs—then contrast with natives on.</li>
+<li>High <code>TimeInCacheLookup</code> with low hit rate can mean
+pathological diversity in expressions; ensure common subexpressions are
+shared or factored.</li>
+<li>Interning plus alpha-renaming avoidance reduces memory churn; if
+memory grows unexpectedly, check for large macro expansions.</li>
+</ol>
+<p>Future roadmap (not yet implemented): configurable cache size
+policies &amp; optional per-layer clearing commands.</p>
+<hr />
+</section>
+</section>
+<section id="6-structural-equality--test-counters" class="level3">
+<h3>6. Structural Equality / Test Counters</h3>
+<p>Helpers always available irrespective of <code>:native</code>:
+<code>alphaEq</code>, <code>betaEq</code>, <code>hashEq</code>,
+<code>etaEq</code>.</p>
+<p>Counters: <code>:test result</code> prints total calls &amp;
+successes; <code>:test clear</code> resets. Useful in regression to
+track coverage (e.g., macro correctness via
+<code>alphaEq expected actual</code>).</p>
+<hr />
+</section>
+<section id="7-practical-workflows" class="level3">
+<h3>7. Practical Workflows</h3>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Commands Sequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Inspect macro expansion</td>
+<td><code>:pretty off; :step on</code> then input expression</td>
+</tr>
+<tr>
+<td>Benchmark pure function</td>
+<td><code>:lazy off; :native off; :pretty off; expr; :stats</code></td>
+</tr>
+<tr>
+<td>Restore baseline stdlib</td>
+<td><code>:clear all; :load stdlib.lambda</code></td>
+</tr>
+<tr>
+<td>Toggle fast arithmetic</td>
+<td><code>:native on</code> / <code>:native off</code></td>
+</tr>
+<tr>
+<td>Debug infinite recursion</td>
+<td><code>:depth 500; :step on</code> (watch last frames)</td>
+</tr>
+<tr>
+<td>Capture session log</td>
+<td><code>:log session.log</code> then work; <code>:log off</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+</section>
+<section id="8-multisegment-lines" class="level3">
+<h3>8. Multi‑segment Lines</h3>
+<p>Combine commands and expressions with <code>;</code>:</p>
+<pre><code>:macro (sq $x) =&gt; (mult $x $x); sq 9
+:load a.lambda; :load b.lambda; :stats</code></pre>
+<p>Segments processed left→right; errors abort remaining segments.</p>
+<hr />
+<p>See <code>LANGUAGE.md</code> for grammar &amp; syntactic sugar;
+<code>COMPILER.md</code> for building / embedding;
+<code>THEORY.md</code> for background.</p>
+</section>
+</section>
+</body>
+</html>

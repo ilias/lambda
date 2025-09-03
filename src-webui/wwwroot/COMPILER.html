@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>COMPILER</title>
+  <style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+  <style type="text/css">:root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#c9d1d9; --fg-soft:#a5b1bd; --accent:#58a6ff; --radius:8px; }html { scroll-behavior:smooth; }body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; margin:0 auto; max-width:980px; padding:2.2rem 1.6rem 4rem; line-height:1.55; background:var(--bg); color:var(--fg); }h1,h2,h3,h4,h5 { line-height:1.15; font-weight:600; }h1 { font-size:2.25rem; margin-top:0; }h2 { margin-top:2.4rem; padding-top:.4rem; border-top:1px solid var(--border); font-size:1.6rem; }h3 { margin-top:1.8rem; font-size:1.25rem; }p { margin:1rem 0; }pre,code { font-family: ui-monospace,Consolas,"Cascadia Code",monospace; font-size:.85rem; }pre { background:var(--panel); padding:1rem 1.1rem; border:1px solid var(--border); border-radius:var(--radius); overflow:auto; position:relative; }code { background:var(--panel); padding:.15rem .4rem; border:1px solid var(--border); border-radius:5px; }pre code { background:transparent; padding:0; border:none; }table { border-collapse:collapse; width:100%; margin:1.25rem 0; }th,td { border:1px solid var(--border); padding:.55rem .7rem; text-align:left; vertical-align:top; }tr:nth-child(even) { background:#1b2230; }a { color:var(--accent); text-decoration:none; }a:hover { text-decoration:underline; }blockquote { margin:1.2rem 0; padding:.75rem 1rem; background:#132032; border-left:4px solid var(--accent); border-radius:4px; color:#fff; }hr { border:none; border-top:1px solid var(--border); margin:3rem 0 2.2rem; }nav#toc { background:var(--panel); border:1px solid var(--border); padding:1rem 1.25rem 1.1rem; border-radius:var(--radius); font-size:.85rem; line-height:1.35; }nav#toc strong { display:block; font-size:.75rem; letter-spacing:.08em; font-weight:700; text-transform:uppercase; margin-bottom:.35rem; opacity:.85; }nav#toc ul { list-style:none; margin:0; padding-left:0; }nav#toc ul ul { margin-left:1rem; }nav#toc a { text-decoration:none; }nav#toc a:hover { text-decoration:underline; }.title-block { margin-bottom:1.5rem; }.title-block h1 { margin-bottom:.25rem; }.meta { color:var(--fg-soft); font-size:.85rem; }.footnotes { font-size:.85rem; opacity:.92; }.highlight table { border:none; }.highlight td { border:none; padding:0; }.highlight pre { margin:0; }@media (max-width:760px){ body{padding:1.4rem .95rem 3rem;} h1{font-size:1.9rem;} }</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">COMPILER</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#build-packaging--embedding-guide" id="toc-build-packaging--embedding-guide">Build, Packaging &amp;
+Embedding Guide</a>
+<ul>
+<li><a href="#project-layout" id="toc-project-layout">Project
+Layout</a></li>
+<li><a href="#prerequisites" id="toc-prerequisites">Prerequisites</a></li>
+<li><a href="#building--running" id="toc-building--running">Building
+&amp; Running</a></li>
+<li><a href="#streaming-modes-comparison" id="toc-streaming-modes-comparison">Streaming Modes
+(Comparison)</a></li>
+<li><a href="#unified-build-script-buildps1" id="toc-unified-build-script-buildps1">Unified Build Script
+(<code>build.ps1</code>)</a>
+<ul>
+<li><a href="#documentation-generation-pandoc" id="toc-documentation-generation-pandoc">Documentation Generation
+(Pandoc)</a></li>
+</ul></li>
+<li><a href="#docker-web-ui" id="toc-docker-web-ui">Docker (Web
+UI)</a></li>
+<li><a href="#nuget-packaging" id="toc-nuget-packaging">NuGet
+Packaging</a></li>
+<li><a href="#embedding-api-c" id="toc-embedding-api-c">Embedding API
+(C#)</a></li>
+<li><a href="#native-arithmetic--list-fast-paths" id="toc-native-arithmetic--list-fast-paths">Native Arithmetic &amp; List
+Fast Paths</a></li>
+<li><a href="#multiuser--deployment-strategies" id="toc-multiuser--deployment-strategies">Multi‑user / Deployment
+Strategies</a></li>
+<li><a href="#performance-modes" id="toc-performance-modes">Performance
+Modes</a></li>
+<li><a href="#troubleshooting" id="toc-troubleshooting">Troubleshooting</a></li>
+<li><a href="#quick-commands-cheat" id="toc-quick-commands-cheat">Quick
+Commands (Cheat)</a></li>
+</ul></li>
+</ul>
+</nav>
+<section id="build-packaging--embedding-guide" class="level1">
+<h1>Build, Packaging &amp; Embedding Guide</h1>
+<p>This document consolidates build instructions, project layout,
+distribution targets, deployment options, and programmatic embedding
+guidance.</p>
+<p>Sections</p>
+<ul>
+<li>Project Layout</li>
+<li>Prerequisites</li>
+<li>Building &amp; Running (CLI, Web API, Web UI)</li>
+<li>Unified Build Script &amp; Documentation Generation</li>
+<li>Docker (Web UI) &amp; Container Notes</li>
+<li>NuGet Packaging &amp; Versioning</li>
+<li>Embedding API (C#) &amp; Native Primitives</li>
+<li>Multi‑user / Deployment Strategies</li>
+<li>Performance Modes &amp; Recommendations</li>
+<li>Troubleshooting</li>
+<li>Streaming Modes (SSE vs WebSocket vs Buffered)</li>
+</ul>
+<hr />
+<section id="project-layout" class="level2">
+<h2>Project Layout</h2>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Type</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lambda-cek</code></td>
+<td>Class Library (<code>net8.0;net9.0</code>)</td>
+<td><code>src/</code></td>
+<td>Core interpreter (parser, CEK, macros, natives)</td>
+</tr>
+<tr>
+<td><code>lambda-cek.cli</code></td>
+<td>Console App</td>
+<td><code>src-cli/</code></td>
+<td>Interactive REPL / file runner</td>
+</tr>
+<tr>
+<td><code>lambda-cek.web</code></td>
+<td>Minimal Web API</td>
+<td><code>src-web/</code></td>
+<td>HTTP endpoints (eval/load/health)</td>
+</tr>
+<tr>
+<td><code>lambda-cek.webui</code></td>
+<td>ASP.NET Core + Static UI</td>
+<td><code>src-webui/</code></td>
+<td>Browser REPL + streaming logs</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="prerequisites" class="level2">
+<h2>Prerequisites</h2>
+<ul>
+<li>.NET 8 SDK (optionally .NET 9 preview for multi-target build)</li>
+<li>PowerShell (build script examples assume Windows pwsh)</li>
+<li>(Optional) Docker Desktop for container builds</li>
+<li>(Optional) Pandoc for HTML doc generation displayed in Web UI</li>
+</ul>
+<p>docker version # optional docker version # optional Verify tools:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>dotnet <span class="op">--</span>version</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>pandoc <span class="op">--</span>version   <span class="co"># optional</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>docker version     <span class="co"># optional</span></span></code></pre></div>
+<hr />
+</section>
+<section id="building--running" class="level2">
+<h2>Building &amp; Running</h2>
+<p>Build all:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>dotnet build</span></code></pre></div>
+<p>CLI REPL:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-cli<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">cli</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> myfile<span class="op">.</span><span class="fu">lambda</span> tests<span class="op">.</span><span class="fu">lambda</span></span></code></pre></div>
+<p>Web API:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-web<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">web</span><span class="op">.</span><span class="fu">csproj</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Override port</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-web<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">web</span><span class="op">.</span><span class="fu">csproj</span> <span class="op">--</span> <span class="op">--</span>urls http<span class="op">://</span>localhost<span class="op">:</span><span class="dv">5055</span></span></code></pre></div>
+<p>Web UI:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>dotnet run <span class="op">--</span>project src-webui<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">webui</span><span class="op">.</span><span class="fu">csproj</span></span></code></pre></div>
+<p>Navigate to the printed URL (typically <a href="http://localhost:5000">http://localhost:5000</a>). Toggle
+streaming / WebSocket in UI.</p>
+</section>
+<section id="streaming-modes-comparison" class="level2">
+<h2>Streaming Modes (Comparison)</h2>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Enable</th>
+<th>Transport</th>
+<th>Log Delivery</th>
+<th>Response JSON</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Buffered</td>
+<td>Streaming Off</td>
+<td>none</td>
+<td>After completion (batched)</td>
+<td><code>{ output, normalized, logs[] }</code></td>
+<td>Simplicity, full log capture</td>
+</tr>
+<tr>
+<td>SSE</td>
+<td>Streaming On</td>
+<td><code>/api/stream</code></td>
+<td>Incremental (auto‑reconnect)</td>
+<td><code>{ output, normalized }</code></td>
+<td>Long running eval, progressive feedback</td>
+</tr>
+<tr>
+<td>WebSocket</td>
+<td>Streaming On + WS On</td>
+<td><code>/ws</code></td>
+<td>Incremental (manual reconnect)</td>
+<td><code>{ output, normalized }</code></td>
+<td>Future interactive features</td>
+</tr>
+</tbody>
+</table>
+<p>Notes:</p>
+<ol type="1">
+<li>Toggling streaming clears the UI log to delineate sessions.</li>
+<li>SSE auto‑reconnects with capped backoff; failures surface a status
+banner.</li>
+<li>WebSocket is optional; fallback gracefully to SSE if handshake
+fails.</li>
+<li>All modes share a single interpreter instance &amp;
+<code>Logger</code>; only transport differs.</li>
+</ol>
+<p>API endpoints:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Route</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/eval?expr=...</code></td>
+<td>Evaluate one expression (buffered logs if streaming off)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/load</code></td>
+<td>Load <code>.lambda</code> file (returns message + logs when
+buffered)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/stream</code></td>
+<td>SSE log stream (one <code>data:</code> line per log)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/health</code></td>
+<td>Health check</td>
+</tr>
+<tr>
+<td>WS</td>
+<td><code>/ws</code></td>
+<td>WebSocket log frames</td>
+</tr>
+</tbody>
+</table>
+<p>Implementation tips:</p>
+<ul>
+<li>For multi‑tenant hosting, allocate an interpreter per session or
+workspace to avoid cross‑user state leakage.</li>
+<li>Keep log lines single line (SSE collapses newlines) and
+concise.</li>
+<li>When streaming is disabled, logs are returned in the evaluation JSON
+response (<code>logs[]</code>).</li>
+<li>Use <code>Logger.Subscribe</code> in custom hosts to forward events
+to external telemetry.</li>
+</ul>
+<p>Disabling streaming uses a buffered snapshot between
+<code>Logger.ClearBuffer()</code> and evaluation completion for parity
+with CLI behavior.</p>
+<hr />
+</section>
+<section id="unified-build-script-buildps1" class="level2">
+<h2>Unified Build Script (<code>build.ps1</code>)</h2>
+<p>Common flags:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-Pack</code></td>
+<td>Builds &amp; packs NuGet (<code>artifacts/</code>)</td>
+</tr>
+<tr>
+<td><code>-Validate</code></td>
+<td>Validates package content (fail fast)</td>
+</tr>
+<tr>
+<td><code>-SkipPackOnError</code></td>
+<td>Continue even if validation failed</td>
+</tr>
+<tr>
+<td><code>-NoDocker</code></td>
+<td>Skip Docker image build</td>
+</tr>
+</tbody>
+</table>
+<p>Example:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>build<span class="op">.</span><span class="fu">ps1</span> <span class="op">-</span>Pack <span class="op">-</span>Validate</span></code></pre></div>
+<section id="documentation-generation-pandoc" class="level3">
+<h3>Documentation Generation (Pandoc)</h3>
+<p>If Pandoc is on PATH, <code>README.md</code> →
+<code>readme.html</code> + <code>readme.css</code> copied into
+<code>src-webui/wwwroot/</code> for in-browser docs.</p>
+<p>Install (examples):</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>winget install <span class="op">--</span>id JohnMacFarlane<span class="op">.</span><span class="fu">Pandoc</span> <span class="op">-</span>e</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>choco install pandoc</span></code></pre></div>
+<hr />
+</section>
+</section>
+<section id="docker-web-ui" class="level2">
+<h2>Docker (Web UI)</h2>
+<p>Build image:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>docker build <span class="op">-</span>t lambda-cek-webui <span class="op">-</span>f src-webui<span class="op">/</span>Dockerfile <span class="op">.</span></span></code></pre></div>
+<p>Run:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>docker run <span class="op">--</span>rm <span class="op">-</span>p <span class="dv">8080</span><span class="op">:</span><span class="dv">8080</span> <span class="op">--</span>name lambda-cek lambda-cek-webui</span></code></pre></div>
+<p>Bind mount repo (read-only) for dynamic file loading:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>docker run <span class="op">--</span>rm <span class="op">-</span>p <span class="dv">8080</span><span class="op">:</span><span class="dv">8080</span> <span class="op">-</span>v <span class="va">$PWD</span><span class="op">:/</span>data<span class="op">:</span>ro <span class="op">--</span>name lambda-cek lambda-cek-webui</span></code></pre></div>
+<p>Custom port:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>docker run <span class="op">--</span>rm <span class="op">-</span>e ASPNETCORE_URLS<span class="op">=</span>http<span class="op">://</span><span class="dv">0.0</span><span class="op">.</span><span class="dv">0.0</span><span class="op">:</span><span class="dv">5005</span> <span class="op">-</span>p <span class="dv">5005</span><span class="op">:</span><span class="dv">5005</span> lambda-cek-webui</span></code></pre></div>
+<p>Security considerations:</p>
+<ul>
+<li>No auth / sandbox by default; add reverse proxy, timeouts,
+CPU/memory limits for multi-user / public use.</li>
+<li>Long evaluations can monopolize interpreter; wrap with cancellation
+tokens in host.</li>
+</ul>
+<hr />
+</section>
+<section id="nuget-packaging" class="level2">
+<h2>NuGet Packaging</h2>
+<p>Pack core library:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>dotnet pack src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release <span class="op">-</span>o artifacts</span></code></pre></div>
+<p>Override version:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>dotnet pack src<span class="op">/</span>lambda-cek<span class="op">.</span><span class="fu">csproj</span> <span class="op">-</span>c Release <span class="op">-</span>o artifacts <span class="op">/</span>p<span class="op">:</span>PackageVersion<span class="op">=</span><span class="dv">0.1</span><span class="op">.</span><span class="dv">1</span></span></code></pre></div>
+<p>Consume:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>dotnet add package LambdaCalculus<span class="op">.</span><span class="fu">Interpreter</span> <span class="op">--</span>version <span class="dv">0.1</span><span class="op">.</span><span class="dv">0</span></span></code></pre></div>
+<p>Planned: CI automation (GitHub Actions) to pack &amp; push on tagged
+release.</p>
+<hr />
+</section>
+<section id="embedding-api-c" class="level2">
+<h2>Embedding API (C#)</h2>
+<p>Minimal:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode csharp"><code class="sourceCode cs"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="dt">var</span> logger <span class="op">=</span> <span class="kw">new</span> LambdaCalculus<span class="op">.</span><span class="fu">Logger</span> <span class="op">{</span> EnableBuffering <span class="op">=</span> <span class="kw">true</span> <span class="op">};</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="dt">var</span> interp <span class="op">=</span> <span class="kw">new</span> LambdaCalculus<span class="op">.</span><span class="fu">Interpreter</span><span class="op">(</span>logger<span class="op">:</span> logger<span class="op">);</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>await interp<span class="op">.</span><span class="fu">LoadFileIfExistsAsync</span><span class="op">(</span><span class="st">&quot;stdlib.lambda&quot;</span><span class="op">);</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fu">var</span> <span class="op">(</span>_<span class="op">,</span> value<span class="op">)</span> <span class="op">=</span> await interp<span class="op">.</span><span class="fu">ProcessInputAsync</span><span class="op">(</span><span class="st">&quot;succ 41&quot;</span><span class="op">);</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>Console<span class="op">.</span><span class="fu">WriteLine</span><span class="op">(</span>interp<span class="op">.</span><span class="fu">Format</span><span class="op">(</span>value<span class="op">));</span> <span class="co">// 42</span></span></code></pre></div>
+<p>Register a native primitive:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode csharp"><code class="sourceCode cs"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>interp<span class="op">.</span><span class="fu">RegisterNativeFunction</span><span class="op">(</span><span class="st">&quot;triple&quot;</span><span class="op">,</span> <span class="op">(</span>op<span class="op">,</span> args<span class="op">,</span> env<span class="op">)</span> <span class="op">=&gt;</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="op">{</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">if</span> <span class="op">(</span>args<span class="op">.</span><span class="fu">Count</span> <span class="op">==</span> <span class="dv">1</span> <span class="op">&amp;&amp;</span> interp<span class="op">.</span><span class="fu">TryGetChurchInt</span><span class="op">(</span>args<span class="op">[</span><span class="dv">0</span><span class="op">],</span> env<span class="op">,</span> <span class="kw">out</span> <span class="dt">var</span> n<span class="op">))</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>        <span class="kw">return</span> interp<span class="op">.</span><span class="fu">MakeChurchNumeral</span><span class="op">(</span>n <span class="op">*</span> <span class="dv">3</span><span class="op">);</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">return</span> <span class="kw">null</span><span class="op">;</span> <span class="co">// fallback to pure path</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="op">});</span></span></code></pre></div>
+<p>Batch process commands + expression:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode csharp"><code class="sourceCode cs"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>await interp<span class="op">.</span><span class="fu">ProcessInputAsync</span><span class="op">(</span><span class="st">&quot;:lazy off; :native on; plus 20 22&quot;</span><span class="op">);</span></span></code></pre></div>
+<p>Buffered logs:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode csharp"><code class="sourceCode cs"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">foreach</span> <span class="op">(</span><span class="dt">var</span> line <span class="kw">in</span> logger<span class="op">.</span><span class="fu">GetBufferSnapshot</span><span class="op">())</span> Console<span class="op">.</span><span class="fu">WriteLine</span><span class="op">(</span>line<span class="op">);</span></span></code></pre></div>
+<hr />
+</section>
+<section id="native-arithmetic--list-fast-paths" class="level2">
+<h2>Native Arithmetic &amp; List Fast Paths</h2>
+<p>Enabled with <code>:native on</code>. Accelerated operations:
+<code>plus minus mult div mod succ pred iszero lt leq eq geq gt neq max min sqrt</code>
+plus list helpers
+(<code>map filter length append reverse take drop any all find sum product</code>).
+Disable with <code>:native off</code> for purist or benchmarking
+scenarios. Structural equivalence helpers
+(<code>alphaEq betaEq hashEq etaEq</code>) are always available.</p>
+<p>Guidelines:</p>
+<ul>
+<li>Use natives for performance demonstrations or large numeric/list
+workloads.</li>
+<li>Disable when validating pure lambda reductions for teaching.</li>
+</ul>
+<hr />
+</section>
+<section id="multiuser--deployment-strategies" class="level2">
+<h2>Multi‑user / Deployment Strategies</h2>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Isolation</th>
+<th>Pros</th>
+<th>Cons</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Per-request instance</td>
+<td>Full</td>
+<td>No shared state</td>
+<td>High allocation cost</td>
+</tr>
+<tr>
+<td>Session-scoped (dictionary)</td>
+<td>Medium</td>
+<td>Persistent user context</td>
+<td>State cleanup complexity</td>
+</tr>
+<tr>
+<td>Interpreter pool</td>
+<td>Medium</td>
+<td>Warm reuse</td>
+<td>Risk of residual state if not fully cleared</td>
+</tr>
+<tr>
+<td>Stateless eval (single expr)</td>
+<td>Logical</td>
+<td>Horizontal scale, safe</td>
+<td>No interactive definitions</td>
+</tr>
+</tbody>
+</table>
+<p>Hardening checklist:</p>
+<ul>
+<li>Enforce iteration / time limits (cancellation tokens).</li>
+<li>Restrict file loading paths; sanitize inputs.</li>
+<li>Cap macro clause count &amp; expansion depth.</li>
+<li>Add authentication &amp; rate limiting on public endpoints.</li>
+</ul>
+<p>Observability: subscribe to logger (<code>Logger.Subscribe</code>)
+and forward lines asynchronously; avoid blocking evaluation path.</p>
+<hr />
+</section>
+<section id="performance-modes" class="level2">
+<h2>Performance Modes</h2>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Recommended Settings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Benchmark pure lambda</td>
+<td><code>:lazy off; :native off; :pretty off</code></td>
+</tr>
+<tr>
+<td>Demonstrate laziness</td>
+<td><code>:lazy on; take 10 [0 .. 1000000]</code></td>
+</tr>
+<tr>
+<td>Maximize cache hits</td>
+<td>Repeated same call then <code>:stats</code></td>
+</tr>
+<tr>
+<td>Audit macro expansion</td>
+<td><code>:step on; :pretty off</code> (temporarily)</td>
+</tr>
+</tbody>
+</table>
+<p>Key metrics: <code>Iterations</code>, <code>CacheHits/Misses</code>,
+<code>TimeInEvaluation</code>, <code>ThunkForceCount</code>.</p>
+<hr />
+</section>
+<section id="troubleshooting" class="level2">
+<h2>Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NU5019 README not found</td>
+<td>Pack path mismatch</td>
+<td>Confirm relative README path in <code>.csproj</code></td>
+</tr>
+<tr>
+<td>NETSDK1057 preview warning</td>
+<td>net9.0 preview</td>
+<td>Ignore or drop net9.0 target</td>
+</tr>
+<tr>
+<td>HTTPS trust prompt</td>
+<td>Dev cert untrusted</td>
+<td><code>dotnet dev-certs https --trust</code></td>
+</tr>
+<tr>
+<td>Port conflict</td>
+<td>Port in use</td>
+<td>Override with <code>--urls</code></td>
+</tr>
+<tr>
+<td>Excessive iterations</td>
+<td>Non-terminating recursion</td>
+<td>Add base case or raise <code>:depth</code> temporarily</td>
+</tr>
+<tr>
+<td>Slow macro expansion</td>
+<td>Large structural patterns + guards</td>
+<td>Refactor macros / limit depth</td>
+</tr>
+</tbody>
+</table>
+<hr />
+</section>
+<section id="quick-commands-cheat" class="level2">
+<h2>Quick Commands (Cheat)</h2>
+<table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Build all</td>
+<td><code>dotnet build -c Release</code></td>
+</tr>
+<tr>
+<td>Pack NuGet</td>
+<td><code>dotnet pack src/lambda-cek.csproj -c Release -o artifacts</code></td>
+</tr>
+<tr>
+<td>CLI REPL</td>
+<td><code>dotnet run --project src-cli/lambda-cek.cli.csproj</code></td>
+</tr>
+<tr>
+<td>Web UI</td>
+<td><code>dotnet run --project src-webui/lambda-cek.webui.csproj</code></td>
+</tr>
+<tr>
+<td>Web API</td>
+<td><code>dotnet run --project src-web/lambda-cek.web.csproj</code></td>
+</tr>
+<tr>
+<td>Docker image</td>
+<td><code>docker build -t lambda-cek-webui -f src-webui/Dockerfile .</code></td>
+</tr>
+</tbody>
+</table>
+<p>See <code>LANGUAGE.md</code> for syntax / macros and
+<code>COMMANDS.md</code> for interactive reference.</p>
+</section>
+</section>
+</body>
+</html>
