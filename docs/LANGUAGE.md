@@ -323,6 +323,77 @@ For additional standard library functions see `stdlib.lambda`.
 
 ---
 
+### Extended Runtime Helpers & Patterns (Migrated)
+
+The following helper families were present in the original monolithic documentation and are now consolidated here for completeness. They complement the core language by offering convenience around laziness, benchmarking, state threading, looping and defensive (safe) data access.
+
+#### Lazy Helpers & Benchmarking
+
+| Helper | Purpose |
+|--------|---------|
+| `delay x` | Wrap a value in a thunk so it is not evaluated until forced |
+| `force t` | Force a thunk created by `delay`; `force (delay v) = v` |
+| `benchmark n f x` | Apply `f` to `x` `n` times (micro‑benchmark driver) |
+| `memoize f` | Placeholder (currently identity) reserved for future user‑level caching |
+
+Usage sketch:
+```lambda
+:lazy on
+th = delay (expensive 42)
+force th            # forces once
+benchmark 50 (plus 1) 0   # run (plus 1) 50 times
+```
+Guidance: Prefer using REPL metrics (`:stats`) around a representative single call over huge `n` unless measuring allocation churn. Disable pretty printing & natives (`:pretty off; :native off`) for purist timing.
+
+#### State Monad (Encapsulated State)
+
+Encodes state threading without manual pair plumbing. A stateful computation is a function from state to pair (value newState).
+
+| Helper | Meaning |
+|--------|---------|
+| `returnState v` | Lift pure value |
+| `bindState m k` | Sequence: feed value of `m` into `k` |
+| `getState` | Access current state |
+| `putState s` | Replace current state (returns unit‑like `nil`) |
+| `runState comp init` | Execute with initial state; returns pair result finalState |
+
+Example:
+```lambda
+increment = bindState getState (λn.putState (succ n))
+runState increment 5        # → pair 6 6
+```
+
+#### Loop Combinator (WHILE)
+
+| Form | Semantics |
+|------|-----------|
+| `WHILE cond body init` | Repeatedly apply `body` while `cond current` is true |
+
+```lambda
+countDown = WHILE (λn.gt n 0) pred 5   # → 0
+```
+Useful for expressing primitive iterative processes without explicit recursion noise.
+
+#### Safe Operations (Maybe‑oriented)
+
+Defensive variants returning `just x` / `nothing` instead of diverging or producing undefined data. (Exact names mirror stdlib; casing variants like `safeDiv` may exist.)
+
+| Helper | Example | Result |
+|--------|---------|--------|
+| `safehead xs` | `safehead [1,2,3]` | `just 1` |
+|                | `safehead []` | `nothing` |
+| `safediv a b` / `safeDiv` | `safediv 10 2` | `just 5` |
+|                          | `safediv 10 0` | `nothing` |
+| `safeInit xs` | `safeInit [1,2,3]` | `[1,2]` |
+| `safeInitMaybe xs` | `safeInitMaybe [1,2,3]` | `just [1,2]` |
+|                    | `safeInitMaybe [1]` | `nothing` |
+
+These pair naturally with pattern macros and pipelines, reducing explicit error branching.
+
+---
+
+---
+
 ### See Also
 
 - `COMMANDS.md` for REPL / colon command usage
