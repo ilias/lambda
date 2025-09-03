@@ -1260,7 +1260,14 @@ intercalate = λsep l.if (isnil l) nil (if (isnil (tail l)) (head l) (foldr (λx
 #   # Safe indexing
 #   safeIndex = λn l.if (geq n (length l)) indexError (nth n l)
 # -----------------------------------------------------------------------------
-trace     = λmsg x.x
+trace     = λlabel.λx.print label x      # trace "label" x -> prints label and value, returns value
+traceVal  = λx.print x                   # traceVal x -> prints value only
+traceSilent = λlabel.λx.x                # traceSilent label x -> returns x without printing (old behavior)
+# Pipeline-friendly trace macros:
+#   expr |> tap "lbl"    ==> trace "lbl" expr  (prints with label, returns expr)
+#   expr |> tapv          ==> traceVal expr     (prints value only)
+:macro (tap $label $x) => (trace $label $x)
+:macro (tapv $x) => (traceVal $x)
 # debug     = trace # Alias for trace
 undefined = Y I
 error     = undefined

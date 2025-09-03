@@ -79,16 +79,7 @@ MIT
 
 ---
 Full reference lives in `docs/` and `FULL_DOC.md`.
-﻿# Lambda Calculus Interpreter
-
-High-performance lambda calculus environment in C# (.NET 8/9): lazy/eager CEK machine, Pratt parser (user-defined infix operators), macro system (multi-clause, structural, guards, variadic), structural equality helpers, optional native fast paths.
-
-## Features
-
-- Lazy & eager evaluation (CEK)
-- User-defined infix operators (Pratt precedence)
-- Macros: structural patterns, guards, variadic/rest
-Full reference lives in `docs/` and `FULL_DOC.md`.
+<!-- Duplicate heading/feature block removed (content already summarized above). Keeping a single canonical intro. -->
 
 This table is synchronized with the interpreter's internal command metadata (shown via `:help`).
 
@@ -194,26 +185,55 @@ twice = λf x.f (f x)
 twice succ 3                       # 5
 twice (mult 2) 3                   # 12
 
-### Debug / IO Helper: print
+### Debug / IO Helpers: print / trace / tap
 
-`print` evaluates its argument, pretty prints it (respecting `:pretty`), logs a colored line beginning with `Print`, and returns the original value unchanged so it composes in pipelines. Label form: `print "label" expr`.
+There are two layers of lightweight debugging helpers that preserve the original value so they compose inside pipelines without disturbing evaluation order.
 
-Optional label:
+1. Core primitive: `print`
+2. Stdlib wrappers & macros: `trace`, `traceVal`, `traceSilent`, `tap`, `tapv`
 
-```lambda
-print 5              # Print 5
-print "dude" 5      # Print dude 5
-(factorial 5) |> print |> succ      # Print 120  -> overall result 121
-map succ [1,2,3] |> print "vec"    # Print vec [2,3,4]
-```
+`print` eagerly evaluates its argument (or labeled second argument), pretty prints it (respecting `:pretty`), logs a colored line beginning with `Print`, and returns the value unchanged. Label form: `print "label" expr`.
 
-Use it to probe intermediate values without breaking chains:
+Wrappers (lazy-safe instrumentation):
 
 ```lambda
-complexExpr |> transform |> print "after-transform" |> finalize
+trace      = λlabel.λx.print label x      # labeled value, returns x
+traceVal   = λx.print x                   # value only, returns x
+traceSilent= λlabel.λx.x                 # no-op (keep shape for conditional insertion)
 ```
 
-Label argument must be a leading string literal; omitted label defaults to just the value.
+Pipeline-oriented macros (expand at parse time):
+
+```lambda
+expr |> tap  "lbl"   ==> trace "lbl" expr   # labeled
+expr |> tapv          ==> traceVal expr      # unlabeled
+```
+
+Examples:
+
+```lambda
+print 5                  # Print 5
+print "dude" 5          # Print dude 5
+(factorial 5) |> print |> succ          # Print 120 -> 121
+map succ [1,2,3] |> print "vec"        # Print vec [2,3,4]
+
+5 |> tap "seed" |> succ |> tapv        # labeled then value-only
+let x = 3 in x |> tap "x" |> square    # observe x before squaring
+(trace "mid" (succ 4)) |> succ          # 6 (with mid label on 5)
+```
+
+Choosing a helper:
+
+| Helper | Prints | Returns | Use Case |
+|--------|--------|---------|----------|
+| `print` | value (optional label) | value | Ad hoc REPL probing |
+| `trace` | label + value | value | Inline debug w/ label context |
+| `traceVal` | value | value | Quick numeric / structural probe |
+| `traceSilent` | nothing | value | Toggle off traces without editing pipeline shape |
+| `tap` (macro) | label + value | value | Pipeline style (left-to-right) |
+| `tapv` (macro) | value | value | Pipeline style unlabeled |
+
+Tip: Replace `tap` with `traceSilent` (via a macro edit) to disable a block of traces while keeping code alignment.
 ```
 
 ## Advanced Usage
@@ -816,7 +836,7 @@ This project is a high-performance, feature-rich lambda calculus interpreter imp
 
 For more theoretical background, see `THEORY.md`.
 
-## Contributing
+## Contributing (Guidelines)
 
 Contributions are welcome! To get started:
 
@@ -874,7 +894,7 @@ A: Use `:clear` (or `:clear all`) to reset everything, or selectively `:clear de
 - Sandboxing (timeouts, memory quotas) not yet enforced—use caution in multi-user setups.
 - Pattern matching construct (`match`) not yet implemented (macros approximate use cases).
 
-## License
+## License (MIT)
 
 This project is licensed under the MIT License. See `LICENSE` for details.
 

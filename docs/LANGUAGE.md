@@ -390,38 +390,43 @@ Defensive variants returning `just x` / `nothing` instead of diverging or produc
 
 These pair naturally with pattern macros and pipelines, reducing explicit error branching.
 
-#### IO / Debug Helpers
+#### IO / Debug & Tracing Helpers
 
-| Helper | Purpose |
-|--------|---------|
-| `print <expr>` / `print' <expr>` | Evaluate `<expr>`, pretty print the value (respecting `:pretty`). Optional leading string literal label form: `print "label" <expr>` emits `Print label <value>`; plain form emits `Print <value>`. Always returns the original value |
+Two layers of lightweight instrumentation exist: the primitive `print` and stdlib trace wrappers/macros that preserve pipeline flow.
 
-Characteristics:
+| Helper | Prints | Returns | Description |
+|--------|--------|---------|-------------|
+| `print expr` / `print "lbl" expr` | value (optional label) | value | Primitive debug print (eager) |
+| `trace "lbl" x` | label + value | x | Labeled trace wrapper |
+| `traceVal x` | value | x | Value‑only trace |
+| `traceSilent "lbl" x` | nothing | x | No‑op (placeholder) |
+| pipeline tap (expr then label) | label + value | expr | Macro expands to trace labeled form |
+| pipeline tapv (expr) | value | expr | Macro expands to traceVal form |
 
-- Side‑effecting output only (value result unchanged)
-- Suitable for pipelines: `expr |> print |> next`
-- Forces argument (realizes thunks in lazy mode)
-- Honors `:pretty off` for raw structural form
+Semantics & behavior:
+
+- All helpers return the original value so they compose inside `|>` chains.
+- `print`/`trace`/`traceVal` force their argument (exposes thunks under lazy mode) – use sparingly inside very deep recursive definitions if laziness matters.
+- Labels must be a leading string literal for the labeled forms.
+- `traceSilent` is convenient for toggling groups of traces without restructuring code (swap `tap` macro expansion temporarily if needed).
 
 Examples:
 
 ```lambda
-print 5                            # logs: Print 5, result 5
-print "dude" 5                    # logs: Print dude 5
-print (plus 2 3)                   # logs: Print 5
-(factorial 5) |> print |> succ     # logs: Print 120, returns 121 overall
-print' (map succ [1,2,3])          # alias usage logs: Print [2,3,4]
-print "vec" (map succ [1,2,3])    # logs: Print vec [2,3,4]
+print 5                      # Print 5
+print "dbg" (plus 2 3)       # Print dbg 5
+factorial 5 |> print |> succ  # Print 120 -> 121
+5 |> tap "seed" |> succ       # Print seed 5 -> 6
+5 |> tapv |> succ             # Print 5 -> 6
+let x = 3 in x |> tap "x" |> square   # Print x 3 -> 9
+(trace "mid" (succ 4)) |> succ        # Print mid 5 -> 6
+(traceVal (succ 2)) |> succ            # Print 3 -> 4
+(traceSilent "off" (exp 2 5)) |> succ  # No output -> 33
 ```
 
-Typical workflow:
+Disable pretty printing (`:pretty off`) to inspect raw lambda structures instead of canonical numerals/lists/booleans during tracing.
 
-```lambda
-:pretty on
-let r = complexExpr in print r; r   # inspect once, reuse binding
-```
-
-Performance note: Pretty printing large Church lists traverses them; switch `:pretty off` before printing huge structures.
+Performance note: printing very large Church lists or deep normalized expressions incurs traversal cost; keep such traces temporary.
 
 ---
 
