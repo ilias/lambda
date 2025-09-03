@@ -398,6 +398,12 @@ alphaEq (mapY succ (range 5)) [1,2,3,4,5]
 alphaEq (filterY (λx.eq (mod x 2) 0) (range 10)) [0,2,4,6,8]
 alphaEq (lengthY (range 50)) 50
 alphaEq (reverseY (range 5)) [4,3,2,1,0]
+
+# --- Print Helper (side-effecting) ---
+# Ensure print returns its argument unchanged (label and no-label forms) and composes in pipeline
+alphaEq (print 5) 5
+alphaEq (print "msg" 7) 7
+alphaEq (print "n" 4 |> succ) 5
 alphaEq (sumY (range 5)) 10
 alphaEq (productY (tail (range 7))) 720
 alphaEq (anyY (λx.gt x 3) (range 5)) true

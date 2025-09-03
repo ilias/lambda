@@ -32,6 +32,39 @@ internal static class NativeRegistry
             Category: "math",
             Doc: "random n | random a b -> Church numeral within range (inclusive)"),
         new(
+            Name: "print",
+            Aliases: ["print'"],
+            MinArity: 1,
+            MaxArity: 2,
+            Impl: (interp, name, args, env) =>
+            {
+                // Formats supported now:
+                //   print <value>
+                //   print "label" <value>
+                // If two arguments, first is treated as label (string-ish) and second is the value.
+                Expr valueExpr;
+                string? label = null;
+                if (args.Count == 1)
+                {
+                    valueExpr = interp.EvaluateCEK(args[0], env);
+                }
+                else // args.Count == 2
+                {
+                    var labelExpr = interp.EvaluateCEK(args[0], env);
+                    var labelRendered = interp.FormatWithNumerals(labelExpr);
+                    label = labelRendered.Length > 200 ? labelRendered[..200] + "..." : labelRendered;
+                    valueExpr = interp.EvaluateCEK(args[1], env);
+                }
+                var rendered = interp.FormatWithNumerals(valueExpr);
+                if (!string.IsNullOrEmpty(label))
+                    interp.Logger.Log($"Print {label} {rendered}");
+                else
+                    interp.Logger.Log($"Print {rendered}");
+                return valueExpr;
+            },
+            Category: "io",
+            Doc: "print x | print label x -> log 'Print <value>' or 'Print <label> <value>' (pretty forms); return x (alias: print')"),
+        new(
             Name: "alphaEq",
             Aliases: [],
             MinArity: 2,

@@ -26,7 +26,7 @@
   .cont-hint { font-size:.65rem; letter-spacing:.05em; text-transform:uppercase; margin-top:.35rem; color:#e3b341; display:none; font-weight:600; }
   .cont-hint.active { display:block; }
   /* Log color classes */
-  .log-error{color:#ff6b6b;} .log-comment{color:#e3b341;} .log-result{color:var(--good);} .log-norm{color:var(--good); opacity:.85;} .log-step{color:#e3b341;} .log-time{color:#58a6ff;} .log-name{color:#58a6ff;} .log-eval{color:#d2a8ff;} .log-macro{color:#58a6ff;} .log-alpha{color:#d2a8ff;} .log-alpha-pass{color:var(--good);} .log-alpha-fail{color:#ff6b6b;} .log-command{color:#ff7b72;} .log-loading{color:#76e3ea;} .log-fileline{color:#8b949e;} .log-fileresult{color:var(--good);} .log-progress{color:#58a6ff; opacity:.7;} .log-processing{color:#8b949e;}
+  .log-error{color:#ff6b6b;} .log-comment{color:#e3b341;} .log-result{color:var(--good);} .log-norm{color:var(--good); opacity:.85;} .log-step{color:#e3b341;} .log-time{color:#58a6ff;} .log-name{color:#58a6ff;} .log-eval{color:#d2a8ff;} .log-macro{color:#58a6ff;} .log-alpha{color:#d2a8ff;} .log-alpha-pass{color:var(--good);} .log-alpha-fail{color:#ff6b6b;} .log-command{color:#ff7b72;} .log-loading{color:#76e3ea;} .log-fileline{color:#8b949e;} .log-fileresult{color:var(--good);} .log-progress{color:#58a6ff; opacity:.7;} .log-processing{color:#8b949e;} .log-print{color:#ffa657;}
   #filters { display:flex; flex-wrap:wrap; gap:.5rem; margin:.4rem 0 .3rem; }
   #filters label { font-size:.55rem; letter-spacing:.08em; text-transform:uppercase; font-weight:600; display:flex; gap:.25rem; align-items:center; background:var(--panel); padding:.25rem .45rem; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
   #filters input { margin:0; accent-color:var(--accent); }
@@ -370,6 +370,7 @@
       if(s.startsWith('Time:')) return 'log-time';
       if(s.startsWith('Name:')) return 'log-name';
       if(s.startsWith('Eval:')) return 'log-eval';
+      if(s.startsWith('Print ')) return 'log-print';
       if(s.startsWith('Macro')) return 'log-macro';
       if(s.startsWith('Test:')) {
         return s.includes("passed") ? 'log-alpha-pass' : s.includes("failed") ? 'log-alpha-fail' : 'log-alpha';
@@ -665,6 +666,7 @@
       {label:'Time', classes:['log-time']},
       {label:'Step', classes:['log-step']},
       {label:'Eval', classes:['log-eval']},
+      {label:'Print', classes:['log-print']},
       {label:'Norm', classes:['log-norm']},
       {label:'Name', classes:['log-name']},
       {label:'Processing', classes:['log-processing']}

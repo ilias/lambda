@@ -3,20 +3,22 @@
 This document catalogs all colon (`:`) commands, their effects, related debugging / performance features, and structural equivalence tooling.
 
 Sections
+
 - Command Categories
 - Effects & Desugarings Summary
 - Full Command Reference Table
 - Step Tracing & Debugging
 - Performance Statistics & Caches
+- Native Debug / IO Helpers
 - Structural Equality / Test Counters
 - Practical Workflows
 
 ---
 
-### 1. Command Categories
+## 1. Command Categories
 
 Environment
-```
+```text
 :clear                  # Clear env + macros + infix + stats + caches
 :clear defs             # Only definitions
 :clear macros           # Only macro clauses
@@ -28,7 +30,7 @@ Environment
 ```
 
 Evaluation / Mode
-```
+```text
 :lazy on|off            # Lazy (default) vs eager evaluation
 :native on|off|show     # Toggle numeric & list native fast paths / list natives
 :pretty on|off          # Pretty printing of Church encodings
@@ -37,7 +39,7 @@ Evaluation / Mode
 ```
 
 Debug / Performance / Logging
-```
+```text
 :stats                  # Performance & cache metrics
 :test clear             # Reset structural equality counters
 :test result            # Show structural equality counters
@@ -45,13 +47,13 @@ Debug / Performance / Logging
 ```
 
 Language Extension
-```
+```text
 :infix <op> <prec> <assoc>
 :macro (pattern) => body
 ```
 
 Help & Session
-```
+```text
 :help                   # Summary help (abbreviated)
 :exit | :quit           # Terminate session
 ```
@@ -63,48 +65,47 @@ Help & Session
 | Construct / Command | Effect / Desugaring |
 |---------------------|---------------------|
 | `def f x y = body`  | `f = x,y -> body` |
-| `x, y -> body`      | `x -> (y -> body)` |
-| `let x = A, y = B in C` | Nested lets / lambdas chaining |
+| `x, y -> body`      | Curried form expansion |
+| `let x = A, y = B in C` | Nested lets chaining |
 | `let rec f = E in B` | `let f = Y (λf.E) in B` |
-| `a |> f |> g`       | `g (f a)` |
-| `f . a . b`         | `(f a) b` |
-| `f ∘ g`             | `λx.f (g x)` |
-| `f $ x $ y`         | `f x y` (low precedence) |
+| `a |> f |> g`       | `g (f a)` pipeline |
+| `f . a . b`         | Application chaining |
+| `f ∘ g`             | Composition lambda |
+| `f $ x $ y`         | Low precedence application |
 | `_` param           | Fresh ignored variable |
-| `:infix op p a`     | Registers infix precedence / associativity |
-| `:macro (pat) => body` | Adds macro clause (pattern → expansion) |
-| `:native on|off`    | Toggle arithmetic & list native fast paths |
-| `:clear`            | Full reset (env, macros, infix, stats, caches) |
-| `:pretty on|off`    | Toggle pretty printer |
-| `:step on|off`      | Toggle CEK tracing |
-| `:log file`         | Start appending log lines to file |
-| `:log off`          | Stop logging |
+| `:infix`            | Register infix operator |
+| `:macro`            | Add macro clause |
+| `:native on/off`    | Toggle numeric/list fast paths |
+| `:clear`            | Reset interpreter state |
+| `:pretty on/off`    | Toggle pretty printer |
+| `:step on/off`      | Toggle CEK trace |
+| `:log file/off`     | Start or stop logging |
 | `:log clear`        | Truncate log file |
-| `:stats`            | Print runtime statistics |
-| `:test result`      | Show structural equality counters |
+| `:stats`            | Runtime statistics |
+| `:test result`      | Structural equality counters |
 
 ---
 
 ### 3. Full Command Reference Table
 
-| Command | Syntax | Description |
-|---------|--------|-------------|
-| :clear | `:clear [macros|defs|ops|cache|all]` | Clear portions of interpreter state |
-| :depth | `:depth [n]` | Show or set max recursion depth (guard) |
-| :env | `:env [defs|macros|infix|native|all]` | Display environment subsets |
-| :exit | `:exit | :quit` | Exit interpreter |
-| :help | `:help` | Show quick help (not full docs) |
-| :infix | `:infix [op prec assoc]` | Define/list infix operators |
-| :lazy | `:lazy on|off` | Toggle lazy vs eager evaluation |
-| :load | `:load <file>` | Load a .lambda file line-by-line |
-| :log | `:log <file|off|clear>` | Manage logging |
-| :macro | `:macro (<pattern>) => <body>` | Define macro clause (structural, guarded, rest) |
-| :native | `:native on|off|show` | Toggle arithmetic/list natives or list primitives |
-| :pretty | `:pretty on|off` | Toggle pretty printing |
-| :save | `:save <file>` | Persist current env (defs, macros, infix) |
-| :stats | `:stats` | Performance & cache metrics |
-| :step | `:step on|off` | CEK reduction tracing |
-| :test | `:test clear | :test result` | Structural equality counters |
+| Command | Usage | Description |
+|---------|-------|-------------|
+| :clear  | `:clear macros|defs|ops|cache|all` | Clear selected state segment |
+| :depth  | `:depth n` or `:depth` | Set/show recursion guard |
+| :env    | `:env defs|macros|infix|native|all` | Display environment subset |
+| :exit   | `:exit` or `:quit` | Exit interpreter |
+| :help   | `:help` | Show quick help |
+| :infix  | `:infix op prec assoc` | Define infix operator |
+| :lazy   | `:lazy on|off` | Toggle lazy evaluation |
+| :load   | `:load file` | Load .lambda file |
+| :log    | `:log file` / `:log off` / `:log clear` | Manage logging |
+| :macro  | `:macro (pattern) => body` | Add macro clause |
+| :native | `:native on|off|show` | Toggle/list numeric & list natives |
+| :pretty | `:pretty on|off` | Toggle pretty printer |
+| :save   | `:save file` | Persist env snapshot |
+| :stats  | `:stats` | Performance & cache metrics |
+| :step   | `:step on|off` | Toggle CEK tracing |
+| :test   | `:test clear` / `:test result` | Structural equality counters |
 
 Tip: To restore a clean baseline without losing macros/infix, use `:clear defs` then `:load stdlib.lambda`.
 
@@ -146,7 +147,7 @@ Use cases:
 
 Reset environment + caches: `:clear cache` (caches only) or full `:clear`.
 
-#### 5a. Performance Metrics Reference (Extended)
+### 5a. Performance Metrics Reference (Extended)
 
 The `:stats` command exposes fine‑grained timers and counters beyond the abbreviated list above:
 
@@ -179,10 +180,10 @@ Workflow patterns:
 |------|-------|
 | Measure memoization | Evaluate same expression repeatedly; watch hit ratio climb |
 | Compare impls | Run fast & slow versions; contrast `Iterations` / `TimeInEvaluation` |
-| Tune laziness | Toggle `:lazy on|off`; inspect `ThunkForceCount` delta |
+| Tune laziness | Toggle lazy mode then inspect `ThunkForceCount` change |
 | Identify hot path | High `TimeInSubstitution` suggests substitution dominates; inline or reduce duplication |
 
-#### 5b. Caching & Memoization Layers
+### 5b. Caching & Memoization Layers
 
 Multiple layers cooperate for performance:
 
@@ -204,7 +205,31 @@ Future roadmap (not yet implemented): configurable cache size policies & optiona
 
 ---
 
-### 6. Structural Equality / Test Counters
+## 6. Native Debug / IO Helpers
+
+Currently exposed native debugging helper:
+
+| Helper | Description |
+|--------|-------------|
+| `print expr` / `print' expr` | Evaluate & pretty print `expr`. Optional leading label string: `print "lbl" expr` emits `Print lbl <value>`, otherwise `Print <value>`. Returns original value (pipeline friendly) |
+
+Notes:
+
+- Respects `:pretty` mode.
+- Forces argument (may realize large lazy structures).
+- Logging destination integrates with `:log` if enabled.
+
+Pipeline example:
+
+```lambda
+complexCalc |> print |> succ
+```
+
+Future additions may include timing wrappers or structured trace output.
+
+---
+
+### 7. Structural Equality / Test Counters
 
 Helpers always available irrespective of `:native`: `alphaEq`, `betaEq`, `hashEq`, `etaEq`.
 
@@ -212,7 +237,7 @@ Counters: `:test result` prints total calls & successes; `:test clear` resets. U
 
 ---
 
-### 7. Practical Workflows
+### 8. Practical Workflows
 
 | Goal | Commands Sequence |
 |------|-------------------|
@@ -225,13 +250,15 @@ Counters: `:test result` prints total calls & successes; `:test clear` resets. U
 
 ---
 
-### 8. Multi‑segment Lines
+### 9. Multi‑segment Lines
 
 Combine commands and expressions with `;`:
-```
+
+```text
 :macro (sq $x) => (mult $x $x); sq 9
 :load a.lambda; :load b.lambda; :stats
 ```
+
 Segments processed left→right; errors abort remaining segments.
 
 ---

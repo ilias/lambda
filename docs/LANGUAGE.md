@@ -390,6 +390,39 @@ Defensive variants returning `just x` / `nothing` instead of diverging or produc
 
 These pair naturally with pattern macros and pipelines, reducing explicit error branching.
 
+#### IO / Debug Helpers
+
+| Helper | Purpose |
+|--------|---------|
+| `print <expr>` / `print' <expr>` | Evaluate `<expr>`, pretty print the value (respecting `:pretty`). Optional leading string literal label form: `print "label" <expr>` emits `Print label <value>`; plain form emits `Print <value>`. Always returns the original value |
+
+Characteristics:
+
+- Side‑effecting output only (value result unchanged)
+- Suitable for pipelines: `expr |> print |> next`
+- Forces argument (realizes thunks in lazy mode)
+- Honors `:pretty off` for raw structural form
+
+Examples:
+
+```lambda
+print 5                            # logs: Print 5, result 5
+print "dude" 5                    # logs: Print dude 5
+print (plus 2 3)                   # logs: Print 5
+(factorial 5) |> print |> succ     # logs: Print 120, returns 121 overall
+print' (map succ [1,2,3])          # alias usage logs: Print [2,3,4]
+print "vec" (map succ [1,2,3])    # logs: Print vec [2,3,4]
+```
+
+Typical workflow:
+
+```lambda
+:pretty on
+let r = complexExpr in print r; r   # inspect once, reuse binding
+```
+
+Performance note: Pretty printing large Church lists traverses them; switch `:pretty off` before printing huge structures.
+
 ---
 
 ---

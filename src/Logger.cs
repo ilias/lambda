@@ -89,6 +89,7 @@ public class Logger
         string s when s.StartsWith("Time:") => BLUE,     // Timing info
         string s when s.StartsWith("Name:") => BLUE,     // Final result details
         string s when s.StartsWith("Eval:") => MAGENTA,  // Evaluation expression
+        string s when s.StartsWith("Print ") => ORANGE,  // Print helper output
         string s when s.StartsWith("Macro") => BLUE,     // Macro expansion
         string s when s.StartsWith("Test:") => s.Contains("passed") ? GREEN : s.Contains("failed") ? RED : MAGENTA,  // Alpha test result
         string s when s.StartsWith(":") => PINK,         // General command

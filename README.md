@@ -12,6 +12,7 @@ High-performance lambda calculus environment in C# (.NET 8/9): lazy/eager CEK ma
 - ~200 stdlib definitions (`stdlib.lambda`)
 - CLI, Web API, streaming Web UI (SSE / WebSocket)
 - NuGet package + Docker (Web UI)
+- Debug print helper with optional label: `print expr` or `print "label" expr` → logs `Print [label ]value`
 
 ## Docs
 
@@ -192,6 +193,27 @@ map add5 [1, 2, 3, 4]              # [6, 7, 8, 9]
 twice = λf x.f (f x)
 twice succ 3                       # 5
 twice (mult 2) 3                   # 12
+
+### Debug / IO Helper: print
+
+`print` evaluates its argument, pretty prints it (respecting `:pretty`), logs a colored line beginning with `Print`, and returns the original value unchanged so it composes in pipelines. Label form: `print "label" expr`.
+
+Optional label:
+
+```lambda
+print 5              # Print 5
+print "dude" 5      # Print dude 5
+(factorial 5) |> print |> succ      # Print 120  -> overall result 121
+map succ [1,2,3] |> print "vec"    # Print vec [2,3,4]
+```
+
+Use it to probe intermediate values without breaking chains:
+
+```lambda
+complexExpr |> transform |> print "after-transform" |> finalize
+```
+
+Label argument must be a leading string literal; omitted label defaults to just the value.
 ```
 
 ## Advanced Usage
