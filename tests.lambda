@@ -414,6 +414,7 @@ fY = Y (λf.λn.if (n <= 2) 1 ((n - 1 |> trace "fy1" |> f) + (n - 2 |> trace "fy
 alphaEq (fY 5) 5
 alphaEq (fY 10) 55
 alphaEq (fY 15) 610
+alphaEq (map (\x.fY x) [1..10]) [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]
 alphaEq (trace "fib" 10) 10
 alphaEq (traceVal 42) 42
 alphaEq (traceSilent "nope" 99) 99
