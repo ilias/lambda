@@ -3,6 +3,7 @@
 This document describes the surface language, syntax constructs, macro system and core semantic sugar of the Lambda Calculus Interpreter. It is extracted from the original monolithic README for easier navigation.
 
 Sections
+
 - Overview & Philosophy
 - Core Constructs & Syntax Cheatsheet
 - Examples (Essentials)
@@ -77,6 +78,7 @@ let x = 10 in succ x; succ 5           # Final result ⇒ 6
 ```
 
 Rules:
+
 - Semicolons only at REPL/file root (not inside parentheses, lists, lambdas, lets, macros).
 - Empty segments ignored; errors abort remaining segments.
 - `:exit` / `:quit` stop further segments.
@@ -131,6 +133,7 @@ Pretty printer detects canonical shapes and renders concise forms; disable via `
 Declare: `:infix <symbol> <precedence> <left|right>` then bind the symbol with a definition.
 
 Example:
+
 ```lambda
 :infix + 6 left
 :infix * 7 left
@@ -156,6 +159,7 @@ Built‑ins always present: `|>`, `∘`, `.`, `$` (their semantics shouldn’t b
 | `f $ x`  | Low precedence application | `f x` (right‑assoc; removes parentheses) |
 
 Usage examples:
+
 ```lambda
 5 |> succ |> mult 2
 f . g . 5          # f (g 5)
@@ -168,6 +172,7 @@ mult 2 $ succ 5
 ### Operator Precedence & Associativity
 
 Loosest → tightest (conceptual ladder):
+
 1. Top‑level `;` (segment separator)
 2. `let … in …` (right‑assoc)
 3. Arrow `p1, p2 -> body` (right‑assoc)
@@ -177,6 +182,7 @@ Loosest → tightest (conceptual ladder):
 7. Atom (parenthesized expr, literal, identifier, lambda, list)
 
 Guidelines:
+
 - Application binds tighter than any infix. `f x + g y` ⇒ `plus (f x) (g y)`.
 - `$` and `|>` share lowest precedence but opposite associativity.
 - Parentheses trump precedence; add them when mixing special operators.
@@ -208,6 +214,7 @@ SteppedRange ::= Expression ',' Expression '..' Expression
 ```
 
 Desugarings (informal):
+
 ```
 let x = A in B           ≡ (λx.B) A
 let x = A, y = B in C    ≡ (λx.λy.C) A B
@@ -227,26 +234,31 @@ Parser error taxonomy includes: `UnexpectedToken`, `MissingLetEquals`, `Unexpect
 ### Macro System
 
 Basic form:
+
 ```lambda
 :macro (square $x) => (mult $x $x)
 square 7   # → 49
 ```
 
 Advanced capabilities:
+
 1. Multi‑clause macros with guards:
+
 ```lambda
 :macro (max2 $a $b) when (geq $a $b) => $a
 :macro (max2 $a $b) => $b
 ```
-2. Variadic / rest patterns: `$xs ...` (tail capture → Church list of args)
-3. Guards with `when (expr)` referencing pattern vars
-4. Structural application patterns: `(cons 1 $t)`, `($f $x $y)`
-5. Wildcards `_` ignore subexpressions
-6. Integer literal patterns match exact numerals
-7. Specificity ordering (literal & structural > variable > rest) with tie break on arity then recency
-8. Safe placeholder substitution preventing accidental capture (hygiene roadmap)
+
+1. Variadic / rest patterns: `$xs ...` (tail capture → Church list of args)
+2. Guards with `when (expr)` referencing pattern vars
+3. Structural application patterns: `(cons 1 $t)`, `($f $x $y)`
+4. Wildcards `_` ignore subexpressions
+5. Integer literal patterns match exact numerals
+6. Specificity ordering (literal & structural > variable > rest) with tie break on arity then recency
+7. Safe placeholder substitution preventing accidental capture (hygiene roadmap)
 
 Examples:
+
 ```lambda
 :macro (head (cons $h $t)) => $h
 :macro (swapArgs ($f $a $b)) => ($f $b $a)
@@ -261,6 +273,7 @@ Planned enhancements: hygiene / gensym, quasiquote/unquote, macro removal, neste
 ### Pretty Printing Rules
 
 Enabled by default (`:pretty on`). Converts:
+
 | Raw Shape | Display |
 |-----------|---------|
 | Church numeral λf.λx.f^n x | `n` |
@@ -296,11 +309,13 @@ These helpers are native and always enabled (independent of `:native` arithmetic
 | `etaEq a b` | Beta-normalize; eta-reduce; alpha compare | Captures extensional equalities (λx.f x ≡ f) |
 
 Process outline:
+
 1. Force required thunks (lazy only) to expose heads.
 2. Perform bounded normalization (beta; limited inlining of known combinators; guarded to avoid runaway expansion).
 3. Apply comparison strategy (hash or alpha).
 
 Guidance:
+
 - Prefer `hashEq` for quick negative checks; confirm positives with `betaEq` / `etaEq`.
 - Use `etaEq` only when eta-extensionality matters (slightly more work).
 - Rising structural test counts (`:test result`) can highlight hot equivalence paths—optimize upstream definitions or add sharing.
@@ -337,12 +352,14 @@ The following helper families were present in the original monolithic documentat
 | `memoize f` | Placeholder (currently identity) reserved for future user‑level caching |
 
 Usage sketch:
+
 ```lambda
 :lazy on
 th = delay (expensive 42)
 force th            # forces once
 benchmark 50 (plus 1) 0   # run (plus 1) 50 times
 ```
+
 Guidance: Prefer using REPL metrics (`:stats`) around a representative single call over huge `n` unless measuring allocation churn. Disable pretty printing & natives (`:pretty off; :native off`) for purist timing.
 
 #### State Monad (Encapsulated State)
@@ -358,6 +375,7 @@ Encodes state threading without manual pair plumbing. A stateful computation is 
 | `runState comp init` | Execute with initial state; returns pair result finalState |
 
 Example:
+
 ```lambda
 increment = bindState getState (λn.putState (succ n))
 runState increment 5        # → pair 6 6
@@ -372,6 +390,7 @@ runState increment 5        # → pair 6 6
 ```lambda
 countDown = WHILE (λn.gt n 0) pred 5   # → 0
 ```
+
 Useful for expressing primitive iterative processes without explicit recursion noise.
 
 #### Safe Operations (Maybe‑oriented)
