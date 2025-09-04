@@ -336,6 +336,39 @@ map (mult 2) [1,2,3,4]           # [2,4,6,8]
 
 For additional standard library functions see `stdlib.lambda`.
 
+### Property / Law Reference (Informal)
+
+Representative law instances (validated by concrete tests) illustrating expected algebraic behavior of helper families:
+
+| Family | Law (Instance Form) |
+|--------|---------------------|
+| Maybe Functor | `maybeMap I (just x) = just x` |
+| Maybe Applicative | `maybeAp (just I) v = v` |
+| Maybe Applicative | `maybeAp (just f) (just x) = just (f x)` |
+| Maybe Monad | `maybeBind (just x) f = f x` |
+| Maybe Monad | `maybeBind m just = m` |
+| Maybe Monad | `maybeBind (maybeBind m f) g = maybeBind m (λx.maybeBind (f x) g)` |
+| Either Functor | `eitherMap f (left e) = left e` |
+| Either Monad | `eitherBind (right x) f = f x` |
+| Either Monad | `eitherBind m right = m` |
+| Tracing | `alphaEq (tap "lbl" v) v` |
+| Delayed Tracing | Untaken branch not forced (semantic preservation) |
+| Show Helpers | Head tag stable (`showBool true` begins with 116) |
+
+To extend: introduce property generators (future roadmap) producing random Church numerals & short lists, then fold over these equations using `alphaEq` / `hashEq` for validation.
+
+### Extended Example: Applicative Composition (Maybe)
+
+```lambda
+comp = λf g x.f (g x)
+fs  = just succ
+gs  = just (mult 2)
+xs  = just 5
+lhs = maybeAp (maybeAp (maybeAp (just comp) fs) gs) xs
+rhs = maybeAp fs (maybeAp gs xs)
+alphaEq lhs rhs  # true (applicative composition)
+```
+
 ---
 
 ### Extended Runtime Helpers & Patterns (Migrated)

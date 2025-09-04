@@ -274,6 +274,72 @@ maybeMap2 plus (just 2) (just 3)               # just 5
 eitherBind (left 1) (λx.right (plus x 1))      # left 1 (short-circuits)
 ```
 
+### Deeper Usage Patterns
+
+```lambda
+# 1. Conditional instrumentation (avoid double recursion evaluation)
+fib = Y (λf n.
+        if (n <= 2)
+                1
+                ( (n - 1 |> tapd "fib-1" |> f)
+                    + (n - 2 |> tapd "fib-2" |> f)))
+
+fib 10  # Uses delayed traces so only taken branches force values
+
+# 2. Maybe pipeline with applicative style (no manual pattern matching)
+add3 = maybeMap2 (λa b.plus a b) (just 10) (just 5)   # just 15
+
+# 3. Composing three independent Maybes (Applicative composition law example)
+comp = λf g x.f (g x)
+fs = just succ
+gs = just (mult 2)
+xs = just 5
+lhs = maybeAp (maybeAp (maybeAp (just comp) fs) gs) xs   # just (succ (mult 2 5)) = just 11
+rhs = maybeAp fs (maybeAp gs xs)
+alphaEq lhs rhs  # true
+
+# 4. Either error accumulation chain (short-circuits on first Left)
+step1 = λx.right (plus x 2)
+step2 = λx.if (eq (mod x 5) 0) (left "div-by-5") (right (mult x 3))
+eitherBind (eitherBind (right 7) step1) step2    # right 27
+eitherBind (eitherBind (right 8) step1) step2    # left "div-by-5"
+
+# 5. show* helpers inside a trace label (runtime-safe tagging)
+value = just 42
+trace "maybe" (showMaybe (λn.[110,61] ++ [n]) value)  # Prints tagged representation; returns string
+
+# 6. Lazy-safe instrumentation of an expensive branch only when chosen
+expensive = λn.(range (mult n 1000)) |> length  # pretend heavy list build
+decide = λflag.if flag (traceDelay "heavy" (delay (expensive 5))) 0
+decide true   # Forces and prints heavy
+decide false  # Skips forcing heavy entirely
+```
+
+### Property / Law Cheat Sheet
+
+Informal property-style laws validated by representative tests (not exhaustive generators):
+
+| Family | Law | Sample Instance (Stdlib syntax) |
+|--------|-----|---------------------------------|
+| Maybe Functor | `maybeMap I = I` | `alphaEq (maybeMap I (just 5)) (just 5)` |
+| Maybe Applicative | Identity | `maybeAp (just I) v == v` |
+| Maybe Applicative | Homomorphism | `maybeAp (just f) (just x) == just (f x)` |
+| Maybe Applicative | Interchange | `maybeAp u (just y) == maybeAp (just (λf.f y)) u` |
+| Maybe Applicative | Composition | See lhs/rhs example above |
+| Maybe Monad | Left Identity | `maybeBind (just x) f == f x` |
+| Maybe Monad | Right Identity | `maybeBind m just == m` |
+| Maybe Monad | Associativity | `maybeBind (maybeBind m f) g == maybeBind m (λx.maybeBind (f x) g)` |
+| Either Functor | Left preserved | `eitherMap succ (left e) == left e` |
+| Either Monad | Left Identity | `eitherBind (right x) f == f x` |
+| Either Monad | Right Identity | `eitherBind m right == m` |
+| Either Monad | Associativity | (see Maybe associativity analog) |
+| Applicative Either | Identity/Hom/Interchange | Mirror Maybe laws (Right path) |
+| Tracing | Identity preservation | `alphaEq (tap "lbl" 5) 5` |
+| Delayed Tracing | No premature forcing | `tapd` avoids forcing untaken branch |
+| Show Helpers | Deterministic tag | `head (showBool true) = 116` |
+
+Note: Laws involving arbitrary functions are instantiated with simple numeric functions (`succ`, `mult 2`, etc.) in the test suite for determinism.
+
 ## Advanced Usage
 
 This section demonstrates sophisticated applications combining multiple features of the interpreter for real-world functional programming patterns.

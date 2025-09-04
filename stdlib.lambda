@@ -1661,6 +1661,33 @@ apply_n = λf n x.n f x   # Apply function f n times to seed x (same as times n 
 :macro (testMaybeBy $eqA $a $b) => (maybeEq $eqA $a $b)
 :macro (testEitherBy $eqL $eqR $a $b) => (eitherEq $eqL $eqR $a $b)
 
+# Property Test Macros (lightweight)
+# assoc op a b c  => alphaEq (op (op a b) c) (op a (op b c))
+# Usage example: assoc plus 1 2 3  # Church boolean (true) for associativity hold
+# assocRange op n  => run assoc over triples (i,j,k) with 0<=i<=j<=k<n and count successes (Church numeral)
+# assocAll op n    => Church boolean: all associative within 0..n-1 for ordered triples
+
+:macro (assoc $op $a $b $c) => (alphaEq ($op ($op $a $b) $c) ($op $a ($op $b $c)))
+
+# Internal helpers for generating ranges (reuse existing range function via enumFromTo style if present)
+# fold over i<=j<=k<n accumulating (pair count total)
+assocTriplesFold = λop n.  \
+        (let rec loop = λi j k acc. \
+                if (geq i n) acc ( \
+                    if (geq j n) (loop (succ i) i i acc) ( \
+                        if (geq k n) (loop i (succ j) j acc) ( \
+                            let res = (alphaEq (op (op i j) k) (op i (op j k))) in \
+                            let acc2 = pair (plus (first acc) (if res 1 0)) (succ (second acc)) in \
+                            (loop i j (succ k) acc2)))) in \
+         (loop 0 0 0 (pair 0 0)))  # close outer ( ... let rec loop ... )
+
+assocRangeCount = λop n.(first (assocTriplesFold op n))       # successes
+assocRangeTotal = λop n.(second (assocTriplesFold op n))      # total tested
+assocAllFn      = λop n.eq (assocRangeCount op n) (assocRangeTotal op n)
+
+:macro (assocCount $op $n) => (assocRangeCount $op $n)
+:macro (assocAll $op $n) => (assocAllFn $op $n)
+
 
 # =============================================================================
 # SECTION 10: INFIX OPERATORS
