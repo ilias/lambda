@@ -38,6 +38,7 @@ Web UI:
 ```powershell
 dotnet run --project src-webui --
 ```
+
 Open <http://localhost:5000>
 
 API:
@@ -234,7 +235,6 @@ Choosing a helper:
 | `tapv` (macro) | value | value | Pipeline style unlabeled |
 
 Tip: Replace `tap` with `traceSilent` (via a macro edit) to disable a block of traces while keeping code alignment.
-```
 
 ## Advanced Usage
 
@@ -521,7 +521,6 @@ countDown = WHILE (λn.gt n 0) pred 5   # → 0
 
 Chain with `maybe`, `maybeMap`, or a custom bind pattern.
 
-
 ### Caching and Memoization
 
 The interpreter includes multiple caching layers:
@@ -633,7 +632,6 @@ Hardening checklist:
 
 Observability: subscribe to `Logger.Subscribe(line => Forward(line));` to pipe logs to structured telemetry (ensure async, non-blocking).
 
-
 ## Building and Running
 
 ### Documentation Generation (Pandoc)
@@ -645,24 +643,32 @@ Pandoc is NOT bundled. If it is missing the script will emit an error and skip H
 Install options (choose one):
 
 Windows (Chocolatey):
-```
+
+```pwsh
 choco install pandoc
 ```
+
 Windows (Winget):
-```
+
+```pwsh
 winget install --id JohnMacFarlane.Pandoc -e
 ```
+
 macOS (Homebrew):
-```
+
+```bash
 brew install pandoc
 ```
+
 Linux (Debian/Ubuntu):
-```
+
+```bash
 sudo apt-get update && sudo apt-get install -y pandoc
 ```
 
 Verify:
-```
+
+```bash
 pandoc --version
 ```
 
@@ -1073,6 +1079,3 @@ In REPL: `:load tests.lambda`
 | Docker image | `docker build -t lambda-cek-webui -f src-webui/Dockerfile .` |
 
 ---
-
-
-
