@@ -9,7 +9,7 @@ public partial class Interpreter
     {
     new(":clear", ":clear [macros|defs|ops|cache|all]", "Clear state (default=all): macros, defs, ops (infix), cache (memoization), or all (env+macros+ops+stats+caches)"),
         new(":depth", ":depth [n]", "Show or set maximum recursion depth (range 10-10000)"),
-    new(":env", ":env [defs|macros|infix|native|all]", "Display environment subsets; default all"),
+        new(":env", ":env [defs|macros|infix|native|all]", "Display environment subsets; default all"),
         new(":exit", ":exit | :quit", "Exit the interpreter"),
         new(":help", ":help", "Show help summary"),
         new(":infix", ":infix [op prec assoc]", "Define or list infix operators (assoc = left|right)"),
@@ -22,8 +22,13 @@ public partial class Interpreter
         new(":save", ":save <file>", "Persist current environment to a file"),
         new(":stats", ":stats", "Show performance statistics & cache metrics"),
         new(":step", ":step on|off", "Toggle step-by-step CEK trace output"),
-    new(":test", ":test clear | :test result | :test json | :test text", "Reset counters, show results, or change result output mode (text/json)"),
-    // :commands removed (integrated into :help output)
+        new(":test", ":test clear | :test result | :test json | :test text", "Reset counters, show results, or change result output mode (text/json)"),
+        // QoL additions
+        new(":hist", ":hist [n]", "Show last n (default 20) entered top-level inputs"),
+        new(":repeat", ":repeat <index| -k>", "Re-run history entry by index (as shown in :hist) or negative offset (-1 = last)"),
+        new(":reload", ":reload", "Reload the most recently :load'ed file"),
+        new(":last", ":last", "Show the last evaluated expression's pretty-printed form again"),
+        // :commands removed (integrated into :help output)
     };
 
     // Command listing helpers removed (commands now documented directly in :help).

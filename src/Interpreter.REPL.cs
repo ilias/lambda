@@ -22,6 +22,7 @@ public partial class Interpreter
     /// </summary>
     public async Task<string> LoadFileAsync(string path)
     {
+    _lastLoadedFile = path; // store for :reload
         int lineCount = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         _logger.Log($"Loading commands from '{path}'");

@@ -33,6 +33,11 @@ public partial class Interpreter
     internal int? _currentSourceLine = null; // 1-based line number when loading
     private bool _isLoadingFile = false; // guard to keep file context during batch load
     // macroExpandedLine removed
+    // REPL QoL: history & last result tracking
+    private readonly List<string> _history = new(1024);
+    private Expr? _lastResultExpr = null; // last successfully evaluated (non-assignment) expression value
+    private const int MaxHistory = 10_000;
+    internal string? _lastLoadedFile = null; // for :reload
 
     public Interpreter(Logger logger, Statistics? stats = null)
     {
@@ -92,6 +97,15 @@ public partial class Interpreter
                 if (trimmed.Length == 0) continue;
                 _currentInputLine = trimmed; // capture segment for test recording
                 if (trimmed.StartsWith('#')) continue; // skip comment segment
+                // Record original top-level segment in history (commands added in fast path earlier)
+                if (!trimmed.StartsWith(':'))
+                {
+                    if (_history.Count == 0 || _history[^1] != trimmed)
+                    {
+                        _history.Add(trimmed);
+                        if (_history.Count > MaxHistory) _history.RemoveRange(0, _history.Count - MaxHistory);
+                    }
+                }
 
                 if (trimmed.StartsWith(':'))
                 {
@@ -115,11 +129,13 @@ public partial class Interpreter
                         _context[st.VarName!] = val;
                         sb.AppendLine($"-> {st.VarName} = {FormatWithNumerals(val)}");
                         lastExpr = null;
+                        _lastResultExpr = lastExpr;
                     }
                     else
                     {
                         _logger.Log($"Eval: {FormatWithNumerals(st.Expression)}");
                         if (_showStep) _logger.Log($"Processing: {st}");
+                        _lastResultExpr = lastExpr;
                         var res = _evaluator.Evaluate(st.Expression);
                         var norm = NormalizeExpression(res);
                         _stats.TotalIterations += _stats.Iterations;
@@ -242,6 +258,10 @@ public partial class Interpreter
             ":test" when arg.Equals("result", StringComparison.OrdinalIgnoreCase) => TestResult(),
             ":test" when arg.Equals("json", StringComparison.OrdinalIgnoreCase) => SetTestOutputMode(TestOutputMode.Json),
             ":test" when arg.Equals("text", StringComparison.OrdinalIgnoreCase) => SetTestOutputMode(TestOutputMode.Text),
+            ":hist" => HandleHistory(arg),
+            ":repeat" => await HandleRepeatAsync(arg),
+            ":reload" => await HandleReloadAsync(),
+            ":last" => HandleLast(),
             ":log" => await _logger.HandleLogCommandAsync(arg),
             ":load" => await LoadFileAsync(arg),
             ":save" => await SaveFileAsync(arg),
@@ -260,6 +280,51 @@ public partial class Interpreter
             _ => $"Unknown command: {command}"
         };
     }
+
+    private string HandleHistory(string arg)
+    {
+        int n = 20;
+        if (!string.IsNullOrWhiteSpace(arg) && int.TryParse(arg, out var parsed) && parsed > 0)
+            n = parsed;
+        var span = _history.Count <= n ? _history : _history.TakeLast(n).ToList();
+        if (span.Count == 0) return "# (history empty)";
+        var width = (_history.Count).ToString().Length;
+        var lines = span.Select((s, i) =>
+        {
+            int index = _history.Count - span.Count + i; // absolute index
+            return $"  {index.ToString().PadLeft(width)}: {s}";
+        });
+        return string.Join('\n', lines);
+    }
+
+    private async Task<string> HandleRepeatAsync(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg)) return "Usage: :repeat <index | -k>";
+        int idx;
+        if (int.TryParse(arg, out var parsed))
+        {
+            if (parsed < 0)
+            {
+                idx = _history.Count + parsed; // -1 => last
+            }
+            else idx = parsed;
+        }
+        else return "Error: index must be integer (absolute or negative offset)";
+        if (idx < 0 || idx >= _history.Count) return $"Error: history index out of range (0..{_history.Count - 1})";
+        var cmd = _history[idx];
+        var (expr, str) = await ProcessInputAsync(cmd);
+        return $"# repeat[{idx}]: {cmd}\n{str}".TrimEnd();
+    }
+
+    private async Task<string> HandleReloadAsync()
+    {
+        if (string.IsNullOrEmpty(_lastLoadedFile)) return "No prior :load file to reload.";
+        if (!File.Exists(_lastLoadedFile)) return $"Last file no longer exists: {_lastLoadedFile}";
+        return await LoadFileAsync(_lastLoadedFile);
+    }
+
+    private string HandleLast()
+        => _lastResultExpr is null ? "# (no last expression)" : FormatWithNumerals(_lastResultExpr);
     
 
     // Consolidated formatting method that uses the enhanced Expr.ToString()

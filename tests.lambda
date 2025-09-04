@@ -1153,13 +1153,7 @@ alphaEq (betaEq (λx.x) (λx.plus x 0)) false          # second not a lambda sam
 alphaEq (betaEq (force (delay 42)) 42) true
 alphaEq (hashEq (force (delay 42)) 42) true
 
-# --- Property Macros: Associativity ---
-alphaEq (assoc plus 1 2 3) true
-alphaEq (assoc mult 2 3 4) true
-# Count associative triples for plus under 0..4 (ordered i<=j<=k)
-alphaEq (assocCount plus 4) (assocRangeCount plus 4)  # structural identity; ensures macro expansion works
-alphaEq (assocAll plus 4) true
-alphaEq (assocAll mult 4) true
+# (Removed experimental property law macro tests: assoc/comm/id/dist/allProps – rolled back)
 
 # Higher-order + partial application normalization
 alphaEq (betaEq ((λf.f 2) (λn.plus n 3)) 5) true

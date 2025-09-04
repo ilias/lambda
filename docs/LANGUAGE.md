@@ -17,6 +17,7 @@ Sections
 - Formal Grammar (EBNF‑style)
 - Macro System (Basic → Advanced Enhancements)
 - Pretty Printing Rules (Output Representation)
+- REPL Convenience Commands (History / Reload / Last)
 
 ---
 
@@ -228,6 +229,29 @@ f $ x $ y                ≡ f x y
 ```
 
 Parser error taxonomy includes: `UnexpectedToken`, `MissingLetEquals`, `UnexpectedArrow`, `UnexpectedComma`, `UnexpectedSemicolon`, `IllegalAssignment`, `UnexpectedDot`, `UnterminatedList`, `MacroPatternError`.
+
+---
+
+### REPL Convenience Commands
+
+In addition to the core commands (`:load`, `:env`, `:macro`, etc.), the REPL offers quality‑of‑life commands for interactive workflows:
+
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| `:hist` | `:hist [n]` | Show the last `n` (default 20) entered non‑command top‑level inputs |
+| `:repeat` | `:repeat <index\|-k>` | Re-run a prior history entry by absolute index or negative offset (`-1` = last) |
+| `:reload` | `:reload` | Reload the most recently loaded file (via `:load`) |
+| `:last` | `:last` | Show the last evaluated expression value again |
+
+Details:
+
+- History excludes commands (except ones embedded in multi‑segment lines) and collapses consecutive duplicate entries.
+- `:repeat -3` replays the third most recent history entry; the replayed output is prefixed with a `# repeat[index]:` line.
+- `:reload` remembers only the most recent `:load <file>` path; if the file was deleted, a warning is shown.
+- `:last` prints the stored pretty‑printed value (respecting the current `:pretty` mode). If no expression has been evaluated yet it reports an empty state.
+- History is in‑memory only (not persisted across sessions).
+
+These commands are also listed in `:help` and the main `README.md` command table.
 
 ---
 

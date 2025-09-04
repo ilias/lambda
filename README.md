@@ -103,6 +103,10 @@ This table is synchronized with the interpreter's internal command metadata (sho
 | :stats | `:stats` | Show performance statistics & cache metrics |
 | :step | `:step on\|off` | Toggle step-by-step CEK trace output |
 | :test | `:test clear` / `:test result` | Reset or display structural equality test counters |
+| :hist | `:hist [n]` | Show last n (default 20) entered top-level inputs |
+| :repeat | `:repeat <index\|-k>` | Re-run history entry by index or negative offset -1 means last |
+| :reload | `:reload` | Reload the most recently :load'ed file |
+| :last | `:last` | Show the last evaluated expression again |
 
 Tip: After heavy experimentation, run `:clear all` then `:load stdlib.lambda` to restore the baseline library. For only redefining functions without losing macro/infix definitions use `:clear defs`.
 
