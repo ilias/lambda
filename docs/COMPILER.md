@@ -27,7 +27,6 @@ Sections
 | `lambda-cek.web` | Minimal Web API | `src-web/` | HTTP endpoints (eval/load/health) |
 | `lambda-cek.webui` | ASP.NET Core + Static UI | `src-webui/` | Browser REPL + streaming logs |
 
-
 ## Prerequisites
 
 - .NET 8 SDK (optionally .NET 9 preview for multi-target build)
@@ -50,7 +49,6 @@ docker version     # optional
 ## Building & Running
 
 Build all:
-
 
 ```powershell
 dotnet build
@@ -78,7 +76,6 @@ dotnet run --project src-webui/lambda-cek.webui.csproj
 ```
 
 Navigate to the printed URL (typically <http://localhost:5000>). Toggle streaming / WebSocket in UI.
-
 
 ## Streaming Modes (Comparison)
 
@@ -153,19 +150,20 @@ Build image:
 ```powershell
 docker build -t lambda-cek-webui -f src-webui/Dockerfile .
 ```
+
 Run:
- 
+
 ```powershell
 docker run --rm -p 8080:8080 --name lambda-cek lambda-cek-webui
 ```
-Bind mount repo (read-only) for dynamic file loading:
 
+Bind mount repo (read-only) for dynamic file loading:
 
 ```powershell
 docker run --rm -p 8080:8080 -v $PWD:/data:ro --name lambda-cek lambda-cek-webui
 ```
-Custom port:
 
+Custom port:
 
 ```powershell
 docker run --rm -e ASPNETCORE_URLS=http://0.0.0.0:5005 -p 5005:5005 lambda-cek-webui
@@ -185,14 +183,14 @@ Pack core library:
 ```powershell
 dotnet pack src/lambda-cek.csproj -c Release -o artifacts
 ```
-Override version:
 
+Override version:
 
 ```powershell
 dotnet pack src/lambda-cek.csproj -c Release -o artifacts /p:PackageVersion=0.1.1
 ```
-Consume:
 
+Consume:
 
 ```powershell
 dotnet add package LambdaCalculus.Interpreter --version 0.1.0

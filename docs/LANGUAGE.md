@@ -20,7 +20,7 @@ Sections
 
 ---
 
-### Overview & Philosophy
+## Overview & Philosophy
 
 The interpreter is a CEK‑machine based lambda calculus environment with pragmatic extensions:
 
@@ -153,7 +153,7 @@ Built‑ins always present: `|>`, `∘`, `.`, `$` (their semantics shouldn’t b
 
 | Operator | Meaning | Desugaring |
 |----------|---------|------------|
-| `a |> f` | Pipeline (left→right data) | `f a` |
+| `a \|> f` | Pipeline (left→right data) | `f a` |
 | `f . x`  | Application chaining       | `(f x)` (chains right‑assoc) |
 | `f ∘ g`  | Function composition       | `λx.f (g x)` |
 | `f $ x`  | Low precedence application | `f x` (right‑assoc; removes parentheses) |
@@ -193,7 +193,7 @@ Guidelines:
 
 EBNF‑style (simplified from full README; Pratt handles infix dynamically):
 
-```
+```BNF
 Program      ::= Segment (';' Segment)*
 Segment      ::= (Command | Definition | Expression)?
 Definition   ::= Identifier '=' Expression
@@ -215,7 +215,7 @@ SteppedRange ::= Expression ',' Expression '..' Expression
 
 Desugarings (informal):
 
-```
+```lambda
 let x = A in B           ≡ (λx.B) A
 let x = A, y = B in C    ≡ (λx.λy.C) A B
 let rec f = E in B       ≡ (λf.B) (Y (λf.E))

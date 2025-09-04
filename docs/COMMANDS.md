@@ -18,6 +18,7 @@ Sections
 ## 1. Command Categories
 
 Environment
+
 ```text
 :clear                  # Clear env + macros + infix + stats + caches
 :clear defs             # Only definitions
@@ -30,6 +31,7 @@ Environment
 ```
 
 Evaluation / Mode
+
 ```text
 :lazy on|off            # Lazy (default) vs eager evaluation
 :native on|off|show     # Toggle numeric & list native fast paths / list natives
@@ -39,6 +41,7 @@ Evaluation / Mode
 ```
 
 Debug / Performance / Logging
+
 ```text
 :stats                  # Performance & cache metrics
 :test clear             # Reset structural equality counters
@@ -47,12 +50,14 @@ Debug / Performance / Logging
 ```
 
 Language Extension
+
 ```text
 :infix <op> <prec> <assoc>
 :macro (pattern) => body
 ```
 
 Help & Session
+
 ```text
 :help                   # Summary help (abbreviated)
 :exit | :quit           # Terminate session
@@ -68,7 +73,7 @@ Help & Session
 | `x, y -> body`      | Curried form expansion |
 | `let x = A, y = B in C` | Nested lets chaining |
 | `let rec f = E in B` | `let f = Y (λf.E) in B` |
-| `a |> f |> g`       | `g (f a)` pipeline |
+| `a \|> f \|> g`       | `g (f a)` pipeline |
 | `f . a . b`         | Application chaining |
 | `f ∘ g`             | Composition lambda |
 | `f $ x $ y`         | Low precedence application |
@@ -90,21 +95,21 @@ Help & Session
 
 | Command | Usage | Description |
 |---------|-------|-------------|
-| :clear  | `:clear macros|defs|ops|cache|all` | Clear selected state segment |
+| :clear  | `:clear macros\|defs\|ops\|cache\|all` | Clear selected state segment |
 | :depth  | `:depth n` or `:depth` | Set/show recursion guard |
-| :env    | `:env defs|macros|infix|native|all` | Display environment subset |
+| :env    | `:env defs\|macros\|infix\|native\|all` | Display environment subset |
 | :exit   | `:exit` or `:quit` | Exit interpreter |
 | :help   | `:help` | Show quick help |
 | :infix  | `:infix op prec assoc` | Define infix operator |
-| :lazy   | `:lazy on|off` | Toggle lazy evaluation |
+| :lazy   | `:lazy on\|off` | Toggle lazy evaluation |
 | :load   | `:load file` | Load .lambda file |
 | :log    | `:log file` / `:log off` / `:log clear` | Manage logging |
 | :macro  | `:macro (pattern) => body` | Add macro clause |
-| :native | `:native on|off|show` | Toggle/list numeric & list natives |
-| :pretty | `:pretty on|off` | Toggle pretty printer |
+| :native | `:native on\|off\|show` | Toggle/list numeric & list natives |
+| :pretty | `:pretty on\|off` | Toggle pretty printer |
 | :save   | `:save file` | Persist env snapshot |
 | :stats  | `:stats` | Performance & cache metrics |
-| :step   | `:step on|off` | Toggle CEK tracing |
+| :step   | `:step on\|off` | Toggle CEK tracing |
 | :test   | `:test clear` / `:test result` | Structural equality counters |
 
 Tip: To restore a clean baseline without losing macros/infix, use `:clear defs` then `:load stdlib.lambda`.
@@ -115,7 +120,7 @@ Tip: To restore a clean baseline without losing macros/infix, use `:clear defs` 
 
 Enable with `:step on` to emit per‑reduction CEK step lines (`log-step`). Combine with `:pretty off` for raw lambda structures. Typical isolation procedure:
 
-```
+```lambda
 :clear all; :load stdlib.lambda; :step on; :pretty off
 <expression>
 ```
@@ -141,6 +146,7 @@ Disable via `:step off` promptly to reduce output overhead.
 | VarCounter | Fresh variable generation counter |
 
 Use cases:
+
 - Compare implementations (e.g., naive vs tail recursion) via `Iterations`.
 - Gauge caching by rising hit ratio after repeated calls.
 - Detect runaway expansions (surging `Iterations` / large substitution counts).
