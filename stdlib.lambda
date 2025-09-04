@@ -977,6 +977,87 @@ safeInit = λl.if (or (isnil l) (isnil (tail l))) nil (reverse (tail (reverse l)
 safeInitMaybe = λl.if (or (isnil l) (isnil (tail l))) nothing (just (reverse (tail (reverse l))))
 maybeMap = λf m.if (isNothing m) nothing (just (f (fromJust m)))
 
+# -----------------------------------------------------------------------------
+# Roadmap Item 4: Monadic / Applicative helpers for Maybe & Either
+# Provides standard monadic operations enabling fluent chaining without
+# manually unpacking structures. Naming follows conventional FP libraries.
+# maybeBind     : Maybe a -> (a -> Maybe b) -> Maybe b
+# maybeReturn   : a -> Maybe a (alias: just)
+# maybeAp       : Maybe (a -> b) -> Maybe a -> Maybe b
+# eitherBind    : Either e a -> (a -> Either e b) -> Either e b
+# eitherReturn  : a -> Either e a (alias: right)
+# eitherAp      : Either e (a -> b) -> Either e a -> Either e b
+# NOTE: These reuse existing predicates (isNothing/isLeft etc.) and so do
+# not introduce new encodings.
+maybeBind    = λm f.if (isNothing m) nothing (f (fromJust m))
+maybeReturn  = just
+maybeAp      = λmf mx. if (isNothing mf) nothing (if (isNothing mx) nothing (just ((fromJust mf) (fromJust mx))))
+maybeMap2    = λf ma mb.maybeBind ma (λa.maybeBind mb (λb.maybeReturn (f a b)))  # binary lift example
+
+eitherBind   = λe f.if (isLeft e) e (f (fromRight e))
+eitherReturn = right
+eitherAp     = λef ex. if (isLeft ef) ef (if (isLeft ex) ex (right ((fromRight ef) (fromRight ex))))
+eitherMap    = λf e.if (isLeft e) e (right (f (fromRight e)))
+eitherMapLeft= λf e.if (isLeft e) (left (f (fromLeft e))) e
+eitherMap2   = λf ea eb.eitherBind ea (λa.eitherBind eb (λb.eitherReturn (f a b)))
+
+# Lightweight chaining helpers (point-free friendly)
+mbind = maybeBind
+ebind = eitherBind
+
+# -----------------------------------------------------------------------------
+# Roadmap Item 2: Show / pretty helpers to disambiguate common encodings.
+# Problem: Church encodings can make 0 / false / nil / nothing ambiguous when
+# printed raw. These helpers build tagged textual representations so users can
+# distinguish values during tracing / debugging without modifying the core
+# printer. Strings are ASCII lists (see Section 7); we construct only what we
+# need locally to stay lightweight. For larger usage consider centralizing
+# string literals later.
+
+# Basic string literals (ASCII lists)
+str_true    = cons 116 (cons 114 (cons 117 (cons 101 nil)))                # "true"
+str_false   = cons 102 (cons 97 (cons 108 (cons 115 (cons 101 nil))))       # "false"
+str_Just    = cons 74 (cons 117 (cons 115 (cons 116 (cons 32 nil))))        # "Just "
+str_Nothing = cons 78 (cons 111 (cons 116 (cons 104 (cons 105 (cons 110 (cons 103 nil))))))  # "Nothing"
+str_Left    = cons 76 (cons 101 (cons 102 (cons 116 (cons 32 nil))))        # "Left "
+str_Right   = cons 82 (cons 105 (cons 103 (cons 104 (cons 116 (cons 32 nil))))) # "Right "
+
+# showBool : Bool -> String
+showBool = λb.if b str_true str_false
+
+# showMaybe : (showA : A -> String) -> Maybe A -> String
+showMaybe = λshowA m.if (isNothing m) str_Nothing (append str_Just (showA (fromJust m)))
+
+# showEither : (showL : L -> String) -> (showR : R -> String) -> Either L R -> String
+showEither = λshowL showR e.if (isLeft e) (append str_Left (showL (fromLeft e))) (append str_Right (showR (fromRight e)))
+
+# Tagging helpers (non-string) for advanced patterning – wrap with a sum-like tag.
+# boolTag : Bool -> (Tag, Bool)   where Tag is distinguishing numeric 66 ('B').
+boolTag = λb.pair 66 b
+maybeTag = λm.pair 77 m   # 'M'
+eitherTag = λe.pair 69 e  # 'E'
+
+# -----------------------------------------------------------------------------
+# Roadmap Item 1: Lazy-safe tracing variants.
+# Original issue: native 'print' is strict in its argument, so embedding
+# tracing inside both branches of a conditional (especially under a Y-based
+# recursion) can cause unintended evaluation. We introduce thunk-based
+# variants that accept a delayed computation (created with 'delay') so users
+# can control when expensive expressions are forced.
+#
+# Usage:
+#   traceDelay "fib n" (delay (fib n))          # Forces only inside trace
+#   expr |> tapd "label"                        # Pipeline macro (delays expr)
+#   expr |> tapdv                                # Value-only delayed
+#
+# NOTE: These still ultimately force once for printing; but they prevent the
+# value from being evaluated prior to selecting a control-flow branch.
+traceDelay    = λlabel.λthunk.trace label (force thunk)
+traceDelayVal = λthunk.traceVal (force thunk)
+
+:macro (tapd $label $x) => (traceDelay $label (delay $x))
+:macro (tapdv $x) => (traceDelayVal (delay $x))
+
 
 # =============================================================================
 # SECTION 6: STATE AND I/O

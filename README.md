@@ -186,28 +186,32 @@ twice = λf x.f (f x)
 twice succ 3                       # 5
 twice (mult 2) 3                   # 12
 
-### Debug / IO Helpers: print / trace / tap
+### Debug / IO Helpers & Pretty/Show Utilities
 
 There are two layers of lightweight debugging helpers that preserve the original value so they compose inside pipelines without disturbing evaluation order.
 
 1. Core primitive: `print`
-2. Stdlib wrappers & macros: `trace`, `traceVal`, `traceSilent`, `tap`, `tapv`
+2. Stdlib wrappers & macros: `trace`, `traceVal`, `traceSilent`, `tap`, `tapv`, plus lazy-safe variants `traceDelay`, `traceDelayVal`, `tapd`, `tapdv`.
 
 `print` eagerly evaluates its argument (or labeled second argument), pretty prints it (respecting `:pretty`), logs a colored line beginning with `Print`, and returns the value unchanged. Label form: `print "label" expr`.
 
 Wrappers (lazy-safe instrumentation):
 
 ```lambda
-trace      = λlabel.λx.print label x      # labeled value, returns x
-traceVal   = λx.print x                   # value only, returns x
-traceSilent= λlabel.λx.x                 # no-op (keep shape for conditional insertion)
+trace        = λlabel.λx.print label x      # labeled value, returns x
+traceVal     = λx.print x                   # value only, returns x
+traceSilent  = λlabel.λx.x                  # no-op (keep shape for conditional insertion)
+traceDelay   = λlabel.λth.trace label (force th)      # delayed computation with label
+traceDelayVal= λth.traceVal (force th)                # delayed computation value-only
 ```
 
 Pipeline-oriented macros (expand at parse time):
 
 ```lambda
-expr |> tap  "lbl"   ==> trace "lbl" expr   # labeled
-expr |> tapv          ==> traceVal expr      # unlabeled
+expr |> tap   "lbl"  ==> trace "lbl" expr        # labeled
+expr |> tapv         ==> traceVal expr            # unlabeled
+expr |> tapd  "lbl"  ==> traceDelay "lbl" (delay expr)   # labeled, lazy-safe
+expr |> tapdv        ==> traceDelayVal (delay expr)       # unlabeled, lazy-safe
 ```
 
 Examples:
@@ -231,10 +235,44 @@ Choosing a helper:
 | `trace` | label + value | value | Inline debug w/ label context |
 | `traceVal` | value | value | Quick numeric / structural probe |
 | `traceSilent` | nothing | value | Toggle off traces without editing pipeline shape |
-| `tap` (macro) | label + value | value | Pipeline style (left-to-right) |
-| `tapv` (macro) | value | value | Pipeline style unlabeled |
+| `tap` (macro) | label + value | value | Pipeline style (eager) |
+| `tapv` (macro) | value | value | Pipeline style unlabeled (eager) |
+| `traceDelay` | label + value (forces thunk) | value | Delay expression until trace site (avoid premature forcing) |
+| `traceDelayVal` | value (forces thunk) | value | Lazy-safe value-only variant |
+| `tapd` (macro) | label + value | value | Pipeline macro building a delayed trace |
+| `tapdv` (macro) | value | value | Pipeline delayed value-only |
 
-Tip: Replace `tap` with `traceSilent` (via a macro edit) to disable a block of traces while keeping code alignment.
+Tip: Replace `tap` with `traceSilent` (via a macro edit) or swap `tap`→`tapd` to make instrumentation lazy-safe without changing shape. Use delayed forms inside both branches of a large recursive conditional to prevent unnecessary evaluation.
+
+### Show / Pretty Helper Additions
+
+To disambiguate Church encodings (`0` vs `false` vs `nil` / `nothing`) during debugging, the stdlib offers lightweight tagged renderers that produce ASCII lists (strings):
+
+| Helper | Input | Output Shape | Notes |
+|--------|-------|--------------|-------|
+| `showBool b` | Bool | `[116,114,117,101]` or `[102,97,108,115,101]` | Prints "true" / "false" |
+| `showMaybe showA m` | Maybe A | chars for "Nothing" or "Just " ++ showA x | Caller supplies element renderer |
+| `showEither showL showR e` | Either L R | "Left " ++ showL l OR "Right " ++ showR r | Disambiguates side |
+
+Head character ASCII codes (for simple structural tests): `true -> 116 (t)`, `false -> 102 (f)`, `Just -> 74 (J)`, `Nothing -> 78 (N)`, `Left -> 76 (L)`, `Right -> 82 (R)`.
+
+### Maybe / Either Monadic & Applicative Helpers
+
+New combinators standardize chaining patterns:
+
+| Type | Return | Helpers |
+|------|--------|---------|
+| Maybe | `nothing` / `just x` | `maybeBind`, `maybeReturn` (= `just`), `maybeAp`, `maybeMap2`, alias `mbind` |
+| Either | `left e` / `right x` | `eitherBind`, `eitherReturn` (= `right`), `eitherAp`, `eitherMap`, `eitherMapLeft`, `eitherMap2`, alias `ebind` |
+
+Examples:
+
+```lambda
+maybeBind (just 3) (λx.just (plus x 1))        # just 4
+eitherAp (right succ) (right 4)                # right 5
+maybeMap2 plus (just 2) (just 3)               # just 5
+eitherBind (left 1) (λx.right (plus x 1))      # left 1 (short-circuits)
+```
 
 ## Advanced Usage
 

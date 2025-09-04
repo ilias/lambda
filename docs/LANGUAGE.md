@@ -416,11 +416,15 @@ Two layers of lightweight instrumentation exist: the primitive `print` and stdli
 | Helper | Prints | Returns | Description |
 |--------|--------|---------|-------------|
 | `print expr` / `print "lbl" expr` | value (optional label) | value | Primitive debug print (eager) |
-| `trace "lbl" x` | label + value | x | Labeled trace wrapper |
-| `traceVal x` | value | x | Value‑only trace |
+| `trace "lbl" x` | label + value | x | Labeled trace wrapper (eager) |
+| `traceVal x` | value | x | Value‑only trace (eager) |
 | `traceSilent "lbl" x` | nothing | x | No‑op (placeholder) |
-| pipeline tap (expr then label) | label + value | expr | Macro expands to trace labeled form |
-| pipeline tapv (expr) | value | expr | Macro expands to traceVal form |
+| `traceDelay "lbl" (delay expr)` | label + value | value | Lazy-safe label variant (forces thunk inside) |
+| `traceDelayVal (delay expr)` | value | value | Lazy-safe value-only variant |
+| pipeline `tap` (expr then label) | label + value | expr | Macro → `trace` labeled (eager) |
+| pipeline `tapv` (expr) | value | expr | Macro → `traceVal` (eager) |
+| pipeline `tapd` (expr then label) | label + value | expr | Macro → `traceDelay` (lazy-safe) |
+| pipeline `tapdv` (expr) | value | expr | Macro → `traceDelayVal` (lazy-safe) |
 
 Semantics & behavior:
 
@@ -443,7 +447,37 @@ let x = 3 in x |> tap "x" |> square   # Print x 3 -> 9
 (traceSilent "off" (exp 2 5)) |> succ  # No output -> 33
 ```
 
-Disable pretty printing (`:pretty off`) to inspect raw lambda structures instead of canonical numerals/lists/booleans during tracing.
+Disable pretty printing (`:pretty off`) to inspect raw lambda structures instead of canonical numerals/lists/booleans during tracing. Prefer delayed variants when embedding traces in both branches of recursive conditionals to avoid forcing unused work.
+
+#### Show Helpers (Disambiguation)
+
+Because several Church encodings share numeric forms (e.g. `0` vs `false` vs `nil` vs `nothing`), the stdlib provides lightweight "show" helpers that build ASCII lists with tags:
+
+| Helper | Purpose |
+|--------|---------|
+| `showBool b` | Produces string "true"/"false" |
+| `showMaybe showA m` | "Nothing" or "Just " ++ showA x |
+| `showEither showL showR e` | "Left " ++ showL l OR "Right " ++ showR r |
+
+Testing trick: compare the head character code (e.g. 74 = 'J' for `Just`).
+
+#### Maybe / Either Monadic Helpers
+
+Chaining support mirrors common FP libraries:
+
+| Family | Core | Applicative | Extra |
+|--------|------|-------------|-------|
+| Maybe | `maybeBind` / alias `mbind` | `maybeAp` | `maybeMap2`, `maybeReturn` (= `just`) |
+| Either | `eitherBind` / alias `ebind` | `eitherAp` | `eitherMap`, `eitherMapLeft`, `eitherMap2`, `eitherReturn` (= `right`) |
+
+Example snippets:
+
+```lambda
+maybeBind (just 2) (λx.just (plus x 3))          # just 5
+eitherAp (right succ) (right 4)                  # right 5
+eitherBind (left "err") (λx.right (plus x 1))   # left "err"
+maybeMap2 plus (just 1) (just 2)                 # just 3
+```
 
 Performance note: printing very large Church lists or deep normalized expressions incurs traversal cost; keep such traces temporary.
 
