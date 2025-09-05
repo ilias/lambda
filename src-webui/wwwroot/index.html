@@ -34,11 +34,11 @@
       <textarea id="expr" rows="8" class="expr-area" placeholder=":help or succ 41 or let add = x,y -> x + y in add 2 3"></textarea>
   <div id="contHint" class="cont-hint" aria-live="polite">Continuation: line will join with next</div>
       <div class="actions">
-        <button id="runBtn">Evaluate</button>
-        <button class="secondary" id="clearBtn" type="button">Clear Output</button>
-  <button class="secondary" id="clearInputBtn" type="button">Clear Input</button>
-        <button class="secondary" id="streamToggle" type="button" data-on="0">Streaming: Off</button>
-        <button class="secondary" id="wsToggle" type="button" data-on="0">WS: Off</button>
+  <button id="runBtn" class="primary">Evaluate ▷</button>
+  <button class="destructive" id="clearBtn" type="button" title="Clear current output log">Clear Output</button>
+  <button class="secondary" id="clearInputBtn" type="button" title="Clear current input editor">Clear Input</button>
+  <button class="subtle" id="streamToggle" type="button" data-on="0" title="Toggle server streaming (SSE/WS)">Streaming: Off</button>
+  <button class="subtle" id="wsToggle" type="button" data-on="0" title="Switch between SSE and WebSocket">WS: Off</button>
       </div>
   <div class="small">Multiple expressions separated by semicolons are processed sequentially. Each line is evaluated independently.</div>
     </section>
@@ -46,8 +46,8 @@
       <label for="filePath">Load .lambda File</label>
       <div class="split">
         <input type="text" id="filePath" placeholder="path e.g. stdlib.lambda" />
-        <button id="loadBtn" type="button">Load</button>
-        <button id="localLoadBtn" type="button" class="secondary">Local...</button>
+  <button id="loadBtn" type="button" class="primary" title="Load file from server path">Load</button>
+  <button id="localLoadBtn" type="button" class="secondary" title="Load a local .lambda file">Local...</button>
   <input id="localFile" type="file" accept=".lambda,.txt" class="hidden" aria-label="Local lambda file" />
       </div>
       <div id="fileStatus" class="status mt-sm">Idle</div>
@@ -70,9 +70,9 @@
         </div>
         <div id="searchBox" class="search-box inline push-right">
           <input id="searchInput" type="text" placeholder="Search" class="search-input" />
-          <button class="secondary tiny" id="searchPrev" type="button">Prev</button>
-          <button class="secondary tiny" id="searchNext" type="button">Next</button>
-          <button class="secondary tiny" id="searchClear" type="button">Clear</button>
+          <button class="ghost tiny" id="searchPrev" type="button" title="Previous match">Prev</button>
+          <button class="ghost tiny" id="searchNext" type="button" title="Next match">Next</button>
+          <button class="ghost tiny" id="searchClear" type="button" title="Clear search">Clear</button>
         </div>
       </div>
       <div id="filters"></div>
@@ -80,7 +80,7 @@
     </section>
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
-  <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev" type="button" class="secondary">Prev</button> <button id="sfNext" type="button" class="secondary">Next</button> <button id="sfClear" type="button" class="secondary" title="Clear (Esc)">✕</button></div>
+  <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev" type="button" class="ghost">Prev</button> <button id="sfNext" type="button" class="ghost">Next</button> <button id="sfClear" type="button" class="ghost" title="Clear (Esc)">✕</button></div>
   <!-- Scroll navigation links -->
   <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom" class="secondary">▼</button>
   <button id="scrollTopBtn" type="button" title="Go to top" aria-label="Scroll to top" class="secondary">▲</button>
