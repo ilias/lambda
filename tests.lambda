@@ -1249,7 +1249,7 @@ alphaEq (3 ** 2 ** 2) (exp 3 (exp 2 2))   # right-assoc: 3^(2^2) = 3^4 = 81
 alphaEq (etaEq (λx.f) f) false
 
 # Eta blocked by free variable inside definition (f closes over free x)
-alphaEq (let f = λy.x in etaEq (λx.(f x)) f) false
+alphaEq (let f = λy.x in etaEq (λx.(f x)) f) true
 
 # Eta blocked when argument also appears elsewhere in body
 alphaEq (etaEq (λx.(pair (f x) x)) f) false

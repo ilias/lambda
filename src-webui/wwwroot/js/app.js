@@ -275,6 +275,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const logBuffer = []; // elements waiting to flush
   let flushScheduled = false;
   const MAX_BATCH = 120; // flush sooner if many lines
+  // Segment tracking between 'line <num>: <<:' markers
+  let currentSegmentId = 0;
+  const segmentMeta = new Map(); // id -> { failed:boolean }
+  function startNewSegment(){ currentSegmentId++; segmentMeta.set(currentSegmentId, { failed:false }); }
   function flushLogs(){
     flushScheduled = false;
     if(!logBuffer.length) return;
@@ -301,11 +305,14 @@ window.addEventListener('DOMContentLoaded', () => {
     const outEl = currentOutEl(); if(!outEl) return;
     const decoded = decodeUnicodeEscapes(text);
     const cls = classify(decoded);
+    const isMarker = /^line\s+\d+\s*/i.test(decoded) && decoded.includes('<<:');
+  if(isMarker){ startNewSegment(); }
     if(decoded.startsWith('Test:') && (/(?:\bpassed\b|\bfailed\b)/.test(decoded))){
       testStats.total++;
       if(/\bpassed\b/.test(decoded)) testStats.passed++;
       updateTestIndicator();
     }
+    if(cls === 'log-alpha-fail' && currentSegmentId){ const meta = segmentMeta.get(currentSegmentId); if(meta) meta.failed = true; }
     if(!decoded.trimStart().startsWith('#') && decoded.includes('#')){
       const hashIdx = decoded.indexOf('#');
       if(hashIdx > 0){
@@ -316,12 +323,13 @@ window.addEventListener('DOMContentLoaded', () => {
         const commentSpan = document.createElement('span'); commentSpan.className = 'log-comment'; commentSpan.textContent = comment;
         container.appendChild(beforeNode); container.appendChild(commentSpan); container.appendChild(document.createTextNode('\n'));
         if(isFilteredSpan(container)) container.classList.add('hidden-log');
+        if(currentSegmentId) container.dataset.segment = currentSegmentId;
         logBuffer.push(container);
       } else {
-        logBuffer.push(makeSpanLine(decoded, cls));
+        const el = makeSpanLine(decoded, cls); if(currentSegmentId) el.dataset.segment = currentSegmentId; else el.dataset.segment = '0'; logBuffer.push(el);
       }
     } else {
-      logBuffer.push(makeSpanLine(decoded, cls));
+      const el = makeSpanLine(decoded, cls); if(currentSegmentId) el.dataset.segment = currentSegmentId; else el.dataset.segment = '0'; logBuffer.push(el);
     }
     if(logBuffer.length >= MAX_BATCH) flushLogs(); else scheduleFlush();
   }
@@ -506,12 +514,34 @@ window.addEventListener('DOMContentLoaded', () => {
     {label:'Processing', classes:['log-processing']}
   ];
   let disabledGroups = new Set();
+  let showOnlyFailedSegments = false; // 'Failed' filter toggle
   function isFilteredSpan(el){
     for(const g of FILTER_CONFIG){ if(disabledGroups.has(g.label)){ for(const cls of g.classes){ if(el.classList.contains(cls)) return true; } } }
     return false;
   }
-  function renderFilters(){ const host=document.getElementById('filters'); if(!host) return; host.innerHTML=''; FILTER_CONFIG.forEach(g=>{ const id='f_'+g.label.toLowerCase(); const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=!disabledGroups.has(g.label); cb.addEventListener('change',()=>{ if(cb.checked) disabledGroups.delete(g.label); else disabledGroups.add(g.label); applyLineFilters(); }); lab.appendChild(cb); lab.appendChild(document.createTextNode(g.label)); host.appendChild(lab); }); }
-  function applyLineFilters(){ const outEl = currentOutEl(); if(!outEl) return; outEl.querySelectorAll('span').forEach(s=>{ if(isFilteredSpan(s)) s.classList.add('hidden-log'); else s.classList.remove('hidden-log'); }); }
+  function renderFilters(){
+    const host=document.getElementById('filters'); if(!host) return; host.innerHTML='';
+    FILTER_CONFIG.forEach(g=>{ const id='f_'+g.label.toLowerCase(); const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.id=id; cb.checked=!disabledGroups.has(g.label); cb.addEventListener('change',()=>{ if(cb.checked) disabledGroups.delete(g.label); else disabledGroups.add(g.label); applyLineFilters(); }); lab.appendChild(cb); lab.appendChild(document.createTextNode(g.label)); host.appendChild(lab); });
+    // Append 'Failed' filter
+    const failedLab = document.createElement('label');
+    const failedCb = document.createElement('input'); failedCb.type='checkbox'; failedCb.id='f_failed'; failedCb.checked=false;
+    failedCb.addEventListener('change',()=>{ showOnlyFailedSegments = failedCb.checked; applyLineFilters(); });
+    failedLab.appendChild(failedCb); failedLab.appendChild(document.createTextNode('Failed'));
+    host.appendChild(failedLab);
+  }
+  function applyLineFilters(){
+    const outEl = currentOutEl(); if(!outEl) return;
+    outEl.querySelectorAll('span').forEach(s=>{
+      let hide = isFilteredSpan(s);
+      if(showOnlyFailedSegments){
+        const segId = s.dataset.segment ? parseInt(s.dataset.segment,10) : null;
+        const meta = segId ? segmentMeta.get(segId) : null;
+        // Only show spans that belong to a segment with a failure
+        if(!meta || !meta.failed){ hide = true; }
+      }
+      if(hide) s.classList.add('hidden-log'); else s.classList.remove('hidden-log');
+    });
+  }
   renderFilters();
 
   // History
