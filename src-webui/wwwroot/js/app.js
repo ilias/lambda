@@ -2,16 +2,19 @@
 // Organized in sections; future refactors can split into multiple modules.
 
 (function(){
-  // ---- Cache busting & cache clearing ----
-  try {
-    if('serviceWorker' in navigator){
-      navigator.serviceWorker.getRegistrations().then(rs=> rs.forEach(r=> r.unregister().catch(()=>{}))).catch(()=>{});
-    }
-    if('caches' in window){
-      caches.keys().then(keys=> keys.forEach(k=> caches.delete(k).catch(()=>{}))).catch(()=>{});
-    }
-  } catch {}
+  // ---- Cache busting helper ----
   window.__cacheBust = function(u){ try { const t = Date.now().toString(36)+Math.random().toString(36).slice(2); return u + (u.includes('?')?'&':'?') + '_='+ t; } catch { return u; } };
+
+  // ---- Optional Service Worker registration (static asset caching only) ----
+  const SW_ENABLED = true; // flip to false for debugging if needed
+  if(SW_ENABLED && 'serviceWorker' in navigator){
+    // Defer registration a tick so first paint isn't delayed
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.getRegistration('sw.js').then(reg=>{
+        if(!reg){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+      }).catch(()=>{});
+    });
+  }
 })();
 
 // ---- Central fetch helper with timeout & unified error handling ----
@@ -268,6 +271,32 @@ window.addEventListener('DOMContentLoaded', () => {
     if(!str || str.indexOf('\\u') === -1) return str;
     return str.replace(/\\u([0-9a-fA-F]{4})/g, (m, hex)=>{ try { return String.fromCharCode(parseInt(hex,16)); } catch { return m; } });
   }
+  // ---- Batched log appending (DOM batching for performance) ----
+  const logBuffer = []; // elements waiting to flush
+  let flushScheduled = false;
+  const MAX_BATCH = 120; // flush sooner if many lines
+  function flushLogs(){
+    flushScheduled = false;
+    if(!logBuffer.length) return;
+    const outEl = currentOutEl(); if(!outEl){ logBuffer.length=0; return; }
+    const frag = document.createDocumentFragment();
+    for(const el of logBuffer){ frag.appendChild(el); }
+    logBuffer.length = 0;
+    outEl.appendChild(frag);
+    // Trim if exceeding max
+    if(outEl.childNodes.length > maxLogLines){ while(outEl.childNodes.length > maxLogLines){ outEl.removeChild(outEl.firstChild); } }
+    outEl.scrollTop = outEl.scrollHeight;
+  }
+  function scheduleFlush(){
+    if(!flushScheduled){ flushScheduled = true; requestAnimationFrame(flushLogs); }
+  }
+  function makeSpanLine(decoded, cls){
+    const span = document.createElement('span');
+    if(cls) span.className = cls;
+    span.textContent = decoded + '\n';
+    if(isFilteredSpan(span)) span.classList.add('hidden-log');
+    return span;
+  }
   function append(text){
     const outEl = currentOutEl(); if(!outEl) return;
     const decoded = decodeUnicodeEscapes(text);
@@ -282,23 +311,19 @@ window.addEventListener('DOMContentLoaded', () => {
       if(hashIdx > 0){
         const before = decoded.slice(0, hashIdx).replace(/\s+$/,'');
         const comment = decoded.slice(hashIdx);
-        const container = document.createElement('span');
-        if(cls) container.className = cls;
+        const container = document.createElement('span'); if(cls) container.className = cls;
         const beforeNode = document.createTextNode(before + ' ');
-        const commentSpan = document.createElement('span');
-        commentSpan.className = 'log-comment';
-        commentSpan.textContent = comment;
+        const commentSpan = document.createElement('span'); commentSpan.className = 'log-comment'; commentSpan.textContent = comment;
         container.appendChild(beforeNode); container.appendChild(commentSpan); container.appendChild(document.createTextNode('\n'));
         if(isFilteredSpan(container)) container.classList.add('hidden-log');
-        outEl.appendChild(container);
+        logBuffer.push(container);
       } else {
-        const span = document.createElement('span'); if(cls) span.className = cls; span.textContent = decoded + '\n'; if(isFilteredSpan(span)) span.classList.add('hidden-log'); outEl.appendChild(span);
+        logBuffer.push(makeSpanLine(decoded, cls));
       }
     } else {
-      const span = document.createElement('span'); if(cls) span.className = cls; span.textContent = decoded + '\n'; if(isFilteredSpan(span)) span.classList.add('hidden-log'); outEl.appendChild(span);
+      logBuffer.push(makeSpanLine(decoded, cls));
     }
-    if(outEl.childNodes.length > maxLogLines){ while(outEl.childNodes.length > maxLogLines){ outEl.removeChild(outEl.firstChild); } }
-    outEl.scrollTop = outEl.scrollHeight;
+    if(logBuffer.length >= MAX_BATCH) flushLogs(); else scheduleFlush();
   }
   function appendUserInputLine(raw){
     const outEl = currentOutEl(); if(!outEl) return;
@@ -311,9 +336,8 @@ window.addEventListener('DOMContentLoaded', () => {
       container.textContent = '> ' + before + ' ';
       const commentSpan = document.createElement('span'); commentSpan.className='log-comment'; commentSpan.textContent = comment; container.appendChild(commentSpan); container.appendChild(document.createTextNode('\n'));
     } else { container.textContent = '> ' + raw + '\n'; }
-    outEl.appendChild(container);
-    if(outEl.childNodes.length > maxLogLines){ while(outEl.childNodes.length > maxLogLines){ outEl.removeChild(outEl.firstChild); } }
-    outEl.scrollTop = outEl.scrollHeight;
+    logBuffer.push(container);
+    if(logBuffer.length >= MAX_BATCH) flushLogs(); else scheduleFlush();
   }
 
   // Scroll nav
@@ -364,6 +388,19 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Evaluation
+  // ---- Performance metrics (latency) ----
+  const perfStatsEl = document.getElementById('perfStats');
+  let evalDurations = []; // recent durations
+  function recordEvalDuration(ms){
+    if(!isFinite(ms)) return;
+    evalDurations.push(ms);
+    if(evalDurations.length > 200) evalDurations.splice(0, evalDurations.length-200);
+    const sorted = [...evalDurations].sort((a,b)=>a-b);
+    const median = sorted[Math.floor(sorted.length/2)] || 0;
+    const last = evalDurations[evalDurations.length-1] || 0;
+    if(perfStatsEl){ perfStatsEl.textContent = `Latency ms (last/med): ${last.toFixed(1)} / ${median.toFixed(1)}`; }
+  }
+
   async function doEval(){
     const rawLines = exprEl.value.split(/\r?\n/);
     const merged = []; let buffer = '';
@@ -379,7 +416,10 @@ window.addEventListener('DOMContentLoaded', () => {
     runBtn.disabled = true;
     try {
       for(const raw of lines) {
+        performance.mark('eval-start');
         const res = await evalExpr(raw);
+        performance.mark('eval-end');
+        try { performance.measure('eval','eval-start','eval-end'); const entries = performance.getEntriesByName('eval'); const recent = entries[entries.length-1]; if(recent) recordEvalDuration(recent.duration); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); if(entries.length>50) performance.clearMeasures('eval'); } catch{}
         appendUserInputLine(raw);
         if(!streaming){
           if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
@@ -503,7 +543,10 @@ window.addEventListener('DOMContentLoaded', () => {
       for(let i=0;i<toEval.length;i++){
         const expr = toEval[i];
         try {
+          performance.mark('eval-start');
           const res = await evalExpr(expr);
+            performance.mark('eval-end');
+            try { performance.measure('eval','eval-start','eval-end'); const entries = performance.getEntriesByName('eval'); const recent = entries[entries.length-1]; if(recent) recordEvalDuration(recent.duration); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); if(entries.length>50) performance.clearMeasures('eval'); } catch{}
           appendUserInputLine(expr);
           if(!streaming){
             if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));

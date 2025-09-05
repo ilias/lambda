@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <title>Lambda Calculus Interpreter UI</title>
@@ -10,6 +11,7 @@
   <meta http-equiv="Expires" content="0" />
   <link rel="stylesheet" href="app.css" />
 </head>
+
 <body>
   <header class="site-header">
     <h1 class="site-title">Lambda Calculus Interpreter</h1>
@@ -31,43 +33,56 @@
       </div>
       <div id="inputEditors"></div>
       <!-- Initial textarea will be transformed into first tab by script (kept for noscript fallback) -->
-      <textarea id="expr" rows="8" class="expr-area" placeholder=":help or succ 41 or let add = x,y -> x + y in add 2 3"></textarea>
-  <div id="contHint" class="cont-hint" aria-live="polite">Continuation: line will join with next</div>
+      <textarea id="expr" rows="8" class="expr-area"
+        placeholder=":help or succ 41 or let add = x,y -> x + y in add 2 3"></textarea>
+      <div id="contHint" class="cont-hint" aria-live="polite">Continuation: line will join with next</div>
       <div class="actions">
-  <button id="runBtn" class="primary">Evaluate ▷</button>
-  <button class="destructive" id="clearBtn" type="button" title="Clear current output log">Clear Output</button>
-  <button class="secondary" id="clearInputBtn" type="button" title="Clear current input editor">Clear Input</button>
-  <button class="subtle" id="streamToggle" type="button" data-on="0" title="Toggle server streaming (SSE/WS)">Streaming: Off</button>
-  <button class="subtle" id="wsToggle" type="button" data-on="0" title="Switch between SSE and WebSocket">WS: Off</button>
+        <button id="runBtn" class="primary">Evaluate ▷</button>
+        <button class="destructive" id="clearBtn" type="button" title="Clear current output log">Clear Output</button>
+        <button class="secondary" id="clearInputBtn" type="button" title="Clear current input editor">Clear
+          Input</button>
+        <button class="subtle" id="streamToggle" type="button" data-on="0"
+          title="Toggle server streaming (SSE/WS)">Streaming: Off</button>
+        <button class="subtle" id="wsToggle" type="button" data-on="0" title="Switch between SSE and WebSocket">WS:
+          Off</button>
       </div>
-  <div class="small">Multiple expressions separated by semicolons are processed sequentially. Each line is evaluated independently.</div>
+      <div class="small">Multiple expressions separated by semicolons are processed sequentially. Each line is evaluated
+        independently.</div>
     </section>
     <section>
       <label for="filePath">Load .lambda File</label>
       <div class="split">
         <input type="text" id="filePath" placeholder="path e.g. stdlib.lambda" />
-  <button id="loadBtn" type="button" class="primary" title="Load file from server path">Load</button>
-  <button id="localLoadBtn" type="button" class="secondary" title="Load a local .lambda file">Local...</button>
-  <input id="localFile" type="file" accept=".lambda,.txt" class="hidden" aria-label="Local lambda file" />
+        <button id="loadBtn" type="button" class="primary" title="Load file from server path">Load</button>
+        <button id="localLoadBtn" type="button" class="secondary" title="Load a local .lambda file">Local...</button>
+        <input id="localFile" type="file" accept=".lambda,.txt" class="hidden" aria-label="Local lambda file" />
       </div>
       <div id="fileStatus" class="status mt-sm">Idle</div>
-      <div id="fileProgress" class="progress"><div id="fileProgressBar" class="progress-bar"></div>
+      <div id="fileProgress" class="progress">
+        <div id="fileProgressBar" class="progress-bar"></div>
       </div>
       <hr class="rule" />
       <h3 class="mt0">Quick Examples</h3>
       <ul class="examples-list">
-        <li>succ 5</li><li>let inc = x -> succ x in inc 41</li><li>[1,2,3]</li><li>let rec fact = n -> if (iszero n) 1 (mult n (fact (pred n))) in fact 5</li>
+        <li>succ 5</li>
+        <li>let inc = x -> succ x in inc 41</li>
+        <li>[1,2,3]</li>
+        <li>let rec fact = n -> if (iszero n) 1 (mult n (fact (pred n))) in fact 5</li>
       </ul>
     </section>
     <section class="full-span" aria-label="Result Log">
       <div class="bar bar-results">
         <label for="output" class="label-small mt-aligned">Result / Log</label>
         <div id="outputTabs" class="inline-tabs"></div>
-         <div id="testIndicator" class="inline small" role="status" aria-live="polite" aria-atomic="true">Tests: 0/0 (0%)</div>
         <div class="inline small max-lines-wrap">
           <label for="maxLinesInput">Max Lines</label>
-          <input id="maxLinesInput" type="number" min="100" max="200000" step="100" value="4000" title="Maximum lines retained per log tab" />
+          <input id="maxLinesInput" type="number" min="100" max="200000" step="100" value="4000"
+            title="Maximum lines retained per log tab" />
         </div>
+        <div id="testIndicator" class="inline small" role="status" aria-live="polite" aria-atomic="true">Tests: 0/0 (0%)
+        </div>
+        <div id="perfStats" class="inline small" title="Recent evaluation latencies (last / median)">Latency ms
+          (last/med): - / -</div>
         <div id="searchBox" class="search-box inline push-right">
           <input id="searchInput" type="text" placeholder="Search" class="search-input" />
           <button class="ghost tiny" id="searchPrev" type="button" title="Previous match">Prev</button>
@@ -80,10 +95,14 @@
     </section>
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
-  <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev" type="button" class="ghost">Prev</button> <button id="sfNext" type="button" class="ghost">Next</button> <button id="sfClear" type="button" class="ghost" title="Clear (Esc)">✕</button></div>
+  <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev"
+      type="button" class="ghost">Prev</button> <button id="sfNext" type="button" class="ghost">Next</button> <button
+      id="sfClear" type="button" class="ghost" title="Clear (Esc)">✕</button></div>
   <!-- Scroll navigation links -->
-  <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom" class="secondary">▼</button>
+  <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom"
+    class="secondary">▼</button>
   <button id="scrollTopBtn" type="button" title="Go to top" aria-label="Scroll to top" class="secondary">▲</button>
   <script defer src="js/app.js"></script>
 </body>
+
 </html>
