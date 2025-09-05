@@ -34,6 +34,20 @@ services.AddSingleton<Interpreter>(_ =>
 });
 
 var app = builder.Build();
+// --- Security Headers (CSP) --------------------------------------------------
+// We remove all inline <script> / <style> blocks in index.html so we can enforce
+// a reasonably strict Content-Security-Policy without using 'unsafe-inline'.
+// If you later introduce inline styles/scripts, adjust CSP accordingly.
+app.Use(async (ctx, next) =>
+{
+    const string csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
+    if (!ctx.Response.Headers.ContainsKey("Content-Security-Policy"))
+    {
+        ctx.Response.Headers["Content-Security-Policy"] = csp;
+    }
+    await next();
+});
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseWebSockets();
