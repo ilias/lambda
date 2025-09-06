@@ -730,7 +730,8 @@ times    = λn.λf.λx.n f x
 curry    = λf x y.f (pair x y)
 uncurry  = λf p.f (first p) (second p)
 partial  = λf.λx.λy.f x y   # Creates a unary function awaiting final arg when called as (partial f a)
-partial2 = λf.λx.λy.λz.f x y z  # Fix first two args when used as (partial2 f a b)
+# Accumulating variant so ((partial2 plus 2 3) 4) = plus (plus 2 3) 4 = 9
+partial2 = λf.λx.λy.λz.f (f x y) z  # Fix first two args then combine third
 # 3-arity curry helpers used in tests
 curry3   = λf x y z.f (pair x (pair y z))
 uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
@@ -870,7 +871,8 @@ just      = λx.pair true x
 # New encoding: apply the structure to a two-arg function that always returns false; for lists
 # this function is ignored by `nil` which returns the second argument (true). For a pair it
 # is invoked, reducing to false.
-isNothing = λm.m (λx.λy.false) true
+# Improved Maybe predicate: list nil => true; just pair => not (first m is presence flag)
+isNothing = λm.if (isnil m) true (not (first m))
 isJust    = λm.not (isNothing m)
 fromJust  = second
 maybe     = λdef f m.if (isNothing m) def (f (fromJust m))

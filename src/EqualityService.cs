@@ -39,6 +39,8 @@ internal sealed class EqualityService
         var right = _interp.EvaluateCEK(args[1], env);
     left = ForceFully(left);
     right = ForceFully(right);
+    left = UnwrapDelayLike(left);
+    right = UnwrapDelayLike(right);
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
     var equal = Expr.AlphaEquivalent(nL, nR);
@@ -197,5 +199,25 @@ internal sealed class EqualityService
             cur = _interp.Force(cur);
         }
         return cur;
+    }
+
+    private Expr UnwrapDelayLike(Expr e)
+    {
+        int depth = 0;
+        var current = e;
+        while (depth++ < 32 &&
+               current.Type == ExprType.Abs &&
+               current.AbsBody is not null &&
+               current.AbsBody.Type == ExprType.App &&
+               current.AbsBody.AppLeft is not null &&
+               current.AbsBody.AppLeft.Type == ExprType.Var &&
+               current.AbsVarName == current.AbsBody.AppLeft.VarName &&
+               current.AbsBody.AppRight is not null &&
+               current.AbsVarName is not null &&
+               !_interp.FreeVars(current.AbsBody.AppRight).Contains(current.AbsVarName))
+        {
+            current = current.AbsBody.AppRight;
+        }
+        return current;
     }
 }
