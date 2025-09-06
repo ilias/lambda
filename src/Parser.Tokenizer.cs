@@ -92,7 +92,33 @@ internal sealed class Tokenizer
                 Flush(); result.Add(token);
             }
         }
-        FlushFinal(); return result;
+        FlushFinal();
+
+        // Merge consecutive + + and - - into single Term tokens ++ / -- so they can act as prefix/postfix functions.
+        for (int k = 0; k < result.Count - 1; k++)
+        {
+            if (result[k].Type == TokenType.InfixOp && result[k+1].Type == TokenType.InfixOp)
+            {
+                var a = result[k].Value; var b = result[k+1].Value;
+                if (a == "+" && b == "+")
+                {
+                    var mergedPos = result[k].Position;
+                    result[k] = new Token(TokenType.Term, mergedPos, "++");
+                    result.RemoveAt(k+1);
+                    k--; if (k < -1) k = -1; // re-evaluate previous context
+                    continue;
+                }
+                if (a == "-" && b == "-")
+                {
+                    var mergedPos = result[k].Position;
+                    result[k] = new Token(TokenType.Term, mergedPos, "--");
+                    result.RemoveAt(k+1);
+                    k--; if (k < -1) k = -1;
+                    continue;
+                }
+            }
+        }
+        return result;
 
         void Flush()
         {

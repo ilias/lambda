@@ -72,7 +72,7 @@ public partial class Parser
         {
             left = ParseLetExpr(tokens, ref pos, end); // pos advanced
         }
-        else if (IsArrowParamListAhead(tokens, pos, end))
+    else if (IsArrowParamListAheadStrict(tokens, pos, end))
         {
             // arrow param list (possibly parenthesized)
             int paramStart = pos;
@@ -140,8 +140,34 @@ public partial class Parser
         var exprs = new List<Expr> { ParsePrimary(tokens, ref pos, end) };
         while (pos <= end && IsPrimaryStart(tokens[pos].Type))
             exprs.Add(ParsePrimary(tokens, ref pos, end));
+
+        // Lightweight syntactic sugar for ++ / -- both prefix and postfix if they appear
+        // Patterns:
+        //   ++ x   =>  succ x
+        //   -- x   =>  pred x
+        //   x ++   =>  succ x
+        //   x --   =>  pred x
+        // Only applied when exprs.Count == 2 to avoid interfering with longer chains.
+        if (exprs.Count == 2)
+        {
+            bool firstIsOp = IsIncDecVar(exprs[0]);
+            bool secondIsOp = IsIncDecVar(exprs[1]);
+            if (firstIsOp && !secondIsOp)
+            {
+                var opName = exprs[0].VarName!;
+                return Expr.App(Expr.Var(MapIncDec(opName)), exprs[1]);
+            }
+            if (!firstIsOp && secondIsOp)
+            {
+                var opName = exprs[1].VarName!;
+                return Expr.App(Expr.Var(MapIncDec(opName)), exprs[0]);
+            }
+        }
         return BuildApplicationChain(exprs);
     }
+
+    private static bool IsIncDecVar(Expr e) => e is { Type: ExprType.Var } ve && (ve.VarName == "++" || ve.VarName == "--");
+    private static string MapIncDec(string name) => name == "++" ? "succ" : name == "--" ? "pred" : name;
 
     // Parse a single atomic / primary expression
     private Expr ParsePrimary(List<Token> tokens, ref int pos, int end)
@@ -166,45 +192,35 @@ public partial class Parser
     private static bool IsPrimaryStart(TokenType t)
         => t is TokenType.LParen or TokenType.LBracket or TokenType.Lambda or TokenType.Term or TokenType.Integer or TokenType.Y or TokenType.Let;
 
-    private static bool IsArrowParamListAhead(List<Token> tokens, int pos, int end)
+    private static bool IsArrowParamListAheadStrict(List<Token> tokens, int pos, int end)
     {
         if (pos > end) return false;
-        // Parenthesized form: (x, y) ->
+        // We only treat it as an arrow parameter list if an actual Arrow token appears before any non comma/non term/non paren token.
+        // Exclude symbolic names like ++ / -- from being considered parameter identifiers.
+        if (tokens[pos].Type == TokenType.Term && (tokens[pos].Value is "++" or "--")) return false;
         if (tokens[pos].Type == TokenType.LParen)
         {
-            int i = pos + 1;
-            bool any = false;
+            int i = pos + 1; bool sawName = false;
             while (i <= end && tokens[i].Type == TokenType.Term)
             {
-                any = true;
-                i++;
-                if (i <= end && tokens[i].Type == TokenType.Comma)
-                {
-                    i++;
-                    continue;
-                }
+                if (tokens[i].Value is "++" or "--") return false; // disallow symbolic tokens inside param list context
+                sawName = true; i++;
+                if (i <= end && tokens[i].Type == TokenType.Comma) { i++; continue; }
                 break;
             }
-            if (!any) return false;
-            if (i > end || tokens[i].Type != TokenType.RParen) return false;
-            i++;
+            if (!sawName) return false;
+            if (i > end || tokens[i].Type != TokenType.RParen) return false; i++;
             return i <= end && tokens[i].Type == TokenType.Arrow;
         }
-        // Bare form: x, y ->
-        int j = pos;
-        bool anyBare = false;
+        int j = pos; bool sawAny = false;
         while (j <= end && tokens[j].Type == TokenType.Term)
         {
-            anyBare = true;
-            j++;
-            if (j <= end && tokens[j].Type == TokenType.Comma)
-            {
-                j++;
-                continue;
-            }
+            if (tokens[j].Value is "++" or "--") return false;
+            sawAny = true; j++;
+            if (j <= end && tokens[j].Type == TokenType.Comma) { j++; continue; }
             break;
         }
-        if (!anyBare) return false;
+        if (!sawAny) return false;
         return j <= end && tokens[j].Type == TokenType.Arrow;
     }
 

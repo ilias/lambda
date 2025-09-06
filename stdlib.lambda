@@ -150,6 +150,8 @@ mult     = λm n f.m (n f)
 exp      = Y (λf. λb n. if (iszero n) 1 (mult b (f b (pred n))))
 pow      = exp
 iszero   = λn.n (λx.false) true
+++       = x -> succ x # Alias for succ
+--       = x -> pred x # Alias for pred
 
 # -----------------------------------------------------------------------------
 # 2.2. Division and Modulo
@@ -1842,6 +1844,7 @@ clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
 
 # --- Recursive examples using Y-combinator and infix operators (less efficient) ---
 fibY       = Y (\f. \n. if (n <= 2) 1 ((f (n - 1)) + (f (n - 2))))
+fY         = Y (\f. \n. if (n <= 2) 1 ((n -- |> f) + (n -- |> -- |> f )))
 factY      = Y (\f. \n. if (n == 0) 1 (n * (f (n - 1))))
 sumUptoY   = Y (\f. \n. if (n == 0) 0 (n + (f (n - 1))))
 expY       = Y (\f. \b n. if (n == 0) 1 (b * (f b (n - 1))))

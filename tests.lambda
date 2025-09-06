@@ -198,6 +198,18 @@ alphaEq (4 >= 4) true
 
 # --- Maybe/Optional Type ---
 alphaEq (just 42) (just 42)
+ 
+# --- Increment / Decrement Sugar ---
+# Ensure prefix and postfix ++ / -- behave as succ / pred
+alphaEq (++ 0) 1
+alphaEq (0 ++) 1
+alphaEq (++ 1) 2
+alphaEq (1 ++) 2
+alphaEq (-- 2) 1
+alphaEq (2 --) 1
+alphaEq (-- (succ 2)) 2  # (-- 3) == 2
+alphaEq ((succ 2) --) 2  # (3 --) == 2
+
 alphaEq nothing nil
 alphaEq (isJust (just 1)) true
 alphaEq (isNothing (just 1)) false

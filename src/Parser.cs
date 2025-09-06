@@ -108,6 +108,11 @@ public partial class Parser
         "in" => TokenType.In,
         "rec" => TokenType.Rec,
         ":macro" => TokenType.Macro,
+    // Explicitly treat common shorthand increment/decrement tokens as function identifiers.
+    // They are not special forms here; users can bind them, e.g.  ++ = x -> succ x
+    // or rely on existing succ/pred by alias: ++ = succ; -- = pred
+    "++" => TokenType.Term,
+    "--" => TokenType.Term,
         _ when term != null && IsInfixOperator(term) => TokenType.InfixOp,
         _ => TokenType.Term
     };
