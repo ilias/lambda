@@ -159,6 +159,20 @@ body[data-theme='dark'] .search-current { box-shadow:0 0 0 2px rgba(88,166,255,.
 body[data-theme='light'] .search-hit { background:#ffe8a3; }
 body[data-theme='light'] .search-current { outline:2px solid var(--accent); background:var(--accent); color:#fff !important; }
 
+/* Inline eval spinner */
+.inline-spinner { width:12px; height:12px; border:2px solid var(--color-border); border-top-color:var(--color-accent); border-radius:50%; animation:spin .65s linear infinite; display:inline-block; vertical-align:middle; margin-right:.4rem; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Test summary panel */
+
+/* Search toggles */
+.search-toggle { font-size:.45rem; letter-spacing:.08em; text-transform:uppercase; display:inline-flex; gap:.25rem; align-items:center; opacity:.75; cursor:pointer; }
+.search-toggle input { margin:0; }
+.search-toggle:hover { opacity:1; }
+
+/* Filtered-out (search Only mode) visual dim (still hidden via JS if needed) */
+.search-filter-hidden { display:none !important; }
+
 /* Layout */
 .site-header { padding:var(--space-5) var(--space-6); background:var(--color-surface-1); border-bottom:1px solid var(--color-border); display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); flex-wrap:wrap; box-shadow:var(--elevation-1); }
 .site-title { margin:0; font-size:var(--font-size-xl); font-weight:600; letter-spacing:.02em; }

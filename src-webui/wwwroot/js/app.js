@@ -455,11 +455,21 @@ window.addEventListener('DOMContentLoaded', () => {
     runBtn.disabled = true;
     try {
       for(const raw of lines) {
+        // Inline spinner line (placeholder) inserted before evaluation logs
+        const outEl = currentOutEl();
+        let spinEl = null;
+        if(outEl){
+          spinEl = document.createElement('span');
+          spinEl.className='log-processing';
+          spinEl.innerHTML = '<span class="inline-spinner" aria-hidden="true"></span>Evaluating: '+ raw + '\n';
+          outEl.appendChild(spinEl); outEl.scrollTop = outEl.scrollHeight;
+        }
         performance.mark('eval-start');
         const res = await evalExpr(raw);
         performance.mark('eval-end');
         try { performance.measure('eval','eval-start','eval-end'); const entries = performance.getEntriesByName('eval'); const recent = entries[entries.length-1]; if(recent) recordEvalDuration(recent.duration); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); if(entries.length>50) performance.clearMeasures('eval'); } catch{}
-        appendUserInputLine(raw);
+  if(spinEl){ spinEl.remove(); }
+  appendUserInputLine(raw);
         if(!streaming){
           if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
           const primary = res.output || res.normalized || '(no output)';
@@ -496,11 +506,22 @@ window.addEventListener('DOMContentLoaded', () => {
   function clearSearch(){ searchHits.forEach(el=> el.classList.remove('search-hit','search-current')); searchHits=[]; searchIndex=-1; updateSearchFloat(); }
   function performSearch(){
     clearSearch();
-    const term = searchInput.value.trim(); if(!term){ updateSearchFloat(); return; }
-    let rx; try { rx = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'); } catch { return; }
-    const outEl = currentOutEl(); if(outEl) outEl.querySelectorAll('span').forEach(s=>{ if(rx.test(s.textContent)){ s.classList.add('search-hit'); searchHits.push(s); } });
+    const term = searchInput.value.trim(); if(!term){ updateSearchFloat(); restoreSearchFilter(); return; }
+    const regexMode = !!document.getElementById('searchRegex')?.checked;
+    let rx; try { rx = regexMode ? new RegExp(term,'i') : new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'); } catch { return; }
+    const outEl = currentOutEl();
+    if(outEl) outEl.querySelectorAll('span').forEach(s=>{ if(rx.test(s.textContent)){ s.classList.add('search-hit'); searchHits.push(s); } });
+    if(document.getElementById('searchFilter')?.checked){ applySearchFilter(); }
     if(searchHits.length){ searchIndex=0; focusSearch(); }
     updateSearchFloat();
+  }
+  function applySearchFilter(){
+    const outEl = currentOutEl(); if(!outEl) return;
+    const keep = new Set(searchHits);
+    outEl.querySelectorAll('span').forEach(s=>{ if(!keep.has(s) && !s.classList.contains('search-current')) s.classList.add('search-filter-hidden'); });
+  }
+  function restoreSearchFilter(){
+    document.querySelectorAll('.search-filter-hidden').forEach(el=> el.classList.remove('search-filter-hidden'));
   }
   function focusSearch(){ searchHits.forEach(el=> el.classList.remove('search-current')); if(searchIndex>=0 && searchIndex<searchHits.length){ const el = searchHits[searchIndex]; el.classList.add('search-current'); el.scrollIntoView({block:'center'}); } updateSearchFloat(); }
   function updateSearchFloat(){ if(!searchFloat) return; const termActive = !!(searchInput && searchInput.value.trim().length); if(termActive){ searchFloat.style.display='flex'; if(searchHits.length){ searchCount.textContent = (searchIndex>=0? (searchIndex+1):0) + '/' + searchHits.length; } else { searchCount.textContent = '0/0'; } searchFloat.setAttribute('aria-hidden','false'); } else { searchFloat.style.display='none'; searchFloat.setAttribute('aria-hidden','true'); } }
@@ -510,6 +531,8 @@ window.addEventListener('DOMContentLoaded', () => {
   searchNext?.addEventListener('click', nextHit);
   searchPrev?.addEventListener('click', prevHit);
   searchClear?.addEventListener('click',()=>{ searchInput.value=''; clearSearch(); });
+  document.getElementById('searchRegex')?.addEventListener('change', ()=> performSearch());
+  document.getElementById('searchFilter')?.addEventListener('change', ()=>{ if(!searchInput.value.trim()){ restoreSearchFilter(); return; } if(document.getElementById('searchFilter').checked){ performSearch(); } else { restoreSearchFilter(); } });
   sfNext?.addEventListener('click', nextHit);
   sfPrev?.addEventListener('click', prevHit);
   sfClear?.addEventListener('click',()=>{ searchInput.value=''; clearSearch(); });
@@ -649,3 +672,5 @@ window.addEventListener('DOMContentLoaded', () => {
     sel.addEventListener('change', ()=> apply(sel.value));
   })();
 });
+
+// (Removed test summary aggregation logic)
