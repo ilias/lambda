@@ -55,13 +55,44 @@ async function fetchJSON(url, { method='GET', headers={}, body=null, timeoutMs=D
   throw lastErr || new Error('Request failed');
 }
 
+// Robust GUID (RFC4122 v4) generator (uses crypto.randomUUID when available)
+function __guid(){
+  try { if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch {}
+  // Fallback: not cryptographically strong but sufficient for cache-busting
+  const t = Date.now().toString(16);
+  const r = Math.random().toString(16).slice(2,10);
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const n = (Math.random()*16)|0;
+    const v = c === 'x' ? n : (n & 0x3 | 0x8);
+    return v.toString(16);
+  }).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/, '$1-$2-$3-$4-$5') + '-' + t + r;
+}
+
+// Evaluate expression with explicit anti-cache measures (unique rid + headers + existing __cacheBust)
 async function evalExpr(expr){
-  return fetchJSON(`/api/eval?expr=${encodeURIComponent(expr)}`);
+  const rid = __guid();
+  return fetchJSON(`/api/eval?expr=${encodeURIComponent(expr)}&rid=${encodeURIComponent(rid)}` , {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Request-ID': rid,
+      'Accept': 'application/json'
+    }
+  });
 }
 async function loadFile(p){
-  return fetchJSON('/api/load', {
+  const rid = __guid();
+  return fetchJSON(`/api/load?rid=${encodeURIComponent(rid)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Request-ID': rid,
+      'Accept': 'application/json'
+    },
     body: JSON.stringify({ path: p })
   });
 }
@@ -372,13 +403,13 @@ window.addEventListener('DOMContentLoaded', () => {
     if(useWS){
       if(ws && ws.readyState===WebSocket.OPEN) return;
       if(ws) { try{ ws.close(); }catch{} ws=null; }
-      ws = new WebSocket(__cacheBust((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws'));
+  ws = new WebSocket(__cacheBust((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws?rid='+encodeURIComponent(__guid())));
       ws.onmessage = ev => { const d = ev.data; if(typeof d==='string'){ if(d.startsWith('PROGRESS::')) handleProgress(parseInt(d.split('::')[1]||'0',10)); else append(d);} };
       ws.onclose = ()=>{ if(streaming && useWS) setTimeout(ensureStream, 1200); };
       ws.onerror = ()=>{ try{ ws.close(); }catch{} if(streaming && useWS) setTimeout(ensureStream,1200); };
     } else {
       if(es) return;
-      es = new EventSource(__cacheBust('/api/stream'));
+  es = new EventSource(__cacheBust('/api/stream?rid='+encodeURIComponent(__guid())));
       es.onmessage = e => { if(e.data && e.data!=='.'){ if(e.data.startsWith('PROGRESS::')) handleProgress(parseInt(e.data.split('::')[1]||'0',10)); else append(e.data); } };
       es.onerror = ()=>{ es.close(); es=null; if(streaming && !useWS) setTimeout(ensureStream,1500); };
     }
@@ -602,7 +633,7 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch(e){ fileStatus.textContent = `Local load error: ${e.message}`; }
   }
 
-  fetchJSON('/api/health', { timeoutMs: 4000 }).then(()=>{
+  fetchJSON(`/api/health?rid=${encodeURIComponent(__guid())}`, { timeoutMs: 4000, headers:{'Cache-Control':'no-cache','Pragma':'no-cache','Expires':'0','X-Request-ID':__guid()} }).then(()=>{
     const h = document.getElementById('health'); if(h) h.textContent='ready';
   }).catch(()=>{
     const h = document.getElementById('health'); if(h) h.textContent='unreachable';

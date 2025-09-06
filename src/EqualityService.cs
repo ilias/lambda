@@ -184,7 +184,10 @@ internal sealed class EqualityService
         if (kind != "alpha" || equal) _interp._stats.StructEqSuccesses++;
         var total = equal ? _interp._stats.StructEqSuccesses : _interp._stats.StructEqCalls - _interp._stats.StructEqSuccesses;
         var totalPercent = (double)total / _interp._stats.StructEqCalls * 100;
-        _logger.Log($"Test: {kind,-5} {(equal ? "passed" : "failed")} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
+        var equalText = kind == "alpha"
+            ? (equal ? "passed" : "failed")
+            : (equal ? "match" : "mismatch");
+        _logger.Log($"Test: {kind,-5} {equalText} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
     // Record test for JSON mode consumers
     _interp.RecordTestResult(kind, equal, leftNorm, rightNorm);
         return equal;
