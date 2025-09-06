@@ -1223,9 +1223,6 @@ alphaEq (2 |> succ ∘ succ) 4
 # Provide an explicit negative then the correctly parenthesized / pipelined positive form.
 alphaEq (5 |> succ . pred) (succ (pred 5))  # expected false (document semantics)
 alphaEq (5 |> pred |> succ) (succ (pred 5)) # equivalent with explicit pipeline sequencing (true)
-# Trailing '.' chaining form not supported; previous line caused EmptyExprList. Provide an explicit
-# parenthesized variant using pipeline for equivalent intent instead (already tested above).
-alphaEq (5 |> pred |> succ) (succ (pred 5))  # reaffirm correct grouping
 
 # $ right-associative (already covered elsewhere, add compound): mult 2 $ plus 1 2 = mult 2 (plus 1 2)
 alphaEq (mult 2 $ plus 1 2) (mult 2 (plus 1 2))
