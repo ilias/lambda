@@ -1315,6 +1315,7 @@ alphaEq (let x = 5, y = 7 in x + y) 12
 
 # --- Simple Recursion (factorial duplicate sanity) ---
 alphaEq (let rec f2 = n -> if (n == 0) 1 (n * (f2 (n - 1))) in f2 5) 120
+alphaEq (let rec f3 = n -> if (n == 0) 1 (-- n |> f3 |> mult n) in f3 5) 120
 
 # --- Range Edge Cases ---
 alphaEq [1 .. 1] [1]
