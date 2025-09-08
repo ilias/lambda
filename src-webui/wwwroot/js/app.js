@@ -1,104 +1,18 @@
-// Main application script extracted from previous inline <script> in index.html
-// Organized in sections; future refactors can split into multiple modules.
+// Modularized: utilities & networking & theme moved to separate modules.
+// This file now focuses on REPL, tabs, logs, streaming, evaluation.
+import { __guid, debounce } from './util.js';
+import { fetchJSON, evalExpr, loadFile } from './net.js';
+import { initTheme } from './theme.js';
 
+// (Optional) service worker registration preserved
 (function(){
-  // ---- Cache busting helper ----
-  window.__cacheBust = function(u){ try { const t = Date.now().toString(36)+Math.random().toString(36).slice(2); return u + (u.includes('?')?'&':'?') + '_='+ t; } catch { return u; } };
-
-  // ---- Optional Service Worker registration (static asset caching only) ----
-  const SW_ENABLED = true; // flip to false for debugging if needed
+  const SW_ENABLED = true;
   if(SW_ENABLED && 'serviceWorker' in navigator){
-    // Defer registration a tick so first paint isn't delayed
     window.addEventListener('load', ()=>{
-      navigator.serviceWorker.getRegistration('sw.js').then(reg=>{
-        if(!reg){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
-      }).catch(()=>{});
+      navigator.serviceWorker.getRegistration('sw.js').then(reg=>{ if(!reg){ navigator.serviceWorker.register('sw.js').catch(()=>{}); } }).catch(()=>{});
     });
   }
 })();
-
-// ---- Central fetch helper with timeout & unified error handling ----
-const DEFAULT_TIMEOUT_MS = 15000; // 15s default; adjust if needed
-async function fetchJSON(url, { method='GET', headers={}, body=null, timeoutMs=DEFAULT_TIMEOUT_MS, retry=0 } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let attempt = 0; let lastErr;
-  while (attempt <= retry) {
-    try {
-      const res = await fetch(__cacheBust(url), {
-        method,
-        headers,
-        body,
-        cache: 'no-store',
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (!res.ok) {
-        const text = await res.text().catch(()=> '');
-        throw new Error(`HTTP ${res.status}${text?`: ${text.slice(0,180)}`:''}`);
-      }
-      // Try JSON parse; surface friendly error if invalid
-      try { return await res.json(); } catch(parseErr){ throw new Error('Invalid JSON response'); }
-    } catch (err) {
-      lastErr = err;
-      if (controller.signal.aborted && err.name === 'AbortError') {
-        // No retry on timeout unless explicitly requested by retry param
-        if (attempt >= retry) break;
-      } else if (attempt >= retry) {
-        break;
-      }
-      attempt++;
-      // Simple linear backoff (could be exponential if needed)
-      await new Promise(r => setTimeout(r, 150 * attempt));
-    }
-  }
-  throw lastErr || new Error('Request failed');
-}
-
-// Robust GUID (RFC4122 v4) generator (uses crypto.randomUUID when available)
-function __guid(){
-  try { if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch {}
-  // Fallback: not cryptographically strong but sufficient for cache-busting
-  const t = Date.now().toString(16);
-  const r = Math.random().toString(16).slice(2,10);
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const n = (Math.random()*16)|0;
-    const v = c === 'x' ? n : (n & 0x3 | 0x8);
-    return v.toString(16);
-  }).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/, '$1-$2-$3-$4-$5') + '-' + t + r;
-}
-
-// Evaluate expression with explicit anti-cache measures (unique rid + headers + existing __cacheBust)
-async function evalExpr(expr){
-  const rid = __guid();
-  return fetchJSON(`/api/eval?expr=${encodeURIComponent(expr)}&rid=${encodeURIComponent(rid)}` , {
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'X-Request-ID': rid,
-      'Accept': 'application/json'
-    }
-  });
-}
-async function loadFile(p){
-  const rid = __guid();
-  return fetchJSON(`/api/load?rid=${encodeURIComponent(rid)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'X-Request-ID': rid,
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({ path: p })
-  });
-}
-
-// Utility: debounce
-function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
 
 // Root initialization after DOM ready
 window.addEventListener('DOMContentLoaded', () => {
@@ -663,14 +577,8 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   if(location.hash.includes('stream')) streamToggle.click();
 
-  // Theme
-  (function(){
-    const sel = document.getElementById('themeSel'); const key='lambdaTheme';
-    function apply(t){ document.body.setAttribute('data-theme', t); try{ localStorage.setItem(key,t);}catch{} }
-    const saved = (function(){ try{return localStorage.getItem(key);}catch{return null;} })();
-    if(saved && sel.querySelector(`option[value="${saved}"]`)){ sel.value=saved; apply(saved); }
-    sel.addEventListener('change', ()=> apply(sel.value));
-  })();
+  // Theme (moved)
+  initTheme();
 });
 
-// (Removed test summary aggregation logic)
+// (End of modularized app core)
