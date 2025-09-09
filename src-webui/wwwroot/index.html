@@ -1,24 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8" />
-  <title>Lambda Calculus Interpreter UI</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- Disable caching -->
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
-  <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lambda Calculus Interpreter</title>
   <link rel="stylesheet" href="app.css" />
 </head>
 
 <body>
+  <!-- SVG icon sprite -->
+  <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" focusable="false" class="svg-sprite">
+    <defs>
+      <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5,3 19,12 5,21"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></symbol>
+      <symbol id="i-eraser" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l9-9a2 2 0 0 1 3 0l6 6-6 6H8a2 2 0 0 1-2-2z"/></symbol>
+      <symbol id="i-stream" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10c3-3 6-3 9 0s6 3 9 0"/><path d="M3 16c3-3 6-3 9 0s6 3 9 0"/></symbol>
+      <symbol id="i-ws" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+      <symbol id="i-device" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></symbol>
+      <symbol id="i-chev-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></symbol>
+      <symbol id="i-chev-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M5 21h14"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+    </defs>
+  </svg>
   <header class="site-header">
     <h1 class="site-title">Lambda Calculus Interpreter</h1>
     <nav class="site-nav">
-      <a href="readme.html" rel="noopener" target="_blank">Help ↗</a>
       <a href="https://github.com/ilias/lambda" target="_blank" rel="noopener">GitHub ↗</a>
       <select id="themeSel" class="theme-select" aria-label="Theme">
+        <option value="auto">Auto</option>
         <option value="dark">Dark</option>
         <option value="light">Light</option>
         <option value="colorful">Colorful</option>
@@ -37,24 +51,21 @@
         placeholder=":help or succ 41 or let add = x,y -> x + y in add 2 3"></textarea>
       <div id="contHint" class="cont-hint" aria-live="polite">Continuation: line will join with next</div>
       <div class="actions">
-        <button id="runBtn" class="primary">Evaluate ▷</button>
-        <button class="destructive" id="clearBtn" type="button" title="Clear current output log">Clear Output</button>
-        <button class="secondary" id="clearInputBtn" type="button" title="Clear current input editor">Clear
-          Input</button>
-        <button class="subtle" id="streamToggle" type="button" data-on="0"
-          title="Toggle server streaming (SSE/WS)">Streaming: Off</button>
-        <button class="subtle" id="wsToggle" type="button" data-on="0" title="Switch between SSE and WebSocket">WS:
-          Off</button>
+        <button id="runBtn" class="primary" type="button" title="Evaluate expression"><svg class="icon" aria-hidden><use href="#i-play" xlink:href="#i-play"/></svg><span>Evaluate</span></button>
+        <button class="destructive" id="clearBtn" type="button" title="Clear current output log"><svg class="icon" aria-hidden><use href="#i-trash" xlink:href="#i-trash"/></svg><span>Clear Output</span></button>
+        <button class="secondary" id="clearInputBtn" type="button" title="Clear current input editor"><svg class="icon" aria-hidden><use href="#i-eraser" xlink:href="#i-eraser"/></svg><span>Clear Input</span></button>
+        <button class="subtle" id="streamToggle" type="button" data-on="0" title="Toggle server streaming (SSE/WS)"><svg class="icon" aria-hidden><use href="#i-stream" xlink:href="#i-stream"/></svg><span>Streaming: Off</span></button>
+        <button class="subtle" id="wsToggle" type="button" data-on="0" title="Switch between SSE and WebSocket"><svg class="icon" aria-hidden><use href="#i-ws" xlink:href="#i-ws"/></svg><span>WS: Off</span></button>
       </div>
       <div class="small">Multiple expressions separated by semicolons are processed sequentially. Each line is evaluated
         independently.</div>
     </section>
     <section>
       <label for="filePath">Load .lambda File</label>
-      <div class="split">
-        <input type="text" id="filePath" placeholder="path e.g. stdlib.lambda" />
-        <button id="loadBtn" type="button" class="primary" title="Load file from server path">Load</button>
-        <button id="localLoadBtn" type="button" class="secondary" title="Load a local .lambda file">Local...</button>
+      <div class="bar">
+        <input id="filePath" type="text" placeholder="/stdlib.lambda" />
+        <button id="loadBtn" type="button" class="primary" title="Load file from server path"><svg class="icon" aria-hidden><use href="#i-folder" xlink:href="#i-folder"/></svg><span>Load</span></button>
+        <button id="localLoadBtn" type="button" class="secondary" title="Load a local .lambda file"><svg class="icon" aria-hidden><use href="#i-device" xlink:href="#i-device"/></svg><span>Local...</span></button>
         <input id="localFile" type="file" accept=".lambda,.txt" class="hidden" aria-label="Local lambda file" />
       </div>
       <div id="fileStatus" class="status mt-sm">Idle</div>
@@ -64,10 +75,10 @@
       <hr class="rule" />
       <h3 class="mt0">Quick Examples</h3>
       <ul class="examples-list">
-        <li>succ 5</li>
-        <li>let inc = x -> succ x in inc 41</li>
-        <li>[1,2,3]</li>
-        <li>let rec fact = n -> if (iszero n) 1 (mult n (fact (pred n))) in fact 5</li>
+        <li class="example">succ 5</li>
+        <li class="example">let inc = x -> succ x in inc 41</li>
+        <li class="example">[1,2,3]</li>
+        <li class="example">let rec fact = n -> if (iszero n) 1 (mult n (fact (pred n))) in fact 5</li>
       </ul>
     </section>
     <section class="full-span" aria-label="Result Log">
@@ -79,15 +90,19 @@
           <input id="maxLinesInput" type="number" min="100" max="200000" step="100" value="4000"
             title="Maximum lines retained per log tab" />
         </div>
+        <div class="inline small">
+          <button id="copyLogBtn" class="ghost tiny" type="button" title="Copy current log to clipboard"><svg class="icon tiny" aria-hidden><use href="#i-copy" xlink:href="#i-copy"/></svg><span class="sr-only">Copy</span></button>
+          <button id="downloadLogBtn" class="ghost tiny" type="button" title="Download current log as text"><svg class="icon tiny" aria-hidden><use href="#i-download" xlink:href="#i-download"/></svg><span class="sr-only">Download</span></button>
+        </div>
         <div id="testIndicator" class="inline small" role="status" aria-live="polite" aria-atomic="true">Tests: 0/0 (0%)
         </div>
         <div id="perfStats" class="inline small" title="Recent evaluation latencies (last / median)">Latency ms
           (last/med): - / -</div>
         <div id="searchBox" class="search-box inline push-right">
           <input id="searchInput" type="text" placeholder="Search" class="search-input" />
-          <button class="ghost tiny" id="searchPrev" type="button" title="Previous match">Prev</button>
-          <button class="ghost tiny" id="searchNext" type="button" title="Next match">Next</button>
-          <button class="ghost tiny" id="searchClear" type="button" title="Clear search">Clear</button>
+          <button class="ghost tiny" id="searchPrev" type="button" title="Previous match"><svg class="icon tiny" aria-hidden><use href="#i-chev-left" xlink:href="#i-chev-left"/></svg><span class="sr-only">Prev</span></button>
+          <button class="ghost tiny" id="searchNext" type="button" title="Next match"><svg class="icon tiny" aria-hidden><use href="#i-chev-right" xlink:href="#i-chev-right"/></svg><span class="sr-only">Next</span></button>
+          <button class="ghost tiny" id="searchClear" type="button" title="Clear search"><svg class="icon tiny" aria-hidden><use href="#i-x" xlink:href="#i-x"/></svg><span class="sr-only">Clear</span></button>
           <label class="search-toggle" title="Regex mode"><input type="checkbox" id="searchRegex" /> Rgx</label>
           <label class="search-toggle" title="Filter log to only matching lines"><input type="checkbox" id="searchFilter" /> Only</label>
         </div>
@@ -97,12 +112,9 @@
     </section>
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
-  <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev"
-      type="button" class="ghost">Prev</button> <button id="sfNext" type="button" class="ghost">Next</button> <button
-      id="sfClear" type="button" class="ghost" title="Clear (Esc)">✕</button></div>
+  <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev" type="button" class="ghost">Prev</button> <button id="sfNext" type="button" class="ghost">Next</button> <button id="sfClear" type="button" class="ghost" title="Clear (Esc)">✕</button></div>
   <!-- Scroll navigation links -->
-  <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom"
-    class="secondary">▼</button>
+  <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom" class="secondary">▼</button>
   <button id="scrollTopBtn" type="button" title="Go to top" aria-label="Scroll to top" class="secondary">▲</button>
   <script type="module" src="js/app.js"></script>
 </body>

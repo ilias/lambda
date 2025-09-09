@@ -22,6 +22,7 @@ window.addEventListener('DOMContentLoaded', () => {
   let inputTabs = []; // {id,name,el,taEl,history:[],histIndex:number}
   let activeInput = null; // tab object
   let exprEl = null; // alias to active textarea for legacy code
+  const TABS_STORE_KEY = 'lambdaInputTabs_v1';
 
   function createInputTab(name){
     const id = 'in_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -29,6 +30,17 @@ window.addEventListener('DOMContentLoaded', () => {
     tabEl.className='tab';
     tabEl.textContent = name;
     tabEl.dataset.tabId = id;
+    // Rename on double-click
+    tabEl.title = 'Double-click to rename';
+    tabEl.addEventListener('dblclick', ()=>{
+      const labelNode = tabEl.childNodes[0];
+      const currentLabel = (labelNode && labelNode.nodeType===Node.TEXT_NODE) ? labelNode.nodeValue : name;
+      const next = prompt('Rename tab', currentLabel || '');
+      if(next && next.trim()){
+        if(labelNode && labelNode.nodeType===Node.TEXT_NODE) labelNode.nodeValue = next.trim();
+        const t = inputTabs.find(t=> t.id===id); if(t){ t.name = next.trim(); persistTabs(); }
+      }
+    });
     if(inputTabs.length>0){
       const close = document.createElement('span');
       close.textContent='×';
@@ -48,7 +60,8 @@ window.addEventListener('DOMContentLoaded', () => {
     ta.rows=8;
     ta.placeholder=':help or succ 41 or let add = x,y -> x + y in add 2 3';
     ta.dataset.tabId = id;
-    ta.addEventListener('input', updateContinuationHint);
+  ta.addEventListener('input', updateContinuationHint);
+  ta.addEventListener('input', debounce(()=> persistTabs(), 300));
     ta.addEventListener('keyup', updateContinuationHint);
     ta.addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); doEval(); }});
     ta.addEventListener('keydown', handleHistoryNav);
@@ -56,8 +69,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const tabObj = {id,name,el:tabEl,taEl:ta,history:[],histIndex:0};
     inputTabs.push(tabObj);
     loadHistory(tabObj);
-    if(inputTabs.length===1){ activateInputTab(id); }
-    return tabObj;
+  if(inputTabs.length===1){ activateInputTab(id); }
+  persistTabs();
+  return tabObj;
   }
   function activateInputTab(id){
     const tab = inputTabs.find(t=> t.id===id) || null;
@@ -67,8 +81,9 @@ window.addEventListener('DOMContentLoaded', () => {
       t.el.classList.toggle('active', isActive);
       t.taEl.classList.toggle('active', isActive);
     });
-    activeInput = tab; exprEl = tab.taEl; exprEl.focus();
-    updateContinuationHint();
+  activeInput = tab; exprEl = tab.taEl; exprEl.focus();
+  updateContinuationHint();
+  persistTabs();
   }
   function closeInputTab(id){
     if(inputTabs.length===1) return;
@@ -77,18 +92,36 @@ window.addEventListener('DOMContentLoaded', () => {
     const tab = inputTabs[idx];
     tab.el.remove(); tab.taEl.remove();
     inputTabs.splice(idx,1);
-    if(activeInput && activeInput.id===id){ const newIdx = Math.max(0, idx-1); activateInputTab(inputTabs[newIdx].id); }
+  if(activeInput && activeInput.id===id){ const newIdx = Math.max(0, idx-1); activateInputTab(inputTabs[newIdx].id); }
+  persistTabs();
   }
   const addInputBtnRef = document.createElement('button');
-  addInputBtnRef.type='button'; addInputBtnRef.textContent='+'; addInputBtnRef.className='secondary'; addInputBtnRef.style.fontSize='.65rem'; addInputBtnRef.title='New input tab';
+  addInputBtnRef.type='button'; addInputBtnRef.className='secondary'; addInputBtnRef.style.fontSize='.65rem'; addInputBtnRef.title='New input tab';
+  addInputBtnRef.innerHTML = '<svg class="icon" aria-hidden><use href="#i-plus" xlink:href="#i-plus"/></svg><span class="sr-only">Add</span>';
   addInputBtnRef.addEventListener('click', ()=>{ createInputTab('Input '+(inputTabs.length+1)); });
   inputTabsHost.appendChild(addInputBtnRef);
-  (function initFirstInput(){
+  (function initInputs(){
     const orig = document.getElementById('expr');
-    const first = createInputTab('Input 1');
-    if(orig && orig.value){ first.taEl.value = orig.value; }
+    const saved = (function(){ try{ return JSON.parse(localStorage.getItem(TABS_STORE_KEY)||'null'); } catch { return null; } })();
+    if(saved && Array.isArray(saved?.tabs) && saved.tabs.length){
+      saved.tabs.forEach((t,i)=>{
+        const tab = createInputTab(t?.name || ('Input '+(i+1)));
+        if(typeof t?.content === 'string'){ tab.taEl.value = t.content; }
+      });
+      if(Number.isInteger(saved.active) && saved.active>=0 && saved.active<inputTabs.length){ activateInputTab(inputTabs[saved.active].id); }
+    } else {
+      const first = createInputTab('Input 1');
+      if(orig && orig.value){ first.taEl.value = orig.value; }
+    }
     if(orig) orig.remove();
   })();
+
+  function persistTabs(){
+    try{
+      const data = { active: inputTabs.findIndex(t=> t===activeInput), tabs: inputTabs.map(t=> ({ name: t.name, content: t.taEl.value })) };
+      localStorage.setItem(TABS_STORE_KEY, JSON.stringify(data));
+    }catch{}
+  }
 
   // Output tabs
   const outputTabsEl = document.getElementById('outputTabs');
@@ -132,13 +165,15 @@ window.addEventListener('DOMContentLoaded', () => {
     if(activeTab && activeTab.id===id){ const newIdx = Math.max(0, idx-1); activateTab(tabs[newIdx].id); }
   }
   const addTabBtnRef = document.createElement('button');
-  addTabBtnRef.id='addTabBtn'; addTabBtnRef.type='button'; addTabBtnRef.className='secondary'; addTabBtnRef.textContent='+'; addTabBtnRef.title='New output tab';
+  addTabBtnRef.id='addTabBtn'; addTabBtnRef.type='button'; addTabBtnRef.className='secondary'; addTabBtnRef.title='New output tab';
+  addTabBtnRef.innerHTML = '<svg class="icon" aria-hidden><use href="#i-plus" xlink:href="#i-plus"/></svg><span class="sr-only">Add</span>';
   addTabBtnRef.addEventListener('click', ()=>{ createTab('Session '+(tabs.length+1)); });
   outputTabsEl.appendChild(addTabBtnRef);
   createTab('Session 1');
   function getOutEl(){ return activeTab? activeTab.preEl : null; }
   function clearActiveOutput(){ const o=getOutEl(); if(o) o.textContent=''; resetTestStats(); }
   function currentOutEl(){ return getOutEl(); }
+  function getCurrentLogText(){ const el = currentOutEl(); if(!el) return ''; let out=''; el.childNodes.forEach(n=>{ out += (n.textContent||''); }); return out; }
 
   // Test indicator
   const testIndicatorEl = document.getElementById('testIndicator');
@@ -167,6 +202,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const fileStatus = document.getElementById('fileStatus');
   const fileProgress = document.getElementById('fileProgress');
   const fileProgressBar = document.getElementById('fileProgressBar');
+  const copyLogBtn = document.getElementById('copyLogBtn');
+  const downloadLogBtn = document.getElementById('downloadLogBtn');
 
   // Search refs
   searchInput = document.getElementById('searchInput');
@@ -415,6 +452,24 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   updateContinuationHint();
   runBtn.addEventListener('click', doEval);
+  // Quick examples insert
+  document.querySelectorAll('.examples-list .example').forEach(li=>{
+    li.addEventListener('click', ()=>{
+      if(!exprEl) return;
+      const v = (li.textContent||'').trim();
+      exprEl.value = exprEl.value ? (exprEl.value.replace(/\s*$/,'') + '\n' + v) : v;
+      exprEl.focus();
+      updateContinuationHint();
+    });
+  });
+  // Copy/Download current log
+  copyLogBtn?.addEventListener('click', async ()=>{
+    try { await navigator.clipboard.writeText(getCurrentLogText()); copyLogBtn.textContent='Copied'; setTimeout(()=> copyLogBtn.textContent='Copy', 1200); } catch { copyLogBtn.textContent='Failed'; setTimeout(()=> copyLogBtn.textContent='Copy', 1200); }
+  });
+  downloadLogBtn?.addEventListener('click', ()=>{
+    const blob = new Blob([getCurrentLogText()], {type:'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'lambda-log.txt'; a.click(); setTimeout(()=> URL.revokeObjectURL(a.href), 3000);
+  });
 
   // Search
   function clearSearch(){ searchHits.forEach(el=> el.classList.remove('search-hit','search-current')); searchHits=[]; searchIndex=-1; updateSearchFloat(); }
