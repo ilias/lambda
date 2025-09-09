@@ -30,6 +30,16 @@ window.addEventListener('DOMContentLoaded', () => {
     tabEl.className='tab';
     tabEl.textContent = name;
     tabEl.dataset.tabId = id;
+    // DnD reordering
+    tabEl.setAttribute('draggable','true');
+    tabEl.addEventListener('dragstart', e=>{ tabEl.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', id); e.dataTransfer.setData('text/in-tab','1'); });
+    tabEl.addEventListener('dragend', ()=> tabEl.classList.remove('dragging'));
+    tabEl.addEventListener('dragover', e=>{ if(e.dataTransfer?.getData('text/in-tab')==='1'){ e.preventDefault(); tabEl.classList.add('drag-over'); } });
+    tabEl.addEventListener('dragleave', ()=> tabEl.classList.remove('drag-over'));
+    tabEl.addEventListener('drop', e=>{
+      const srcId = e.dataTransfer?.getData('text/plain'); if(!srcId || srcId===id) return; e.preventDefault(); tabEl.classList.remove('drag-over');
+      reorderInputTabs(srcId, id);
+    });
     // Rename on double-click
     tabEl.title = 'Double-click to rename';
     tabEl.addEventListener('dblclick', ()=>{
@@ -63,7 +73,7 @@ window.addEventListener('DOMContentLoaded', () => {
   ta.addEventListener('input', updateContinuationHint);
   ta.addEventListener('input', debounce(()=> persistTabs(), 300));
     ta.addEventListener('keyup', updateContinuationHint);
-    ta.addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); doEval(); }});
+  ta.addEventListener('keydown', e=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); doEval(); } else { handleEditorKeys(e, ta); }});
     ta.addEventListener('keydown', handleHistoryNav);
     inputEditorsHost.appendChild(ta);
     const tabObj = {id,name,el:tabEl,taEl:ta,history:[],histIndex:0};
@@ -128,6 +138,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const outputPanesEl = document.getElementById('outputPanes');
   let tabs = []; // {id,name,preEl}
   let activeTab = null;
+  const OUT_TABS_STORE_KEY = 'lambdaOutputTabs_v1';
   let searchHits = []; let searchIndex = -1;
   let searchInput, searchPrev, searchNext, searchClear, searchFloat, sfPrev, sfNext, sfClear, searchCount;
 
@@ -147,9 +158,12 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
       outputTabsEl.insertBefore(tabEl, addTabBtnRef);
     }
-    const tabObj = {id,name,el:tabEl,preEl:pre};
+  const tabObj = {id,name,el:tabEl,preEl:pre};
     tabs.push(tabObj);
     activateTab(id);
+  // Attach DnD reordering
+  attachOutputTabDnD(tabEl, id);
+  persistOutputTabs();
     return tabObj;
   }
   function activateTab(id){
@@ -157,23 +171,45 @@ window.addEventListener('DOMContentLoaded', () => {
     activeTab = tabs.find(t=>t.id===id) || null;
     clearSearch();
     applyLineFilters();
+  persistOutputTabs();
   }
   function closeTab(id){
     if(tabs.length===1) return;
     const idx = tabs.findIndex(t=> t.id===id); if(idx<0) return;
     const tab = tabs[idx]; tab.el.remove(); tab.preEl.remove(); tabs.splice(idx,1);
     if(activeTab && activeTab.id===id){ const newIdx = Math.max(0, idx-1); activateTab(tabs[newIdx].id); }
+    persistOutputTabs();
   }
   const addTabBtnRef = document.createElement('button');
   addTabBtnRef.id='addTabBtn'; addTabBtnRef.type='button'; addTabBtnRef.className='secondary'; addTabBtnRef.title='New output tab';
   addTabBtnRef.innerHTML = '<svg class="icon" aria-hidden><use href="#i-plus" xlink:href="#i-plus"/></svg><span class="sr-only">Add</span>';
   addTabBtnRef.addEventListener('click', ()=>{ createTab('Session '+(tabs.length+1)); });
   outputTabsEl.appendChild(addTabBtnRef);
-  createTab('Session 1');
+  // Initialize output tabs (restore from localStorage if available)
+  (function initOutputTabs(){
+    const saved = (function(){ try{ return JSON.parse(localStorage.getItem(OUT_TABS_STORE_KEY)||'null'); } catch { return null; } })();
+    if(saved && Array.isArray(saved?.tabs) && saved.tabs.length){
+      // Recreate in saved order
+      saved.tabs.forEach(t=>{ createTab(t.name || 'Session'); });
+      if(Number.isInteger(saved.active) && saved.active>=0 && saved.active<tabs.length){ activateTab(tabs[saved.active].id); }
+    } else {
+      createTab('Session 1');
+    }
+  })();
   function getOutEl(){ return activeTab? activeTab.preEl : null; }
   function clearActiveOutput(){ const o=getOutEl(); if(o) o.textContent=''; resetTestStats(); }
   function currentOutEl(){ return getOutEl(); }
   function getCurrentLogText(){ const el = currentOutEl(); if(!el) return ''; let out=''; el.childNodes.forEach(n=>{ out += (n.textContent||''); }); return out; }
+
+  function persistOutputTabs(){
+    try{
+      const data = {
+        active: tabs.findIndex(t=> t===activeTab),
+        tabs: tabs.map(t=> ({ name: t.name }))
+      };
+      localStorage.setItem(OUT_TABS_STORE_KEY, JSON.stringify(data));
+    }catch{}
+  }
 
   // Test indicator
   const testIndicatorEl = document.getElementById('testIndicator');
@@ -208,6 +244,59 @@ window.addEventListener('DOMContentLoaded', () => {
   const toastHost = document.getElementById('toastHost');
   const helpOverlay = document.getElementById('helpOverlay');
   const helpClose = document.getElementById('helpClose');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsOverlay = document.getElementById('settingsOverlay');
+  const settingsClose = document.getElementById('settingsClose');
+  const editorFontSize = document.getElementById('editorFontSize');
+  const outputFontSize = document.getElementById('outputFontSize');
+  const defMaxLines = document.getElementById('defMaxLines');
+  const defStreaming = document.getElementById('defStreaming');
+  const defWS = document.getElementById('defWS');
+
+  const SETTINGS_KEY = 'lambdaUISettings_v1';
+  function loadSettings(){
+    try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'); } catch { return {}; }
+  }
+  function saveSettings(s){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s||{})); } catch {}
+  }
+  function applySettings(s){
+    const body = document.body;
+    // font sizes via classes
+    const efs = Math.min(22, Math.max(12, parseInt(s.editorFontSize||15,10)));
+    const ofs = Math.min(20, Math.max(11, parseInt(s.outputFontSize||14,10)));
+    (body.className||'').split(/\s+/).forEach(c=>{ if(/^efs-\d+$/.test(c) || /^ofs-\d+$/.test(c)) body.classList.remove(c); });
+    body.classList.add(`efs-${efs}`);
+    body.classList.add(`ofs-${ofs}`);
+    if(Number.isInteger(s.maxLines)){ maxLogLines = s.maxLines; if(maxLinesInput){ maxLinesInput.value = String(s.maxLines); } }
+    if(typeof s.streaming==='boolean'){ streaming = s.streaming; streamToggle.dataset.on = streaming? '1':'0'; streamToggle.textContent = 'Streaming: ' + (streaming?'On':'Off'); }
+    if(typeof s.useWS==='boolean'){ useWS = s.useWS; wsToggle.dataset.on = useWS? '1':'0'; wsToggle.textContent = 'WS: ' + (useWS?'On':'Off'); }
+  }
+  function initSettingsUI(){
+    const s = loadSettings();
+    // Defaults
+  const ef = Number.isInteger(s.editorFontSize)? s.editorFontSize : 15;
+  const of = Number.isInteger(s.outputFontSize)? s.outputFontSize : 14;
+    const ml = Number.isInteger(s.maxLines)? s.maxLines : (parseInt(maxLinesInput?.value,10)||4000);
+    const st = typeof s.streaming==='boolean'? s.streaming : false;
+    const uw = typeof s.useWS==='boolean'? s.useWS : false;
+    applySettings({ editorFontSize:ef, outputFontSize:of, maxLines:ml, streaming:st, useWS:uw });
+    if(editorFontSize) editorFontSize.value = String(ef);
+    if(outputFontSize) outputFontSize.value = String(of);
+    if(defMaxLines) defMaxLines.value = String(ml);
+    if(defStreaming) defStreaming.checked = !!st;
+    if(defWS) defWS.checked = !!uw;
+  }
+  function openSettings(){ settingsOverlay?.classList.remove('hidden'); }
+  function closeSettings(){ settingsOverlay?.classList.add('hidden'); }
+  settingsBtn?.addEventListener('click', openSettings);
+  settingsClose?.addEventListener('click', closeSettings);
+  settingsOverlay?.addEventListener('click', (e)=>{ if(e.target===settingsOverlay) closeSettings(); });
+  // Bind controls
+  editorFontSize?.addEventListener('input', ()=>{ const s=loadSettings(); s.editorFontSize = parseInt(editorFontSize.value,10); saveSettings(s); applySettings(s); });
+  outputFontSize?.addEventListener('input', ()=>{ const s=loadSettings(); s.outputFontSize = parseInt(outputFontSize.value,10); saveSettings(s); applySettings(s); });
+  defMaxLines?.addEventListener('change', ()=>{ const v=parseInt(defMaxLines.value,10); if(!isNaN(v)&&v>0){ const s=loadSettings(); s.maxLines=v; saveSettings(s); applySettings(s); showToast('Max lines saved'); }});
+  defStreaming?.addEventListener('change', ()=>{ const s=loadSettings(); s.streaming = !!defStreaming.checked; saveSettings(s); applySettings(s); showToast('Streaming default updated'); });
+  defWS?.addEventListener('change', ()=>{ const s=loadSettings(); s.useWS = !!defWS.checked; saveSettings(s); applySettings(s); showToast('WS default updated'); });
 
   // Toasts
   function showToast(msg, kind){
@@ -282,6 +371,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // Trim if exceeding max
     if(outEl.childNodes.length > maxLogLines){ while(outEl.childNodes.length > maxLogLines){ outEl.removeChild(outEl.firstChild); } }
     outEl.scrollTop = outEl.scrollHeight;
+  persistOutputTabs();
   }
   function scheduleFlush(){
     if(!flushScheduled){ flushScheduled = true; requestAnimationFrame(flushLogs); }
@@ -530,6 +620,88 @@ window.addEventListener('DOMContentLoaded', () => {
   helpOverlay?.addEventListener('click', (e)=>{ if(e.target===helpOverlay) helpOverlay.classList.add('hidden'); });
   if(searchInput) searchInput.placeholder = 'Search (/ F3 n/N)';
   // Search highlight styles are defined in app.css; no JS style injection to comply with CSP.
+
+  // Initialize settings after DOM controls exist
+  initSettingsUI();
+
+  // ---- Drag-and-drop for output tabs ----
+  function attachOutputTabDnD(tabEl, id){
+    tabEl.setAttribute('draggable','true');
+    tabEl.addEventListener('dragstart', e=>{ tabEl.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', id); e.dataTransfer.setData('text/out-tab','1'); });
+    tabEl.addEventListener('dragend', ()=> tabEl.classList.remove('dragging'));
+    tabEl.addEventListener('dragover', e=>{ if(e.dataTransfer?.getData('text/out-tab')==='1'){ e.preventDefault(); tabEl.classList.add('drag-over'); } });
+    tabEl.addEventListener('dragleave', ()=> tabEl.classList.remove('drag-over'));
+    tabEl.addEventListener('drop', e=>{ const srcId = e.dataTransfer?.getData('text/plain'); if(!srcId || srcId===id) return; e.preventDefault(); tabEl.classList.remove('drag-over'); reorderOutputTabs(srcId, id); });
+  }
+
+  // createTab already attaches DnD; wrapper removed
+
+  // Reorder helpers
+  function reorderArrayById(arr, srcId, dstId){
+    const sIdx = arr.findIndex(x=> x.id===srcId); const dIdx = arr.findIndex(x=> x.id===dstId); if(sIdx<0||dIdx<0||sIdx===dIdx) return arr;
+    const [item] = arr.splice(sIdx,1); arr.splice(dIdx,0,item); return arr;
+  }
+  function reorderInputTabs(srcId, dstId){
+    const src = inputTabs.find(t=> t.id===srcId); const dst = inputTabs.find(t=> t.id===dstId); if(!src||!dst) return;
+    // DOM order for tabs
+    inputTabsHost.insertBefore(src.el, dst.el);
+    // DOM order for editors
+    inputEditorsHost.insertBefore(src.taEl, dst.taEl);
+    // Array order
+    reorderArrayById(inputTabs, srcId, dstId);
+    persistTabs();
+  }
+  function reorderOutputTabs(srcId, dstId){
+    const src = tabs.find(t=> t.id===srcId); const dst = tabs.find(t=> t.id===dstId); if(!src||!dst) return;
+    outputTabsEl.insertBefore(src.el, dst.el);
+    outputPanesEl.insertBefore(src.preEl, dst.preEl);
+    reorderArrayById(tabs, srcId, dstId);
+  persistOutputTabs();
+  }
+
+  // ---- Editor helpers (indentation, bracket auto-close) ----
+  function handleEditorKeys(e, ta){
+    // Tab / Shift+Tab
+    if(e.key==='Tab'){
+      e.preventDefault();
+      const start = ta.selectionStart, end = ta.selectionEnd; const v = ta.value; const sel = v.slice(start,end);
+      const indent = '  ';
+      if(start!==end && sel.includes('\n')){
+        // Indent multiple lines
+        const before = v.slice(0,start), mid = v.slice(start,end), after = v.slice(end);
+        const indented = mid.replace(/(^|\n)/g, '$1'+indent);
+        ta.value = before + indented + after;
+        ta.selectionStart = start + indent.length; ta.selectionEnd = end + indented.length - mid.length; // expanded selection
+      } else if(e.shiftKey){
+        // Unindent current line
+        const lineStart = v.lastIndexOf('\n', start-1)+1;
+        if(v.slice(lineStart).startsWith(indent)){
+          ta.value = v.slice(0,lineStart) + v.slice(lineStart+indent.length);
+          ta.selectionStart = ta.selectionEnd = start - indent.length;
+        }
+      } else {
+        // Insert indent
+        ta.value = v.slice(0,start) + indent + v.slice(end);
+        const pos = start + indent.length; ta.selectionStart = ta.selectionEnd = pos;
+      }
+      persistTabs(); updateContinuationHint(); return;
+    }
+    // Enter auto-indent
+    if(e.key==='Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey){
+      const pos = ta.selectionStart; const v = ta.value; const lineStart = v.lastIndexOf('\n', pos-1)+1; const m = /^\s*/.exec(v.slice(lineStart,pos)); const pad = m? m[0]:'';
+      setTimeout(()=>{ const p = ta.selectionStart; ta.value = ta.value.slice(0,p) + pad + ta.value.slice(p); ta.selectionStart = ta.selectionEnd = p + pad.length; persistTabs(); updateContinuationHint(); }, 0);
+      return;
+    }
+    // Bracket auto-close for simple cases
+    const pairs = { '(':')', '[':']', '{':'}', '"':'"', "'":"'" };
+    if(pairs[e.key] && !e.ctrlKey && !e.metaKey){
+      e.preventDefault();
+      const start = ta.selectionStart, end = ta.selectionEnd; const v = ta.value; const close = pairs[e.key];
+      ta.value = v.slice(0,start) + e.key + close + v.slice(end);
+      ta.selectionStart = ta.selectionEnd = start + 1;
+      persistTabs(); updateContinuationHint(); return;
+    }
+  }
 
   // Filters
   const FILTER_CONFIG = [
