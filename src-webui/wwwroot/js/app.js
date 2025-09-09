@@ -27,7 +27,11 @@ window.addEventListener('DOMContentLoaded', () => {
   function createInputTab(name){
     const id = 'in_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const tabEl = document.createElement('div');
-    tabEl.className='tab';
+  tabEl.className='tab';
+  tabEl.id = id + '-tab';
+  tabEl.setAttribute('role','tab');
+  tabEl.setAttribute('aria-selected','false');
+  tabEl.setAttribute('tabindex','-1');
     tabEl.textContent = name;
     tabEl.dataset.tabId = id;
     // DnD reordering
@@ -65,8 +69,10 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
       inputTabsHost.insertBefore(tabEl, addInputBtnRef);
     }
-    const ta = document.createElement('textarea');
-    ta.className='input-pane';
+  const ta = document.createElement('textarea');
+  ta.className='input-pane';
+  ta.setAttribute('role','tabpanel');
+  ta.setAttribute('aria-labelledby', tabEl.id);
     ta.rows=8;
     ta.placeholder=':help or succ 41 or let add = x,y -> x + y in add 2 3';
     ta.dataset.tabId = id;
@@ -89,6 +95,8 @@ window.addEventListener('DOMContentLoaded', () => {
     inputTabs.forEach(t=>{
       const isActive = t===tab;
       t.el.classList.toggle('active', isActive);
+      t.el.setAttribute('aria-selected', isActive? 'true':'false');
+      t.el.setAttribute('tabindex', isActive? '0':'-1');
       t.taEl.classList.toggle('active', isActive);
     });
   activeInput = tab; exprEl = tab.taEl; exprEl.focus();
@@ -144,10 +152,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function createTab(name){
     const id = 'tab_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-    const pre = document.createElement('pre');
-    pre.className='output-pane'; pre.setAttribute('aria-live','polite'); pre.dataset.tabId = id;
+  const pre = document.createElement('pre');
+  pre.className='output-pane'; pre.setAttribute('aria-live','polite'); pre.setAttribute('role','tabpanel'); pre.dataset.tabId = id;
     outputPanesEl.appendChild(pre);
-    const tabEl = document.createElement('div'); tabEl.className='tab'; tabEl.textContent = name; tabEl.dataset.tabId = id;
+  const tabEl = document.createElement('div'); tabEl.className='tab'; tabEl.id = id + '-tab'; tabEl.setAttribute('role','tab'); tabEl.setAttribute('aria-selected','false'); tabEl.setAttribute('tabindex','-1'); tabEl.textContent = name; tabEl.dataset.tabId = id;
+  pre.setAttribute('aria-labelledby', tabEl.id);
     if(tabs.length>0){
       const close = document.createElement('span'); close.textContent='×'; close.className='close'; close.title='Close tab';
       close.addEventListener('click', (e)=>{ e.stopPropagation(); closeTab(id); }); tabEl.appendChild(close);
@@ -167,7 +176,7 @@ window.addEventListener('DOMContentLoaded', () => {
     return tabObj;
   }
   function activateTab(id){
-    tabs.forEach(t=>{ t.el.classList.toggle('active', t.id===id); t.preEl.classList.toggle('active', t.id===id); });
+  tabs.forEach(t=>{ const isActive = (t.id===id); t.el.classList.toggle('active', isActive); t.preEl.classList.toggle('active', isActive); t.el.setAttribute('aria-selected', isActive? 'true':'false'); t.el.setAttribute('tabindex', isActive? '0':'-1'); });
     activeTab = tabs.find(t=>t.id===id) || null;
     clearSearch();
     applyLineFilters();
@@ -252,6 +261,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const defMaxLines = document.getElementById('defMaxLines');
   const defStreaming = document.getElementById('defStreaming');
   const defWS = document.getElementById('defWS');
+  const settingsReset = document.getElementById('settingsReset');
+  const defWrapOutput = document.getElementById('defWrapOutput');
 
   const SETTINGS_KEY = 'lambdaUISettings_v1';
   function loadSettings(){
@@ -270,6 +281,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if(Number.isInteger(s.maxLines)){ maxLogLines = s.maxLines; if(maxLinesInput){ maxLinesInput.value = String(s.maxLines); } }
     if(typeof s.streaming==='boolean'){ streaming = s.streaming; streamToggle.dataset.on = streaming? '1':'0'; streamToggle.textContent = 'Streaming: ' + (streaming?'On':'Off'); }
     if(typeof s.useWS==='boolean'){ useWS = s.useWS; wsToggle.dataset.on = useWS? '1':'0'; wsToggle.textContent = 'WS: ' + (useWS?'On':'Off'); }
+  body.classList.toggle('wrap-output', s.wrapOutput !== false);
   }
   function initSettingsUI(){
     const s = loadSettings();
@@ -279,12 +291,14 @@ window.addEventListener('DOMContentLoaded', () => {
     const ml = Number.isInteger(s.maxLines)? s.maxLines : (parseInt(maxLinesInput?.value,10)||4000);
     const st = typeof s.streaming==='boolean'? s.streaming : false;
     const uw = typeof s.useWS==='boolean'? s.useWS : false;
-    applySettings({ editorFontSize:ef, outputFontSize:of, maxLines:ml, streaming:st, useWS:uw });
+  const wo = typeof s.wrapOutput==='boolean'? s.wrapOutput : true;
+  applySettings({ editorFontSize:ef, outputFontSize:of, maxLines:ml, streaming:st, useWS:uw, wrapOutput:wo });
     if(editorFontSize) editorFontSize.value = String(ef);
     if(outputFontSize) outputFontSize.value = String(of);
     if(defMaxLines) defMaxLines.value = String(ml);
     if(defStreaming) defStreaming.checked = !!st;
-    if(defWS) defWS.checked = !!uw;
+  if(defWS) defWS.checked = !!uw;
+  if(defWrapOutput) defWrapOutput.checked = !!wo;
   }
   function openSettings(){ settingsOverlay?.classList.remove('hidden'); }
   function closeSettings(){ settingsOverlay?.classList.add('hidden'); }
@@ -297,6 +311,18 @@ window.addEventListener('DOMContentLoaded', () => {
   defMaxLines?.addEventListener('change', ()=>{ const v=parseInt(defMaxLines.value,10); if(!isNaN(v)&&v>0){ const s=loadSettings(); s.maxLines=v; saveSettings(s); applySettings(s); showToast('Max lines saved'); }});
   defStreaming?.addEventListener('change', ()=>{ const s=loadSettings(); s.streaming = !!defStreaming.checked; saveSettings(s); applySettings(s); showToast('Streaming default updated'); });
   defWS?.addEventListener('change', ()=>{ const s=loadSettings(); s.useWS = !!defWS.checked; saveSettings(s); applySettings(s); showToast('WS default updated'); });
+  defWrapOutput?.addEventListener('change', ()=>{ const s=loadSettings(); s.wrapOutput = !!defWrapOutput.checked; saveSettings(s); applySettings(s); });
+  settingsReset?.addEventListener('click', ()=>{
+  const defaults = { editorFontSize:15, outputFontSize:14, maxLines:4000, streaming:false, useWS:false, wrapOutput:true };
+    saveSettings(defaults);
+    applySettings(defaults);
+    if(editorFontSize) editorFontSize.value = String(defaults.editorFontSize);
+    if(outputFontSize) outputFontSize.value = String(defaults.outputFontSize);
+    if(defMaxLines) defMaxLines.value = String(defaults.maxLines);
+    if(defStreaming) defStreaming.checked = defaults.streaming;
+    if(defWS) defWS.checked = defaults.useWS;
+    showToast('Settings reset');
+  });
 
   // Toasts
   function showToast(msg, kind){

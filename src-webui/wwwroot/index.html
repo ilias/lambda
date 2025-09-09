@@ -48,7 +48,7 @@
     <section id="repl">
       <div class="bar bar-space">
         <label for="expr" class="m0">Expression / Commands</label>
-        <div id="inputTabs" class="flex-tabs"></div>
+  <div id="inputTabs" class="flex-tabs" role="tablist" aria-label="Input tabs"></div>
       </div>
       <div id="inputEditors"></div>
       <!-- Initial textarea will be transformed into first tab by script (kept for noscript fallback) -->
@@ -89,7 +89,7 @@
     <section class="full-span" aria-label="Result Log">
       <div class="bar bar-results">
         <label for="output" class="label-small mt-aligned">Result / Log</label>
-        <div id="outputTabs" class="inline-tabs"></div>
+  <div id="outputTabs" class="inline-tabs" role="tablist" aria-label="Output tabs"></div>
         <div class="inline small max-lines-wrap">
           <label for="maxLinesInput">Max Lines</label>
           <input id="maxLinesInput" type="number" min="100" max="200000" step="100" value="4000"
@@ -156,6 +156,10 @@
           <input id="defMaxLines" type="number" min="100" max="200000" step="100" />
           <label class="switch-row" for="defStreaming"><input id="defStreaming" type="checkbox" /> Streaming on load</label>
           <label class="switch-row" for="defWS"><input id="defWS" type="checkbox" /> Use WebSocket when streaming</label>
+          <label class="switch-row" for="defWrapOutput"><input id="defWrapOutput" type="checkbox" checked /> Wrap output lines</label>
+        </div>
+        <div class="mt-sm">
+          <button id="settingsReset" class="ghost tiny" type="button" title="Reset settings to defaults">Reset to defaults</button>
         </div>
       </div>
     </div>
