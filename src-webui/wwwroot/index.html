@@ -113,6 +113,27 @@
   </main>
   <footer>Lambda Calculus Interpreter UI • <span id="health">checking...</span></footer>
   <div id="searchFloat" aria-hidden="true"><span class="count" id="searchCount">0/0</span> <button id="sfPrev" type="button" class="ghost">Prev</button> <button id="sfNext" type="button" class="ghost">Next</button> <button id="sfClear" type="button" class="ghost" title="Clear (Esc)">✕</button></div>
+  <!-- Toast notifications -->
+  <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+  <!-- Keyboard Shortcuts Help Overlay -->
+  <div id="helpOverlay" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="helpTitle">Keyboard Shortcuts</h3>
+        <button id="helpClose" class="ghost tiny" type="button" aria-label="Close help"><svg class="icon tiny" aria-hidden><use href="#i-x" xlink:href="#i-x"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <ul class="kblist">
+          <li><strong>Ctrl+Enter</strong> — Evaluate</li>
+          <li><strong>/</strong> — Focus Search</li>
+          <li><strong>F3</strong> — Next (Shift+F3: Prev)</li>
+          <li><strong>n</strong>/<strong>N</strong> — Next/Prev match</li>
+          <li><strong>Esc</strong> — Clear search</li>
+          <li><strong>Ctrl+L</strong> — Clear output</li>
+        </ul>
+      </div>
+    </div>
+  </div>
   <!-- Scroll navigation links -->
   <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom" class="secondary">▼</button>
   <button id="scrollTopBtn" type="button" title="Go to top" aria-label="Scroll to top" class="secondary">▲</button>

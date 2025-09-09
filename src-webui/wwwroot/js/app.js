@@ -205,6 +205,15 @@ window.addEventListener('DOMContentLoaded', () => {
   const fileProgressBar = document.getElementById('fileProgressBar');
   const copyLogBtn = document.getElementById('copyLogBtn');
   const downloadLogBtn = document.getElementById('downloadLogBtn');
+  const toastHost = document.getElementById('toastHost');
+  const helpOverlay = document.getElementById('helpOverlay');
+  const helpClose = document.getElementById('helpClose');
+
+  // Toasts
+  function showToast(msg, kind){
+    if(!toastHost) return; const div=document.createElement('div'); div.className='toast'+(kind?(' '+kind):''); div.textContent=msg; toastHost.appendChild(div);
+    setTimeout(()=>{ div.remove(); }, 2500);
+  }
 
   // Search refs
   searchInput = document.getElementById('searchInput');
@@ -465,11 +474,12 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   // Copy/Download current log
   copyLogBtn?.addEventListener('click', async ()=>{
-    try { await navigator.clipboard.writeText(getCurrentLogText()); copyLogBtn.textContent='Copied'; setTimeout(()=> copyLogBtn.textContent='Copy', 1200); } catch { copyLogBtn.textContent='Failed'; setTimeout(()=> copyLogBtn.textContent='Copy', 1200); }
+  try { await navigator.clipboard.writeText(getCurrentLogText()); showToast('Log copied to clipboard','good'); } catch { showToast('Copy failed','bad'); }
   });
   downloadLogBtn?.addEventListener('click', ()=>{
     const blob = new Blob([getCurrentLogText()], {type:'text/plain'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'lambda-log.txt'; a.click(); setTimeout(()=> URL.revokeObjectURL(a.href), 3000);
+  showToast('Log downloaded','good');
   });
 
   // Search
@@ -513,7 +523,11 @@ window.addEventListener('DOMContentLoaded', () => {
     else if(e.key==='Enter' && active===searchInput){ e.preventDefault(); nextHit(); }
     else if((e.key==='n' || e.key==='N') && !inEditable){ e.preventDefault(); e.key==='n'? nextHit(): prevHit(); }
     else if(e.key==='Escape'){ if(searchHits.length){ clearSearch(); } }
+    else if((e.ctrlKey||e.metaKey) && !inEditable && (e.key==='l' || e.key==='L')){ e.preventDefault(); clearActiveOutput(); showToast('Output cleared'); }
+    else if(e.key==='?' && !inEditable){ e.preventDefault(); if(helpOverlay){ helpOverlay.classList.remove('hidden'); } }
   });
+  helpClose?.addEventListener('click', ()=> helpOverlay?.classList.add('hidden'));
+  helpOverlay?.addEventListener('click', (e)=>{ if(e.target===helpOverlay) helpOverlay.classList.add('hidden'); });
   if(searchInput) searchInput.placeholder = 'Search (/ F3 n/N)';
   // Search highlight styles are defined in app.css; no JS style injection to comply with CSP.
 
