@@ -441,6 +441,18 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     if(logBuffer.length >= MAX_BATCH) flushLogs(); else scheduleFlush();
   }
+  // Append logs where an item may contain multiple lines; accepts string or array
+  function appendLogs(logs){
+    if(logs == null) return;
+    if(Array.isArray(logs)){
+      for(const l of logs) appendLogs(l);
+      return;
+    }
+    const s = String(logs);
+    // Split on CRLF/ LF and preserve blank lines
+    const parts = s.split(/\r?\n/);
+    for(const part of parts){ append(part); }
+  }
   function appendUserInputLine(raw){
     const outEl = currentOutEl(); if(!outEl) return;
     if(!raw || raw.trimStart().startsWith('#')){ append(raw); return; }
@@ -481,13 +493,13 @@ window.addEventListener('DOMContentLoaded', () => {
       if(ws && ws.readyState===WebSocket.OPEN) return;
       if(ws) { try{ ws.close(); }catch{} ws=null; }
   ws = new WebSocket(__cacheBust((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws?rid='+encodeURIComponent(__guid())));
-      ws.onmessage = ev => { const d = ev.data; if(typeof d==='string'){ if(d.startsWith('PROGRESS::')) handleProgress(parseInt(d.split('::')[1]||'0',10)); else append(d);} };
+  ws.onmessage = ev => { const d = ev.data; if(typeof d==='string'){ if(d.startsWith('PROGRESS::')) handleProgress(parseInt(d.split('::')[1]||'0',10)); else appendLogs(d);} };
       ws.onclose = ()=>{ if(streaming && useWS) setTimeout(ensureStream, 1200); };
       ws.onerror = ()=>{ try{ ws.close(); }catch{} if(streaming && useWS) setTimeout(ensureStream,1200); };
     } else {
       if(es) return;
   es = new EventSource(__cacheBust('/api/stream?rid='+encodeURIComponent(__guid())));
-      es.onmessage = e => { if(e.data && e.data!=='.'){ if(e.data.startsWith('PROGRESS::')) handleProgress(parseInt(e.data.split('::')[1]||'0',10)); else append(e.data); } };
+  es.onmessage = e => { if(e.data && e.data!=='.'){ if(e.data.startsWith('PROGRESS::')) handleProgress(parseInt(e.data.split('::')[1]||'0',10)); else appendLogs(e.data); } };
       es.onerror = ()=>{ es.close(); es=null; if(streaming && !useWS) setTimeout(ensureStream,1500); };
     }
   }
@@ -548,10 +560,10 @@ window.addEventListener('DOMContentLoaded', () => {
   if(spinEl){ spinEl.remove(); }
   appendUserInputLine(raw);
         if(!streaming){
-          if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
+          if(Array.isArray(res.logs) && res.logs.length) appendLogs(res.logs);
           const primary = res.output || res.normalized || '(no output)';
           const logsArray = Array.isArray(res.logs) ? res.logs : [];
-            const hasResultLine = logsArray.some(l=> l.startsWith('-> '));
+            const hasResultLine = logsArray.some(l=> typeof l==='string' && (l.startsWith('-> ') || l.includes('\n-> ')));
           if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
           let appendedNorm = false;
           if(res.normalized && res.normalized !== primary){
@@ -784,7 +796,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadBtn.addEventListener('click', async ()=>{
     const p = filePathEl.value.trim(); if(!p) return;
     fileStatus.textContent='Loading...'; if(streaming){ fileProgress.style.display='block'; fileProgressBar.style.width='0%'; }
-    try { const r = await loadFile(p); fileStatus.textContent = 'Loaded: ' + r.message; if(!streaming && r.logs && Array.isArray(r.logs) && r.logs.length){ r.logs.forEach(l=>append(l)); append(''); } } catch(e){ fileStatus.textContent = 'Error: ' + e.message; }
+  try { const r = await loadFile(p); fileStatus.textContent = 'Loaded: ' + r.message; if(!streaming && r.logs && Array.isArray(r.logs) && r.logs.length){ appendLogs(r.logs); append(''); } } catch(e){ fileStatus.textContent = 'Error: ' + e.message; }
   });
 
   localLoadBtn?.addEventListener('click', ()=> localFileInput?.click());
@@ -807,10 +819,10 @@ window.addEventListener('DOMContentLoaded', () => {
             try { performance.measure('eval','eval-start','eval-end'); const entries = performance.getEntriesByName('eval'); const recent = entries[entries.length-1]; if(recent) recordEvalDuration(recent.duration); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); if(entries.length>50) performance.clearMeasures('eval'); } catch{}
           appendUserInputLine(expr);
           if(!streaming){
-            if(Array.isArray(res.logs) && res.logs.length) res.logs.forEach(l=>append(l));
+            if(Array.isArray(res.logs) && res.logs.length) appendLogs(res.logs);
             const primary = res.output || res.normalized || '(no output)';
             const logsArray = Array.isArray(res.logs)? res.logs:[];
-            const hasResultLine = logsArray.some(l=> l.startsWith('-> '));
+            const hasResultLine = logsArray.some(l=> typeof l==='string' && (l.startsWith('-> ') || l.includes('\n-> ')));
             if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
             let appendedNorm = false;
             if(res.normalized && res.normalized !== primary){
