@@ -96,7 +96,7 @@ window.addEventListener('DOMContentLoaded', () => {
   persistTabs();
   }
   const addInputBtnRef = document.createElement('button');
-  addInputBtnRef.type='button'; addInputBtnRef.className='secondary'; addInputBtnRef.style.fontSize='.65rem'; addInputBtnRef.title='New input tab';
+  addInputBtnRef.type='button'; addInputBtnRef.className='secondary tiny'; addInputBtnRef.title='New input tab';
   addInputBtnRef.innerHTML = '<svg class="icon" aria-hidden><use href="#i-plus" xlink:href="#i-plus"/></svg><span class="sr-only">Add</span>';
   addInputBtnRef.addEventListener('click', ()=>{ createInputTab('Input '+(inputTabs.length+1)); });
   inputTabsHost.appendChild(addInputBtnRef);
@@ -182,9 +182,10 @@ window.addEventListener('DOMContentLoaded', () => {
     if(!testIndicatorEl) return;
     const pct = testStats.total ? ((testStats.passed / testStats.total) * 100).toFixed(2) : '0';
     testIndicatorEl.textContent = `Tests: ${testStats.passed}/${testStats.total} (${pct}%)`;
-    if(testStats.total === 0){ testIndicatorEl.style.color=''; }
-    else if(testStats.passed === testStats.total){ testIndicatorEl.style.color='var(--good)'; }
-    else { testIndicatorEl.style.color='#e3b341'; }
+  testIndicatorEl.classList.remove('ti-good','ti-warn');
+  if(testStats.total === 0){ /* default */ }
+  else if(testStats.passed === testStats.total){ testIndicatorEl.classList.add('ti-good'); }
+  else { testIndicatorEl.classList.add('ti-warn'); }
   }
   function resetTestStats(){ testStats.passed=0; testStats.total=0; updateTestIndicator(); }
   updateTestIndicator();
@@ -514,15 +515,7 @@ window.addEventListener('DOMContentLoaded', () => {
     else if(e.key==='Escape'){ if(searchHits.length){ clearSearch(); } }
   });
   if(searchInput) searchInput.placeholder = 'Search (/ F3 n/N)';
-  // Search highlight styles now defined in app.css for theming; keep fallback minimal if CSS failed to load.
-  (function(){
-    if(!document.querySelector('style[data-search-style-fallback]')){
-      const style=document.createElement('style');
-      style.dataset.searchStyleFallback='1';
-      style.textContent='.search-hit{background:rgba(88,166,255,.18);border-radius:3px;} .search-current{background:var(--accent)!important;color:#fff!important;outline:2px solid var(--accent);outline-offset:0;}';
-      document.head.appendChild(style);
-    }
-  })();
+  // Search highlight styles are defined in app.css; no JS style injection to comply with CSP.
 
   // Filters
   const FILTER_CONFIG = [

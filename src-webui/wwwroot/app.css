@@ -286,6 +286,8 @@ footer { text-align:center; font-size:.65rem; opacity:.7; margin:3rem 0 0; }
 .examples-list .example:hover { text-decoration:underline; }
 .bar-results { display:flex; flex-wrap:wrap; gap:.75rem; align-items:flex-end; justify-content:space-between; }
 .label-small { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; opacity:.85; }
+.ti-good { color: var(--color-good); }
+.ti-warn { color: #e3b341; }
 .search-box.inline { position:static; background:transparent; padding:0; }
 .search-input { width:140px; font-size:.65rem; padding:.4rem .5rem; }
 button.tiny { font-size:.6rem; padding:.3rem .5rem; }
