@@ -161,6 +161,18 @@ window.addEventListener('DOMContentLoaded', () => {
       const close = document.createElement('span'); close.textContent='×'; close.className='close'; close.title='Close tab';
       close.addEventListener('click', (e)=>{ e.stopPropagation(); closeTab(id); }); tabEl.appendChild(close);
     }
+    // Rename on double-click
+    tabEl.title = 'Double-click to rename';
+    tabEl.addEventListener('dblclick', ()=>{
+      const labelNode = tabEl.childNodes[0];
+      const currentLabel = (labelNode && labelNode.nodeType===Node.TEXT_NODE) ? labelNode.nodeValue : name;
+      const next = prompt('Rename tab', currentLabel || '');
+      if(next && next.trim()){
+        const trimmed = next.trim();
+        if(labelNode && labelNode.nodeType===Node.TEXT_NODE) labelNode.nodeValue = trimmed;
+        const t = tabs.find(t=> t.id===id); if(t){ t.name = trimmed; persistOutputTabs(); }
+      }
+    });
     tabEl.addEventListener('click', ()=> activateTab(id));
     if(typeof addTabBtnRef === 'undefined' || !addTabBtnRef || !addTabBtnRef.parentNode){
       outputTabsEl.appendChild(tabEl);
@@ -256,6 +268,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const settingsBtn = document.getElementById('settingsBtn');
   const settingsOverlay = document.getElementById('settingsOverlay');
   const settingsClose = document.getElementById('settingsClose');
+  const settingsClearStorage = document.getElementById('settingsClearStorage');
   const editorFontSize = document.getElementById('editorFontSize');
   const outputFontSize = document.getElementById('outputFontSize');
   const defMaxLines = document.getElementById('defMaxLines');
@@ -263,6 +276,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const defWS = document.getElementById('defWS');
   const settingsReset = document.getElementById('settingsReset');
   const defWrapOutput = document.getElementById('defWrapOutput');
+  const defLineNumbers = document.getElementById('defLineNumbers');
+  const defShowNormalized = document.getElementById('defShowNormalized');
+  let showNormalized = true;
 
   const SETTINGS_KEY = 'lambdaUISettings_v1';
   function loadSettings(){
@@ -280,8 +296,10 @@ window.addEventListener('DOMContentLoaded', () => {
     body.classList.add(`ofs-${ofs}`);
     if(Number.isInteger(s.maxLines)){ maxLogLines = s.maxLines; if(maxLinesInput){ maxLinesInput.value = String(s.maxLines); } }
     if(typeof s.streaming==='boolean'){ streaming = s.streaming; streamToggle.dataset.on = streaming? '1':'0'; streamToggle.textContent = 'Streaming: ' + (streaming?'On':'Off'); }
-    if(typeof s.useWS==='boolean'){ useWS = s.useWS; wsToggle.dataset.on = useWS? '1':'0'; wsToggle.textContent = 'WS: ' + (useWS?'On':'Off'); }
+  if(typeof s.useWS==='boolean'){ useWS = s.useWS; wsToggle.dataset.on = useWS? '1':'0'; wsToggle.textContent = 'WS: ' + (useWS?'On':'Off'); }
   body.classList.toggle('wrap-output', s.wrapOutput !== false);
+  body.classList.toggle('line-numbers', !!s.lineNumbers);
+  if(typeof s.showNormalized === 'boolean') showNormalized = s.showNormalized; else showNormalized = true;
   }
   function initSettingsUI(){
     const s = loadSettings();
@@ -291,14 +309,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const ml = Number.isInteger(s.maxLines)? s.maxLines : (parseInt(maxLinesInput?.value,10)||4000);
     const st = typeof s.streaming==='boolean'? s.streaming : false;
     const uw = typeof s.useWS==='boolean'? s.useWS : false;
-  const wo = typeof s.wrapOutput==='boolean'? s.wrapOutput : true;
-  applySettings({ editorFontSize:ef, outputFontSize:of, maxLines:ml, streaming:st, useWS:uw, wrapOutput:wo });
+    const wo = typeof s.wrapOutput==='boolean'? s.wrapOutput : true;
+  const ln = typeof s.lineNumbers==='boolean'? s.lineNumbers : false;
+  const sn = typeof s.showNormalized==='boolean'? s.showNormalized : true;
+  applySettings({ editorFontSize:ef, outputFontSize:of, maxLines:ml, streaming:st, useWS:uw, wrapOutput:wo, lineNumbers:ln, showNormalized:sn });
     if(editorFontSize) editorFontSize.value = String(ef);
     if(outputFontSize) outputFontSize.value = String(of);
     if(defMaxLines) defMaxLines.value = String(ml);
     if(defStreaming) defStreaming.checked = !!st;
   if(defWS) defWS.checked = !!uw;
-  if(defWrapOutput) defWrapOutput.checked = !!wo;
+    if(defWrapOutput) defWrapOutput.checked = !!wo;
+  if(defLineNumbers) defLineNumbers.checked = !!ln;
+  if(defShowNormalized) defShowNormalized.checked = !!sn;
   }
   function openSettings(){ settingsOverlay?.classList.remove('hidden'); }
   function closeSettings(){ settingsOverlay?.classList.add('hidden'); }
@@ -312,8 +334,10 @@ window.addEventListener('DOMContentLoaded', () => {
   defStreaming?.addEventListener('change', ()=>{ const s=loadSettings(); s.streaming = !!defStreaming.checked; saveSettings(s); applySettings(s); showToast('Streaming default updated'); });
   defWS?.addEventListener('change', ()=>{ const s=loadSettings(); s.useWS = !!defWS.checked; saveSettings(s); applySettings(s); showToast('WS default updated'); });
   defWrapOutput?.addEventListener('change', ()=>{ const s=loadSettings(); s.wrapOutput = !!defWrapOutput.checked; saveSettings(s); applySettings(s); });
+  defLineNumbers?.addEventListener('change', ()=>{ const s=loadSettings(); s.lineNumbers = !!defLineNumbers.checked; saveSettings(s); applySettings(s); });
+  defShowNormalized?.addEventListener('change', ()=>{ const s=loadSettings(); s.showNormalized = !!defShowNormalized.checked; saveSettings(s); applySettings(s); });
   settingsReset?.addEventListener('click', ()=>{
-  const defaults = { editorFontSize:15, outputFontSize:14, maxLines:4000, streaming:false, useWS:false, wrapOutput:true };
+    const defaults = { editorFontSize:15, outputFontSize:14, maxLines:4000, streaming:false, useWS:false, wrapOutput:true, lineNumbers:false, showNormalized:true };
     saveSettings(defaults);
     applySettings(defaults);
     if(editorFontSize) editorFontSize.value = String(defaults.editorFontSize);
@@ -321,7 +345,49 @@ window.addEventListener('DOMContentLoaded', () => {
     if(defMaxLines) defMaxLines.value = String(defaults.maxLines);
     if(defStreaming) defStreaming.checked = defaults.streaming;
     if(defWS) defWS.checked = defaults.useWS;
+    if(defWrapOutput) defWrapOutput.checked = defaults.wrapOutput;
+  if(defLineNumbers) defLineNumbers.checked = defaults.lineNumbers;
+  if(defShowNormalized) defShowNormalized.checked = defaults.showNormalized;
     showToast('Settings reset');
+  });
+
+  // Clear local storage option
+  settingsClearStorage?.addEventListener('click', ()=>{
+    if(!confirm('This will clear UI tabs, history, settings, and theme from local storage. Continue?')) return;
+    try {
+      // Known keys
+      const keys = [
+        'lambdaInputTabs_v1',
+        'lambdaOutputTabs_v1',
+        'lambdaUISettings_v1',
+        'lambdaTheme'
+      ];
+      // History keys: lambdaHistoryTab_*
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(!k) continue;
+        if(k.startsWith('lambdaHistoryTab_')) keys.push(k);
+      }
+      // Remove all collected keys
+      keys.forEach(k=>{ try{ localStorage.removeItem(k); }catch{} });
+      // Reset in-memory state to defaults
+      try{
+        applySettings({ editorFontSize:15, outputFontSize:14, maxLines:4000, streaming:false, useWS:false, wrapOutput:true, lineNumbers:false, showNormalized:true });
+        if(editorFontSize) editorFontSize.value = '15';
+        if(outputFontSize) outputFontSize.value = '14';
+        if(defMaxLines) defMaxLines.value = '4000';
+        if(defStreaming) defStreaming.checked = false;
+        if(defWS) defWS.checked = false;
+        if(defWrapOutput) defWrapOutput.checked = true;
+        if(defLineNumbers) defLineNumbers.checked = false;
+        if(defShowNormalized) defShowNormalized.checked = true;
+        // Reset theme select to Auto and re-init theme
+        const themeSel = document.getElementById('themeSel');
+        if(themeSel){ themeSel.value = 'auto'; }
+        document.body.setAttribute('data-theme','auto');
+      } catch {}
+      showToast('Local storage cleared');
+    } catch(e){ showToast('Failed to clear storage: '+ e.message, 'error'); }
   });
 
   // Toasts
@@ -404,7 +470,8 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   function makeSpanLine(decoded, cls){
     const span = document.createElement('span');
-    if(cls) span.className = cls;
+  if(cls) span.className = cls;
+  span.classList.add('log-line');
     span.textContent = decoded + '\n';
     if(isFilteredSpan(span)) span.classList.add('hidden-log');
     return span;
@@ -426,7 +493,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if(hashIdx > 0){
         const before = decoded.slice(0, hashIdx).replace(/\s+$/,'');
         const comment = decoded.slice(hashIdx);
-        const container = document.createElement('span'); if(cls) container.className = cls;
+  const container = document.createElement('span'); if(cls) container.className = cls; container.classList.add('log-line');
         const beforeNode = document.createTextNode(before + ' ');
         const commentSpan = document.createElement('span'); commentSpan.className = 'log-comment'; commentSpan.textContent = comment;
         container.appendChild(beforeNode); container.appendChild(commentSpan); container.appendChild(document.createTextNode('\n'));
@@ -456,7 +523,8 @@ window.addEventListener('DOMContentLoaded', () => {
   function appendUserInputLine(raw){
     const outEl = currentOutEl(); if(!outEl) return;
     if(!raw || raw.trimStart().startsWith('#')){ append(raw); return; }
-    const container = document.createElement('span');
+  const container = document.createElement('span');
+  container.classList.add('log-line');
     const idx = raw.indexOf('#');
     if(idx >= 0){
       const before = raw.slice(0, idx).replace(/\s+$/,'');
@@ -516,18 +584,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Evaluation
-  // ---- Performance metrics (latency) ----
-  const perfStatsEl = document.getElementById('perfStats');
-  let evalDurations = []; // recent durations
-  function recordEvalDuration(ms){
-    if(!isFinite(ms)) return;
-    evalDurations.push(ms);
-    if(evalDurations.length > 200) evalDurations.splice(0, evalDurations.length-200);
-    const sorted = [...evalDurations].sort((a,b)=>a-b);
-    const median = sorted[Math.floor(sorted.length/2)] || 0;
-    const last = evalDurations[evalDurations.length-1] || 0;
-    if(perfStatsEl){ perfStatsEl.textContent = `Latency ms (last/med): ${last.toFixed(1)} / ${median.toFixed(1)}`; }
-  }
 
   async function doEval(){
     const rawLines = exprEl.value.split(/\r?\n/);
@@ -556,7 +612,7 @@ window.addEventListener('DOMContentLoaded', () => {
         performance.mark('eval-start');
         const res = await evalExpr(raw);
         performance.mark('eval-end');
-        try { performance.measure('eval','eval-start','eval-end'); const entries = performance.getEntriesByName('eval'); const recent = entries[entries.length-1]; if(recent) recordEvalDuration(recent.duration); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); if(entries.length>50) performance.clearMeasures('eval'); } catch{}
+  try { performance.measure('eval','eval-start','eval-end'); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); } catch{}
   if(spinEl){ spinEl.remove(); }
   appendUserInputLine(raw);
         if(!streaming){
@@ -566,7 +622,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const hasResultLine = logsArray.some(l=> typeof l==='string' && (l.startsWith('-> ') || l.includes('\n-> ')));
           if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
           let appendedNorm = false;
-          if(res.normalized && res.normalized !== primary){
+          if(showNormalized && res.normalized && res.normalized !== primary){
             const alreadyLogged = logsArray.some(l=> l.trim() === res.normalized.trim() || l.trim() === ('Norm: '+res.normalized).trim());
             if(!alreadyLogged){ append('Norm: ' + res.normalized); appendedNorm = true; }
           }
@@ -574,7 +630,7 @@ window.addEventListener('DOMContentLoaded', () => {
         } else {
           const primary = res.output || res.normalized || '(no output)';
           append(primary); let appendedNorm=false;
-          if(res.normalized && res.normalized !== primary){ append(res.normalized); appendedNorm=true; }
+          if(showNormalized && res.normalized && res.normalized !== primary){ append(res.normalized); appendedNorm=true; }
           if(appendedNorm) append('');
         }
       }
@@ -795,8 +851,18 @@ window.addEventListener('DOMContentLoaded', () => {
   clearInputBtn.addEventListener('click', ()=>{ if(exprEl){ exprEl.value=''; updateContinuationHint(); exprEl.focus(); } });
   loadBtn.addEventListener('click', async ()=>{
     const p = filePathEl.value.trim(); if(!p) return;
-    fileStatus.textContent='Loading...'; if(streaming){ fileProgress.style.display='block'; fileProgressBar.style.width='0%'; }
-  try { const r = await loadFile(p); fileStatus.textContent = 'Loaded: ' + r.message; if(!streaming && r.logs && Array.isArray(r.logs) && r.logs.length){ appendLogs(r.logs); append(''); } } catch(e){ fileStatus.textContent = 'Error: ' + e.message; }
+    // Kick off: visible log breadcrumb and ensure streaming connection if enabled
+    append(`[load start: ${p}]`);
+    fileStatus.textContent='Loading...'; if(streaming){ fileProgress.style.display='block'; fileProgressBar.style.width='0%'; ensureStream(); }
+    try {
+      const r = await loadFile(p);
+      fileStatus.textContent = 'Loaded: ' + r.message;
+      // Always surface the load message in the output
+      append(r.message || 'Load complete');
+      if(!streaming && r.logs && Array.isArray(r.logs) && r.logs.length){ appendLogs(r.logs); }
+      append('[load done]');
+    } catch(e){ fileStatus.textContent = 'Error: ' + e.message; append(`Error: ${e.message}`); }
+    finally { if(streaming){ setTimeout(()=>{ fileProgress.style.display='none'; fileProgressBar.style.width='0%'; }, 600); } }
   });
 
   localLoadBtn?.addEventListener('click', ()=> localFileInput?.click());
@@ -816,7 +882,7 @@ window.addEventListener('DOMContentLoaded', () => {
           performance.mark('eval-start');
           const res = await evalExpr(expr);
             performance.mark('eval-end');
-            try { performance.measure('eval','eval-start','eval-end'); const entries = performance.getEntriesByName('eval'); const recent = entries[entries.length-1]; if(recent) recordEvalDuration(recent.duration); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); if(entries.length>50) performance.clearMeasures('eval'); } catch{}
+            try { performance.measure('eval','eval-start','eval-end'); performance.clearMarks('eval-start'); performance.clearMarks('eval-end'); } catch{}
           appendUserInputLine(expr);
           if(!streaming){
             if(Array.isArray(res.logs) && res.logs.length) appendLogs(res.logs);
@@ -825,14 +891,14 @@ window.addEventListener('DOMContentLoaded', () => {
             const hasResultLine = logsArray.some(l=> typeof l==='string' && (l.startsWith('-> ') || l.includes('\n-> ')));
             if(!hasResultLine && (!logsArray.includes(primary))) append(primary);
             let appendedNorm = false;
-            if(res.normalized && res.normalized !== primary){
+            if(showNormalized && res.normalized && res.normalized !== primary){
               const alreadyLogged = logsArray.some(l=> l.trim() === res.normalized.trim() || l.trim() === ('Norm: '+res.normalized).trim());
               if(!alreadyLogged){ append('Norm: ' + res.normalized); appendedNorm = true; }
             }
             if(appendedNorm) append('');
           } else {
             const primary = res.output || res.normalized || '(no output)';
-            append(primary); let appendedNorm=false; if(res.normalized && res.normalized !== primary){ append(res.normalized); appendedNorm=true; } if(appendedNorm) append('');
+            append(primary); let appendedNorm=false; if(showNormalized && res.normalized && res.normalized !== primary){ append(res.normalized); appendedNorm=true; } if(appendedNorm) append('');
           }
         } catch(err){ append(`ERR: ${err.message}`); }
         const pct = Math.round(((i+1)/toEval.length)*100); fileProgressBar.style.width = pct + '%';

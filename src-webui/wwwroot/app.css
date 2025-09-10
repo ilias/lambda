@@ -275,6 +275,24 @@ footer { text-align:center; font-size:.65rem; opacity:.7; margin:3rem 0 0; }
 .output-pane { white-space: pre; overflow-x: auto; }
 body.wrap-output .output-pane { white-space: pre-wrap; overflow-x: hidden; word-break: break-word; overflow-wrap: anywhere; }
 
+/* Line numbers (CSP-safe, no inline styles) */
+body.line-numbers .output-pane { counter-reset: logline; position: relative; padding-left: 3.25rem; }
+/* Only number top-level log lines */
+body.line-numbers .output-pane .log-line { position: relative; display: block; padding-left: 0; }
+body.line-numbers .output-pane .log-line::before {
+	counter-increment: logline;
+	content: counter(logline);
+	position: absolute;
+	left: -2.8rem;
+	width: 2.5rem;
+	text-align: right;
+	color: var(--color-fg-subtle);
+	opacity: .75;
+}
+/* Keep hidden items from consuming line numbers when filtered */
+body.line-numbers .output-pane .log-line.hidden-log::before,
+body.line-numbers .output-pane .log-line.search-filter-hidden::before { content: ''; counter-increment: none; }
+
 /* Utility */
 .mt-0 { margin-top:0; }
 .mb-0 { margin-bottom:0; }

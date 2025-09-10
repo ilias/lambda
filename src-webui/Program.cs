@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Microsoft.AspNetCore.StaticFiles;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -49,8 +50,30 @@ app.Use(async (ctx, next) =>
 });
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// Static files: set short cache timeout (2 seconds)
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var headers = ctx.Context.Response.Headers;
+        headers["Cache-Control"] = "public, max-age=2";
+        headers["Expires"] = DateTime.UtcNow.AddSeconds(2).ToString("R");
+    }
+});
 app.UseWebSockets();
+
+// Global short cache header for non-streaming endpoints (2 seconds)
+app.Use(async (ctx, next) =>
+{
+    // Set headers BEFORE the response starts to avoid read-only errors
+    if (!ctx.Request.Path.StartsWithSegments("/api/stream") && !ctx.Request.Path.StartsWithSegments("/ws"))
+    {
+        var headers = ctx.Response.Headers;
+        if (!headers.ContainsKey("Cache-Control")) headers["Cache-Control"] = "public, max-age=2";
+        if (!headers.ContainsKey("Expires")) headers["Expires"] = DateTime.UtcNow.AddSeconds(2).ToString("R");
+    }
+    await next();
+});
 
 // SSE endpoint
 app.MapGet("/api/stream", async (HttpContext ctx, Interpreter interp) =>

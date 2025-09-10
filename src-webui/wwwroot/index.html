@@ -101,8 +101,7 @@
         </div>
         <div id="testIndicator" class="inline small" role="status" aria-live="polite" aria-atomic="true">Tests: 0/0 (0%)
         </div>
-        <div id="perfStats" class="inline small" title="Recent evaluation latencies (last / median)">Latency ms
-          (last/med): - / -</div>
+        
         <div id="searchBox" class="search-box inline push-right">
           <input id="searchInput" type="text" placeholder="Search" class="search-input" />
           <button class="ghost tiny" id="searchPrev" type="button" title="Previous match"><svg class="icon tiny" aria-hidden><use href="#i-chev-left" xlink:href="#i-chev-left"/></svg><span class="sr-only">Prev</span></button>
@@ -157,9 +156,12 @@
           <label class="switch-row" for="defStreaming"><input id="defStreaming" type="checkbox" /> Streaming on load</label>
           <label class="switch-row" for="defWS"><input id="defWS" type="checkbox" /> Use WebSocket when streaming</label>
           <label class="switch-row" for="defWrapOutput"><input id="defWrapOutput" type="checkbox" checked /> Wrap output lines</label>
+          <label class="switch-row" for="defLineNumbers"><input id="defLineNumbers" type="checkbox" /> Show line numbers</label>
+          <label class="switch-row" for="defShowNormalized"><input id="defShowNormalized" type="checkbox" checked /> Append normalized result</label>
         </div>
         <div class="mt-sm">
           <button id="settingsReset" class="ghost tiny" type="button" title="Reset settings to defaults">Reset to defaults</button>
+          <button id="settingsClearStorage" class="destructive tiny" type="button" title="Clear all saved UI data from local storage">Clear local storage</button>
         </div>
       </div>
     </div>
