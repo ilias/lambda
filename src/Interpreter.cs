@@ -270,7 +270,7 @@ public partial class Interpreter
             ":clear" => HandleClear(arg),
             ":stats" => ShowStats(),
             ":help" => ShowHelp(),
-            ":env" => await ShowEnv(arg),
+            ":env" or ":environment" => await ShowEnv(arg),
             ":exit" or ":quit" => "bye",
             ":depth" => HandleRecursionDepth(arg),
             ":infix" => HandleInfixCommand(arg),
