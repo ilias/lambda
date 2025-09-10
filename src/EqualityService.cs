@@ -28,8 +28,8 @@ internal sealed class EqualityService
         if (rightVal.Type == ExprType.Thunk) rightVal = _interp.Force(rightVal);
         var normLeft = _interp.NormalizeExpression(leftVal);
         var normRight = _interp.NormalizeExpression(rightVal);
-    var equal = Expr.AlphaEquivalent(normLeft, normRight) || (!Expr.AlphaEquivalent(normLeft, normRight) && Expr.AlphaEquivalent(leftVal, rightVal));
-    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("alpha", normLeft, normRight, equal));
+        var equal = Expr.AlphaEquivalent(normLeft, normRight) || (!Expr.AlphaEquivalent(normLeft, normRight) && Expr.AlphaEquivalent(leftVal, rightVal));
+        return _interp.MakeChurchBoolean(LogAndUpdateStructEq("alpha", normLeft, normRight, equal));
     }
 
     internal Expr? BetaEq(string op, List<Expr> args, Dictionary<string, Expr> env)
@@ -37,14 +37,14 @@ internal sealed class EqualityService
         if (args.Count != 2) return null;
         var left = _interp.EvaluateCEK(args[0], env);
         var right = _interp.EvaluateCEK(args[1], env);
-    left = ForceFully(left);
-    right = ForceFully(right);
-    left = UnwrapDelayLike(left);
-    right = UnwrapDelayLike(right);
+        left = ForceFully(left);
+        right = ForceFully(right);
+        left = UnwrapDelayLike(left);
+        right = UnwrapDelayLike(right);
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
-    var equal = Expr.AlphaEquivalent(nL, nR);
-    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("beta", nL, nR, equal));
+        var equal = Expr.AlphaEquivalent(nL, nR);
+        return _interp.MakeChurchBoolean(LogAndUpdateStructEq("beta", nL, nR, equal));
     }
 
     internal Expr? HashEq(string op, List<Expr> args, Dictionary<string, Expr> env)
@@ -52,11 +52,11 @@ internal sealed class EqualityService
         if (args.Count != 2) return null;
         var left = _interp.EvaluateCEK(args[0], env);
         var right = _interp.EvaluateCEK(args[1], env);
-    left = ForceFully(left);
-    right = ForceFully(right);
+        left = ForceFully(left);
+        right = ForceFully(right);
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
-    // Logging will be handled by helper after computing equality outcome
+        // Logging will be handled by helper after computing equality outcome
         string CanonicalHash(Expr expr)
         {
             var sb = new System.Text.StringBuilder();
@@ -106,8 +106,8 @@ internal sealed class EqualityService
         }
         var hL = CanonicalHash(nL);
         var hR = CanonicalHash(nR);
-    var hashEq = hL == hR;
-    return _interp.MakeChurchBoolean(LogAndUpdateStructEq("hash", nL, nR, hashEq));
+        var hashEq = hL == hR;
+        return _interp.MakeChurchBoolean(LogAndUpdateStructEq("hash", nL, nR, hashEq));
     }
 
     internal Expr? EtaEq(string op, List<Expr> args, Dictionary<string, Expr> env)
@@ -188,8 +188,8 @@ internal sealed class EqualityService
             ? (equal ? "passed" : "failed")
             : (equal ? "match" : "mismatch");
         _logger.Log($"Test: {kind,-5} {equalText} - {total}/{_interp._stats.StructEqCalls} ({totalPercent:F2}%)");
-    // Record test for JSON mode consumers
-    _interp.RecordTestResult(kind, equal, leftNorm, rightNorm);
+        // Record test for JSON mode consumers
+        _interp.RecordTestResult(kind, equal, leftNorm, rightNorm);
         return equal;
     }
 
