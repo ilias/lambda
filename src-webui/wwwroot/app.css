@@ -1,3 +1,7 @@
+/* Monaco editor container */
+.monaco-host { display:block; }
+.monaco-host.hidden { display:none; }
+.monaco-editor { height:260px; border:1px solid var(--line); }
 /* -------------------------------------------------------------------------- */
 /* Design System Tokens                                                       */
 /* -------------------------------------------------------------------------- */
@@ -198,6 +202,9 @@ body[data-theme='light'] .search-current { outline:2px solid var(--accent); back
 .theme-select:hover { background:var(--color-surface-1); }
 body[data-theme='light'] .theme-select { background:#ffffff; }
 body[data-theme='colorful'] .theme-select { background:#2d0a3f; }
+
+/* small right margin utility */
+.mr-sm { margin-right: .5rem; }
 .link-btn { background:transparent; border:0; cursor:pointer; font:inherit; padding:0; }
 .icon { width:1em; height:1em; display:inline-block; vertical-align:middle; }
 .icon.tiny { width:.9em; height:.9em; }

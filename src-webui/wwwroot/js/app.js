@@ -133,6 +133,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     if(orig) orig.remove();
   })();
+  // No examples dropdown anymore
 
   function persistTabs(){
     try{
@@ -278,6 +279,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const defWrapOutput = document.getElementById('defWrapOutput');
   const defLineNumbers = document.getElementById('defLineNumbers');
   const defShowNormalized = document.getElementById('defShowNormalized');
+  const defUseMonaco = document.getElementById('defUseMonaco');
   let showNormalized = true;
 
   const SETTINGS_KEY = 'lambdaUISettings_v1';
@@ -300,6 +302,10 @@ window.addEventListener('DOMContentLoaded', () => {
   body.classList.toggle('wrap-output', s.wrapOutput !== false);
   body.classList.toggle('line-numbers', !!s.lineNumbers);
   if(typeof s.showNormalized === 'boolean') showNormalized = s.showNormalized; else showNormalized = true;
+  // Monaco visibility toggle
+  const monacoHost = document.getElementById('monacoHost');
+  const useMonaco = s.useMonaco !== false; // default true
+  if(monacoHost){ monacoHost.classList.toggle('hidden', !useMonaco); }
   }
   function initSettingsUI(){
     const s = loadSettings();
@@ -312,7 +318,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const wo = typeof s.wrapOutput==='boolean'? s.wrapOutput : true;
   const ln = typeof s.lineNumbers==='boolean'? s.lineNumbers : false;
   const sn = typeof s.showNormalized==='boolean'? s.showNormalized : true;
-  applySettings({ editorFontSize:ef, outputFontSize:of, maxLines:ml, streaming:st, useWS:uw, wrapOutput:wo, lineNumbers:ln, showNormalized:sn });
+  const um = typeof s.useMonaco==='boolean'? s.useMonaco : true;
+  applySettings({ editorFontSize:ef, outputFontSize:of, maxLines:ml, streaming:st, useWS:uw, wrapOutput:wo, lineNumbers:ln, showNormalized:sn, useMonaco:um });
     if(editorFontSize) editorFontSize.value = String(ef);
     if(outputFontSize) outputFontSize.value = String(of);
     if(defMaxLines) defMaxLines.value = String(ml);
@@ -336,8 +343,9 @@ window.addEventListener('DOMContentLoaded', () => {
   defWrapOutput?.addEventListener('change', ()=>{ const s=loadSettings(); s.wrapOutput = !!defWrapOutput.checked; saveSettings(s); applySettings(s); });
   defLineNumbers?.addEventListener('change', ()=>{ const s=loadSettings(); s.lineNumbers = !!defLineNumbers.checked; saveSettings(s); applySettings(s); });
   defShowNormalized?.addEventListener('change', ()=>{ const s=loadSettings(); s.showNormalized = !!defShowNormalized.checked; saveSettings(s); applySettings(s); });
+  defUseMonaco?.addEventListener('change', ()=>{ const s=loadSettings(); s.useMonaco = !!defUseMonaco.checked; saveSettings(s); applySettings(s); });
   settingsReset?.addEventListener('click', ()=>{
-    const defaults = { editorFontSize:15, outputFontSize:14, maxLines:4000, streaming:false, useWS:false, wrapOutput:true, lineNumbers:false, showNormalized:true };
+  const defaults = { editorFontSize:15, outputFontSize:14, maxLines:4000, streaming:false, useWS:false, wrapOutput:true, lineNumbers:false, showNormalized:true, useMonaco:true };
     saveSettings(defaults);
     applySettings(defaults);
     if(editorFontSize) editorFontSize.value = String(defaults.editorFontSize);
@@ -348,6 +356,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if(defWrapOutput) defWrapOutput.checked = defaults.wrapOutput;
   if(defLineNumbers) defLineNumbers.checked = defaults.lineNumbers;
   if(defShowNormalized) defShowNormalized.checked = defaults.showNormalized;
+  if(defUseMonaco) defUseMonaco.checked = defaults.useMonaco;
     showToast('Settings reset');
   });
 
@@ -360,7 +369,7 @@ window.addEventListener('DOMContentLoaded', () => {
         'lambdaInputTabs_v1',
         'lambdaOutputTabs_v1',
         'lambdaUISettings_v1',
-        'lambdaTheme'
+  'lambdaTheme'
       ];
       // History keys: lambdaHistoryTab_*
       for(let i=0;i<localStorage.length;i++){
