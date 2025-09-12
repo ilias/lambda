@@ -1,7 +1,13 @@
 /* Monaco editor container */
-.monaco-host { display:block; }
+.monaco-host { display:block; position:relative; z-index:2; }
 .monaco-host.hidden { display:none; }
-.monaco-editor { height:260px; border:1px solid var(--line); }
+/* Use a unique class for our editor mount to avoid clashing with Monaco's internal .monaco-editor */
+.monaco-editor-host { height:260px; min-height:160px; border:1px solid var(--color-border); overflow:hidden; }
+
+/* When Monaco is enabled, hide the native textarea panes visually */
+body.use-monaco textarea.input-pane { display:none !important; }
+body.use-monaco #monacoHost { display:block; }
+body.use-monaco #inputEditors { display:none !important; }
 /* -------------------------------------------------------------------------- */
 /* Design System Tokens                                                       */
 /* -------------------------------------------------------------------------- */
@@ -87,6 +93,14 @@ body[data-theme='dark'] {
 	--color-warn:#e3b341;
 	--color-destructive:#ff4d4d;
 	--color-destructive-hover:#ff3030;
+	/* Monaco editor optional theme overrides */
+	--editor-current-line-bg: transparent;
+	--editor-current-line-border: transparent;
+	--editor-selection-bg: rgba(88,166,255,0.25);
+	--editor-token-keyword: var(--color-accent);
+	--editor-token-number: var(--color-warn);
+	--editor-token-constant: var(--color-good);
+	--editor-token-meta: var(--color-bad);
 }
 /* Light theme refinement (slightly softened accent & surfaces for contrast) */
 body[data-theme='light'] {
@@ -104,6 +118,14 @@ body[data-theme='light'] {
 	--color-warn:#b88700;
 	--color-destructive:#c62828;
 	--color-destructive-hover:#b11717;
+	/* Monaco editor optional theme overrides */
+	--editor-current-line-bg: transparent;
+	--editor-current-line-border: transparent;
+	--editor-selection-bg: rgba(0,120,215,0.25);
+	--editor-token-keyword: var(--color-accent);
+	--editor-token-number: var(--color-warn);
+	--editor-token-constant: var(--color-good);
+	--editor-token-meta: var(--color-bad);
 }
 body[data-theme='colorful'] {
 	--color-bg:#1e0028;
@@ -120,6 +142,14 @@ body[data-theme='colorful'] {
 	--color-warn:#ffc15a;
 	--color-destructive:#ff4d6d;
 	--color-destructive-hover:#ff294f;
+	/* Monaco editor optional theme overrides */
+	--editor-current-line-bg: transparent;
+	--editor-current-line-border: transparent;
+	--editor-selection-bg: rgba(255,138,61,0.22);
+	--editor-token-keyword: var(--color-accent);
+	--editor-token-number: var(--color-warn);
+	--editor-token-constant: var(--color-good);
+	--editor-token-meta: var(--color-bad);
 }
 /* Legacy theme-dependent backgrounds */
 body[data-theme='light'] .output-pane, body[data-theme='light'] textarea, body[data-theme='light'] input[type=text] { background:#ffffff; }

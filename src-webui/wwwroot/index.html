@@ -52,7 +52,7 @@
       </div>
       <div id="inputEditors"></div>
       <div id="monacoHost" class="monaco-host hidden">
-        <div id="monacoEditor" class="monaco-editor"></div>
+        <div id="monacoEditor" class="monaco-editor-host"></div>
       </div>
       <!-- Initial textarea will be transformed into first tab by script (kept for noscript fallback) -->
       <textarea id="expr" rows="8" class="expr-area"
@@ -168,7 +168,7 @@
   <button id="scrollBottomBtn" type="button" title="Go to bottom" aria-label="Scroll to bottom" class="secondary">▼</button>
   <button id="scrollTopBtn" type="button" title="Go to top" aria-label="Scroll to top" class="secondary">▲</button>
   <script type="module" src="js/app.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.49.0/min/vs/loader.min.js"></script>
+  <!-- Monaco AMD loader is dynamically accessed via window.require when present; CDN allowed by CSP -->
   <script src="js/monaco-init.js" type="module"></script>
 </body>
 

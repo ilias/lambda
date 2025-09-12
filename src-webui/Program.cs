@@ -41,7 +41,15 @@ var app = builder.Build();
 // If you later introduce inline styles/scripts, adjust CSP accordingly.
 app.Use(async (ctx, next) =>
 {
-    const string csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
+    // CSP: allow Monaco via jsDelivr; enable unsafe-eval for AMD loader; allow inline styles injected by Monaco; and workers via blob:
+    const string csp = "default-src 'self'; " +
+                      "script-src 'self' https://cdn.jsdelivr.net 'unsafe-eval'; " +
+                      "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; " +
+                      "img-src 'self' data:; " +
+                      "connect-src 'self' https://cdn.jsdelivr.net; " +
+                      "font-src 'self' https://cdn.jsdelivr.net data:; " +
+                      "worker-src 'self' blob:; child-src 'self' blob:; " +
+                      "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
     if (!ctx.Response.Headers.ContainsKey("Content-Security-Policy"))
     {
         ctx.Response.Headers["Content-Security-Policy"] = csp;
@@ -187,6 +195,49 @@ app.MapPost("/api/load", async (LoadFileRequest req, Interpreter interp) =>
 
 // Health endpoint (prefixed for API namespace consistency)
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+
+// Lint endpoint for Monaco diagnostics (parse-only, no side effects)
+app.MapGet("/api/lint", (string expr, Interpreter interp) =>
+{
+    if (string.IsNullOrWhiteSpace(expr))
+        return Results.Ok(new { ok = true, diagnostics = Array.Empty<object>() });
+    try
+    {
+        // Tokenize + parse to validate syntax
+        var _ = interp._parser.Tokenize(expr);
+        interp._parser.ParseAll(expr);
+        return Results.Ok(new { ok = true, diagnostics = Array.Empty<object>() });
+    }
+    catch (LambdaCalculus.ParseException pe)
+    {
+        var pos = Math.Max(0, pe.Position);
+        var line = 1; var col = 1;
+        for (int i = 0; i < pos && i < expr.Length; i++)
+        {
+            if (expr[i] == '\n') { line++; col = 1; }
+            else col++;
+        }
+        var diag = new
+        {
+            message = pe.Message,
+            errorType = pe.ErrorType.ToString(),
+            position = pe.Position,
+            range = new { startLineNumber = line, startColumn = col, endLineNumber = line, endColumn = Math.Max(col, 1) + 1 }
+        };
+        return Results.Ok(new { ok = false, diagnostics = new[] { diag } });
+    }
+    catch (Exception ex)
+    {
+        var diag = new
+        {
+            message = ex.Message,
+            errorType = "GeneralError",
+            position = 0,
+            range = new { startLineNumber = 1, startColumn = 1, endLineNumber = 1, endColumn = 1 }
+        };
+        return Results.Ok(new { ok = false, diagnostics = new[] { diag } });
+    }
+});
 
 app.Run();
 

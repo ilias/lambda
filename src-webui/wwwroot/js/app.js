@@ -306,6 +306,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const monacoHost = document.getElementById('monacoHost');
   const useMonaco = s.useMonaco !== false; // default true
   if(monacoHost){ monacoHost.classList.toggle('hidden', !useMonaco); }
+  // Visually replace textareas with Monaco when enabled
+  body.classList.toggle('use-monaco', !!useMonaco);
   }
   function initSettingsUI(){
     const s = loadSettings();
@@ -343,7 +345,7 @@ window.addEventListener('DOMContentLoaded', () => {
   defWrapOutput?.addEventListener('change', ()=>{ const s=loadSettings(); s.wrapOutput = !!defWrapOutput.checked; saveSettings(s); applySettings(s); });
   defLineNumbers?.addEventListener('change', ()=>{ const s=loadSettings(); s.lineNumbers = !!defLineNumbers.checked; saveSettings(s); applySettings(s); });
   defShowNormalized?.addEventListener('change', ()=>{ const s=loadSettings(); s.showNormalized = !!defShowNormalized.checked; saveSettings(s); applySettings(s); });
-  defUseMonaco?.addEventListener('change', ()=>{ const s=loadSettings(); s.useMonaco = !!defUseMonaco.checked; saveSettings(s); applySettings(s); });
+  defUseMonaco?.addEventListener('change', ()=>{ const s=loadSettings(); s.useMonaco = !!defUseMonaco.checked; saveSettings(s); applySettings(s); try{ window.__monacoToggle?.(s.useMonaco); }catch{} });
   settingsReset?.addEventListener('click', ()=>{
   const defaults = { editorFontSize:15, outputFontSize:14, maxLines:4000, streaming:false, useWS:false, wrapOutput:true, lineNumbers:false, showNormalized:true, useMonaco:true };
     saveSettings(defaults);
@@ -710,7 +712,9 @@ window.addEventListener('DOMContentLoaded', () => {
   sfPrev?.addEventListener('click', prevHit);
   sfClear?.addEventListener('click',()=>{ searchInput.value=''; clearSearch(); });
   document.addEventListener('keydown', e=>{
-    const active = document.activeElement; const inEditable = active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA');
+    const active = document.activeElement;
+    const isMonacoEditable = !!(active && (active.closest && active.closest('.monaco-editor')));
+    const inEditable = !!(active && ((active.tagName==='INPUT') || (active.tagName==='TEXTAREA') || (active.isContentEditable) || isMonacoEditable));
     if(e.key==='/' && !inEditable){ e.preventDefault(); searchInput.focus(); }
     else if(e.key==='F3'){ e.preventDefault(); if(e.shiftKey) prevHit(); else nextHit(); }
     else if(e.key==='Enter' && active===searchInput){ e.preventDefault(); nextHit(); }
