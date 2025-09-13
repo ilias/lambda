@@ -55,6 +55,7 @@ if (Test-Path README.md) {
 	} else {
 		try {
 			$outputHtml = Join-Path $docsDir 'readme.html'
+			# Use modern pandoc syntax highlighting option (replaces deprecated --highlight-style)
 			$pandocArgs = @(
 				'README.md',
 				'--from','gfm',
@@ -62,7 +63,7 @@ if (Test-Path README.md) {
 				'--toc','--toc-depth=3',
 				'--metadata','title=Lambda Calculus Interpreter',
 				'--metadata','lang=en',
-				' --syntax-highlighting','pygments',
+				'--syntax-highlighting','pygments',
 				'--embed-resources',
 				'--section-divs',
 				'-V','viewport=width=device-width,initial-scale=1',
@@ -90,6 +91,7 @@ if (Test-Path README.md) {
 						foreach ($md in $mdFiles) {
 							$outHtml = [System.IO.Path]::ChangeExtension($md.FullName, '.html')
 							Write-Host "[docs] pandoc $($md.Name) -> $(Split-Path -Leaf $outHtml)" -ForegroundColor Cyan
+							# Modern highlighting option (removes deprecation warnings)
 							$pandocArgs = @(
 								$md.FullName,
 								'--from','gfm',
