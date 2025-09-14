@@ -1468,3 +1468,191 @@ alphaEq (all (λx.true) mixed2) true
 alphaEq (find (λx.eq x true) mixed2) false # no numeric equal to true (boolean) so expect nothing encoded as false
 
 :native on
+
+# ---------------------------------------------------------------------------
+# Additional Coverage Block (2025-09) – Newly Identified Gaps
+# ---------------------------------------------------------------------------
+
+# === Structural Equivalence Helpers (beyond alphaEq) ===
+betaEq ((λx.succ x) 4) 5
+hashEq (plus 2 3) 5
+etaEq (λx.succ x) succ
+
+# === WHILE Combinator & gcd1 Variant ===
+alphaEq (WHILE (λn.gt n 0) pred 5) 0
+alphaEq (gcd1 12 8) 4
+alphaEq (gcd1 18 24) (gcd 18 24)
+
+# === Safe Operations (remaining) ===
+alphaEq (safehead [1,2,3]) (just 1)
+alphaEq (safehead nil) nothing
+alphaEq (safetail [1,2]) (just [2])
+alphaEq (safetail nil) nothing
+alphaEq (safenth 2 [10,20,30,40]) (just 30)
+alphaEq (safenth 5 [10,20]) nothing
+alphaEq (safediv 10 2) (just 5)
+alphaEq (safediv 10 0) nothing
+
+# === Numeric Predicates & Extras ===
+alphaEq (isone 1) true
+alphaEq (isone 2) false
+alphaEq (istwo 2) true
+alphaEq (ispositive 0) false
+alphaEq (ispositive 3) true
+alphaEq (half 8) 4
+alphaEq (quadruple 3) 12
+alphaEq (abs 5) 5
+
+# === Delay / Force Semantics ===
+alphaEq (force (delay 5)) 5
+alphaEq (force (delay (succ 4))) 5
+
+# === Maybe / Either Additional Laws ===
+alphaEq (maybeMap (λx.x) (just 5)) (just 5)
+alphaEq (maybeBind (just 7) maybeReturn) (just 7)
+alphaEq (eitherMap succ (left 9)) (left 9)
+alphaEq (eitherBind (right 4) eitherReturn) (right 4)
+
+# Maybe bind associativity (concrete instantiation)
+assocL = maybeBind (maybeBind (just 2) (λx.just (succ x))) (λy.just (plus y 1))
+assocR = maybeBind (just 2) (λx.maybeBind (just (succ x)) (λy.just (plus y 1)))
+alphaEq assocL assocR
+
+# === Tag Helpers ===
+alphaEq (first (boolTag true)) 66
+alphaEq (first (maybeTag (just 1))) 77
+alphaEq (first (eitherTag (right 2))) 69
+
+# === unzip ===
+alphaEq (unzip (zip [1,2] [3,4])) (pair [1,2] [3,4])
+
+# === geq Explicit ===
+alphaEq (geq 5 5) true
+alphaEq (geq 4 5) false
+
+# === Functor Composition (List) ===
+alphaEq (map (succ ∘ square) [1,2,3]) (map succ (map square [1,2,3]))
+
+# === State Monad Expanded Tests ===
+alphaEq (runState (putState 5) 0) (pair nil 5)
+incrState = bindState getState (λn.putState (succ n))
+alphaEq (runState incrState 3) (pair nil 4)
+
+# ---------------------------------------------------------------------------
+# Additional Coverage Block 2 (2025-09) – Remaining stdlib & macro coverage
+# ---------------------------------------------------------------------------
+# Focus:
+#   - Character predicates & case conversion
+#   - String/sequence utilities: words, lines, unwords, unlines, break, intercalate
+#   - Boolean/list convenience macros: nand, nor, empty?, rest, first
+#   - Mathematical min2 / max2
+#   - Repeated application (apply_n) and benchmark semantics
+#   - Assertion & structural test macros (basic truth cases)
+# Notes:
+#   Characters represented as numeric codes. Lists of codes act as strings.
+
+# Character classification predicates
+alphaEq (isdigit 48) true
+alphaEq (isdigit 65) false
+alphaEq (islower 97) true
+alphaEq (islower 65) false
+alphaEq (isupper 65) true
+alphaEq (isupper 97) false
+alphaEq (isalpha 65) true
+alphaEq (isalpha 48) false
+alphaEq (isalnum 48) true
+alphaEq (isalnum 65) true
+alphaEq (isalnum 32) false
+alphaEq (isspace 32) true
+alphaEq (isspace 9)  true
+alphaEq (isspace 65) false
+
+# Case conversion
+alphaEq (tolower 65) 97
+alphaEq (tolower 97) 97
+alphaEq (toupper 97) 65
+alphaEq (toupper 65) 65
+
+# Edge cases
+alphaEq (unwords []) []
+alphaEq (unlines []) []
+alphaEq (intercalate [45] []) []
+
+# Boolean / list convenience macros
+alphaEq (nand true false) true
+alphaEq (nand true true) false
+alphaEq (nor false false) true
+alphaEq (nor true false) false
+alphaEq (empty? nil) true
+alphaEq (empty? [1]) false
+alphaEq (head [7,8,9]) 7
+alphaEq (rest  [7,8,9]) [8,9]
+
+# min2 / max2
+alphaEq (min2 7 3) 3
+alphaEq (min2 3 7) 3
+alphaEq (max2 7 3) 7
+alphaEq (max2 3 7) 7
+
+# apply_n & benchmark
+alphaEq (apply_n succ 5 0) 5
+alphaEq (apply_n (λx.mult x 2) 3 1) 8
+alphaEq (benchmark 10 succ 5) 6
+
+# Assertions & structural test macros
+alphaEq (assert (gt 5 0) 42) 42
+alphaEq (test (plus 2 3) 5) true
+alphaEq (testList [1,2,3] [1,2,3]) true
+alphaEq (testPair (pair 1 2) (pair 1 2)) true
+alphaEq (testMaybe (just 5) (just 5)) true
+alphaEq (testEither (right 9) (right 9)) true
+
+# ---------------------------------------------------------------------------
+# Infix Operator Precedence & Associativity Tests (2025-09)
+# Ensures parser respects declared precedence / associativity rules:
+#   ^ (right-assoc) > *,/,%, then +,-, then comparisons <,<=,>,>=, then ==,!=,
+#   then &&, then ||. Also validates parentheses override and left/right assoc.
+# ---------------------------------------------------------------------------
+
+# Multiplicative vs Additive precedence
+alphaEq (2 + 3 * 4) 14              # parsed as 2 + (3 * 4)
+alphaEq (2 * 3 + 4) 10              # (2 * 3) + 4
+
+# Parentheses override
+alphaEq ((2 + 3) * 4) 20
+alphaEq (2 * (3 + 4)) 14
+
+# Subtraction left-associative
+alphaEq (10 - 3 - 2) 5              # (10 - 3) - 2
+
+# Exponentiation right-associative
+alphaEq (2 ^ 3 ^ 2) 512             # 2 ^ (3 ^ 2) = 2 ^ 9 = 512
+
+# Mixed exponent & multiplication
+alphaEq (2 * 2 ^ 3) 16              # 2 * (2 ^ 3)
+alphaEq (2 ^ 3 * 2) 16              # (2 ^ 3) * 2 (since ^ > *)
+
+# Division / Modulo same precedence as multiplication (left-assoc)
+alphaEq (20 / 3 * 3) 18             # (20 / 3) * 3 => 6 * 3
+alphaEq (20 % 6 + 2) 4              # (20 % 6) + 2 => 2 + 2
+
+# Comparison vs Additive
+alphaEq (2 + 3 < 10) true           # (2 + 3) < 10
+alphaEq (2 < 3 + 4) true            # 2 < (3 + 4)
+
+# Equality vs Comparison
+alphaEq (eqBool (2 < 3) true) true        # (2 < 3) == true
+alphaEq (2 + 2 == 4 && 3 + 4 == 7) true
+alphaEq (2 + 2 == 5 || 3 + 4 == 7) true
+
+# Logical AND higher than OR
+alphaEq (false || true && false) false  # false || (true && false)
+alphaEq ((false || true) && false) false
+alphaEq (true && true || false && false) true  # (true && true) || (false && false)
+
+# Combined chain sanity
+alphaEq (1 + 2 * 3 == 7 && 4 ^ 2 > 3 * 5 || 10 % 4 == 2) true
+	# 1 + (2*3) == 7  => true
+	# 4^2 > 3*5       => 16 > 15 => true
+	# true && true || (10%4==2) => true || true => true
+
