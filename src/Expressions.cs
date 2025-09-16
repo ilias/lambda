@@ -61,7 +61,7 @@ public record Expr(
             {
                 var number = churchNumeralExtractor(this);
                 if (number.HasValue)
-                    return number.Value.ToString();
+                    return $"{number.Value:#,##0}".Replace(",", "_"); // use _ as thousands separator
             }
 
             // 2. cons/nil lists
