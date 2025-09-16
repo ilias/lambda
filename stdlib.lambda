@@ -1002,7 +1002,7 @@ eitherBind   = λe f.if (isLeft e) e (f (fromRight e))
 eitherReturn = right
 eitherAp     = λef ex. if (isLeft ef) ef (if (isLeft ex) ex (right ((fromRight ef) (fromRight ex))))
 eitherMap    = λf e.if (isLeft e) e (right (f (fromRight e)))
-eitherMapLeft= λf e.if (isLeft e) (left (f (fromLeft e))) e
+eitherMapLeft = λf e.if (isLeft e) (left (f (fromLeft e))) e
 eitherMap2   = λf ea eb.eitherBind ea (λa.eitherBind eb (λb.eitherReturn (f a b)))
 
 # Lightweight chaining helpers (point-free friendly)

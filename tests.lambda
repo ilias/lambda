@@ -1448,7 +1448,7 @@ alphaEq (length (drop 99 [1,2,3])) 0        # drop beyond length yields empty
 # --- Mixed numeric / non-numeric fallback tests ---
 
 # Construct a mixed list including a Church numeral and a lambda (non-numeric)
-mixed1 = [1, (λx.x), 2]
+mixed1 = [1, false, 2]
 
 # Expect pure stdlib sum/product definitions to ignore native numeric-only shortcut
 # Native SumNative/ProductNative should return null (due to lambda element) -> fallback fold versions
