@@ -1,3 +1,40 @@
+# -----------------------------------------------
+# Complex Combinator Tests (SKIBC and composition)
+# -----------------------------------------------
+
+# 1) S, K, I basic derived identities
+alphaEq ((S K K) 7) 7                         # S K K == I
+alphaEq ((S K I) 42) 42                       # S K I == identity on value
+
+# 2) K discards second argument
+alphaEq (K 5 99) 5
+alphaEq (K (plus 2 3) 0) 5
+
+# 3) B is composition: B f g x = f (g x)
+alphaEq (B succ square 3) (succ (square 3))
+alphaEq (B succ square 3) ((succ o square) 3)
+
+# 4) C flips arguments: C f x y = f y x
+alphaEq (C minus 3 10) (minus 10 3)
+alphaEq (C pair 1 2) (pair 2 1)
+
+# 5) Composition operator o associates right and matches B
+alphaEq ((succ o square) 4) (succ (square 4))
+alphaEq (((plus 1) o (mult 2)) 3) (plus 1 (mult 2 3))
+
+# 6) S distributes application: S f g x = f x (g x)
+# Use numeric functions to avoid variable capture concerns
+alphaEq (S plus square 3) (plus 3 (square 3))
+alphaEq (S mult succ 4) (mult 4 (succ 4))
+
+# 7) B/C with lists and pairs
+alphaEq (B head (cons 1) [2,3]) 1            # head (cons 1 [2,3])
+alphaEq (B tail (cons 9) [8,7]) [8,7]        # tail (cons 9 [8,7]) = [8,7]
+
+# 8) SK expression equivalences
+alphaEq ((S plus (K 3)) 4) 7
+alphaEq ((S (K succ) I) 4) 5
+
 # =========================================================================
 # Structural Equality Test Suite (auto-converted from tests.lambda)
 # Each prior test:  expr  # expect VALUE  ==>  alphaEq expr VALUE
@@ -1655,4 +1692,52 @@ alphaEq (1 + 2 * 3 == 7 && 4 ^ 2 > 3 * 5 || 10 % 4 == 2) true
 	# 1 + (2*3) == 7  => true
 	# 4^2 > 3*5       => 16 > 15 => true
 	# true && true || (10%4==2) => true || true => true
+
+
+# -----------------------------------------------
+# Combinator Laws: SKI, B, C (in-depth) (2025-09)
+# -----------------------------------------------
+
+# I as S K K
+etaEq (S K K) I
+alphaEq ((S K K) 5) 5
+alphaEq ((S K K) 0) 0
+
+# K discards second arg
+alphaEq ((K 42) 99) 42
+alphaEq (((K 7) (succ 2))) 7
+
+# S distributes: S f g x == f x (g x)
+alphaEq ((S plus square) 3) (plus 3 (square 3))
+alphaEq ((S mult succ) 4) (mult 4 (succ 4))
+
+# S (K f) I == f (extensional)
+etaEq (S (K plus) I) plus
+etaEq (S (K mult) I) mult
+
+# B is composition, and equals o (extensional)
+alphaEq ((B succ square) 3) (succ (square 3))
+alphaEq ((B (plus 1) (mult 2)) 5) 11
+etaEq (B succ square) (o succ square)
+etaEq (B (plus 1) (mult 2)) ((plus 1) o (mult 2))
+
+# B associativity: B (B f g) h == B f (B g h)
+etaEq (B (B succ (plus 2)) (mult 3)) (B succ (B (plus 2) (mult 3)))
+etaEq (B (B square (plus 1)) (succ)) (B square (B (plus 1) succ))
+
+# B with identity-like functions
+etaEq (B I succ) succ
+etaEq (B I square) square
+
+# C flips arguments: C f x y == f y x
+alphaEq (((C minus) 3 10)) (minus 10 3)
+alphaEq (((C pair) 1 2)) (pair 2 1)
+
+# C is an involution: C (C f) == f (extensional)
+etaEq (C (C minus)) minus
+etaEq (C (C pair)) pair
+
+# C with K yields second projection
+alphaEq (((C K) 1 2)) 2
+alphaEq (((C (K 42)) 1 2)) 42
 
