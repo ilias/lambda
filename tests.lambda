@@ -1718,7 +1718,7 @@ etaEq (S (K mult) I) mult
 # B is composition, and equals o (extensional)
 alphaEq ((B succ square) 3) (succ (square 3))
 alphaEq ((B (plus 1) (mult 2)) 5) 11
-etaEq (B succ square) (o succ square)
+etaEq (B succ square) (succ o square)
 etaEq (B (plus 1) (mult 2)) ((plus 1) o (mult 2))
 
 # B associativity: B (B f g) h == B f (B g h)
