@@ -1741,3 +1741,35 @@ etaEq (C (C pair)) pair
 alphaEq (((C K) 1 2)) 2
 alphaEq (((C (K (K 42))) 1 2)) 42
 alphaEq ((42 |> K |> K |> C) 1 2) 42 # chaining style
+alphaEq ((C . K . K . 42) 1 2) 42 # chaining with dot
+:macro (T6 $a $b $c $e $f $g) => ($a ($b ($c $e))) $f $g
+alphaEq (T6 C K K 42 1 2) 42  # macro style
+
+# ---------------------------------------------------
+# More Combinators and Derived Identities (2025-09)
+# ---------------------------------------------------
+
+# W (duplicator): W f x = f x x; one SK form: W = S S (K I)
+etaEq (S S (K I)) (λf x. f x x)
+alphaEq (((S S (K I)) plus 3)) (plus 3 3)
+
+# M (mockingbird): M f = f f; one SK form: M = S I I
+etaEq (S I I) (λf. f f)
+alphaEq (((S I I) (K 42))) 42
+
+# T (thrush): T x f = f x; T = C I
+etaEq (C I) (λx f. f x)
+alphaEq (((C I) 3 succ)) 4
+
+# SK encodings for B and C
+etaEq B (S (K S) K)
+etaEq C (S (B (B S) K) (K K))
+
+# Small identities
+etaEq (S K) (K I)           # S K == K I (both project second arg)
+etaEq K true                 # K is Church true
+etaEq (C K) false            # C K is Church false
+
+# C (K a) is NOT a 2-arg constant; the 2-arg constant is C (K (K a))
+etaEq (C (K (K 42))) (K (K 42))
+alphaEq (((C (K succ)) 3 0)) 4   # C (K a) x y == a x (example with succ)
