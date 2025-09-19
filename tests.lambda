@@ -1740,4 +1740,4 @@ etaEq (C (C pair)) pair
 # C with K yields second projection
 alphaEq (((C K) 1 2)) 2
 alphaEq (((C (K (K 42))) 1 2)) 42
-
+alphaEq ((42 |> K |> K |> C) 1 2) 42 # chaining style
