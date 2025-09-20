@@ -296,8 +296,6 @@ incB 41         # 42
 :module unload A   # removes A::* and A::B::*; incB persists
 ```
 
-```
-
 Notes:
 
 - Qualified identifiers use the form `ALIAS::name`.

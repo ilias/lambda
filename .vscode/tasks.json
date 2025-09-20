@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build-and-smoke",
+			"type": "shell",
+			"command": "dotnet build --nologo && dotnet run --project src-cli --no-build -- tests.lambda exit.lambda",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		}
+	]
+}

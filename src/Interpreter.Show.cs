@@ -314,7 +314,7 @@ public partial class Interpreter
             Blank line while buffer valid attempts evaluation.
         """;
 
-            return $"""
+            return $$"""
         ================= Lambda Calculus Interpreter Help =================
 
         -- Expression Syntax (abridged) --
@@ -342,7 +342,7 @@ public partial class Interpreter
             (User operators definable via :infix name prec assoc)
 
         -- Commands --
-        {commandsPlain}
+        {{commandsPlain}}
 
         -- Command Effects / Desugarings --
             :clear                ≈ reset (macros|defs|ops|cache|stats) scope; :clear macros clears only macros, etc.
@@ -361,6 +361,16 @@ public partial class Interpreter
             :step on|off          Enable CEK machine step trace output
             :test clear|result|json|text  Reset / show counters or switch test result output mode
             :help                 Show this summary
+
+        -- Modules (namespaces) --
+            :module load "file.lambda" as A   Load module under alias A
+                • Access members with qualified names:  A::x, A::y
+                • Selective import into unqualified scope:  :module import A::{x as x1, y}
+                • Temporary with-scope for one expression:  :module with A => (f a)
+                • Submodules: inside a module file, you can :module load "B.lambda" as B
+                    When the parent is loaded as A, submodule alias becomes A.B and names as A::B::name
+                • Dotted aliases are supported in import/with: :module import A.B::{inc as incB}
+                                Unloading the parent also unloads its submodules: :module unload A
 
         -- Always-On Structural Natives --
             alphaEq / betaEq / hashEq / etaEq remain available even when :native off
@@ -393,7 +403,7 @@ public partial class Interpreter
                     :macro (arity2 ($f $x $y)) => 2
                     :macro (arity2 $z) => 0
 
-        {multiLine}
+        {{multiLine}}
         See README 'Formal Grammar' for precise grammar & full desugarings.
         """;
         }
