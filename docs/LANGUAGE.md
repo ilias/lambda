@@ -18,6 +18,7 @@ Sections
 - Macro System (Basic → Advanced Enhancements)
 - Pretty Printing Rules (Output Representation)
 - REPL Convenience Commands (History / Reload / Last)
+- Module System (Aliases, Qualified Names, Import, With-scope)
 
 ---
 
@@ -254,6 +255,151 @@ Details:
 These commands are also listed in `:help` and the main `README.md` command table.
 
 ---
+
+## Module System
+
+Modules let you load `.lambda` files into an isolated environment and expose their bindings under a qualified alias. This avoids accidental name clashes and allows explicit imports.
+
+### Basics
+
+Qualified access uses `ALIAS::name`.
+
+```lambda
+:module load "mylib.lambda" as M
+M::foo
+M::bar 1 2
+```
+
+List all modules:
+
+```lambda
+:module list
+```
+
+Reload from disk (re-process the file and refresh published symbols):
+
+```lambda
+:module reload M
+``;
+
+Unload (remove published qualified symbols and registry entry):
+
+```lambda
+:module unload M
+```
+
+### Aliases and Qualified Names
+
+Set a new registry alias key (note: previously published qualified names keep their original alias; alias changes are registry-level):
+
+```lambda
+:module alias OLD as NEW
+```
+
+### Import into Unqualified Scope
+
+Selective imports copy module values into the unqualified scope; imported names persist even if the module is unloaded later.
+
+```lambda
+:module import M::{foo, bar as barM}
+foo 1
+barM 2
+```
+
+### Temporary With-scope
+
+Evaluate a single expression with all module bindings available unqualified. This is a command form, not an expression—use it at top level.
+
+```lambda
+:module with M => (foo 1)
+```
+
+### Clear Imported Names
+
+Remove previously imported unqualified names heuristically (qualified symbols remain untouched):
+
+```lambda
+:module clear-imports
+```
+
+### Name Rewriting & Semantics
+
+- When a file is loaded as a module, the interpreter analyzes which names the file defines and rewrites only free references to those names to their qualified form `ALIAS::name`.
+- Bound variables (lambda parameters, let-bound names) are not qualified.
+- References to names not defined by the module (e.g., stdlib) are left unqualified and resolve in the host environment.
+- Qualified names are published into the main environment for use by other files/REPL inputs.
+
+These rules ensure module internals are self-consistent and do not accidentally capture or shadow host bindings.
+
+### Examples
+
+Assume `m.lambda`:
+
+```lambda
+a = 41
+b = succ a
+f = x -> plus x a
+h = plus -> plus 1 2   # bound var stays local
+```
+
+Usage:
+
+```lambda
+:module load "m.lambda" as M
+M::a            # 41
+M::b            # 42
+(M::f 1)        # 42
+M::h            # λplus.3
+
+:module import M::{f as f1, a}
+f1 1            # 42
+plus a 1        # 42
+
+:module with M => (plus a 1)  # evaluates to 42 (command form)
+
+:module unload M
+
+### Submodules (Hierarchical Aliases)
+
+Module files can load their own submodules using `:module load` inside the file. When a parent module is loaded as alias `A`, any submodule loaded inside (e.g., `:module load "B.lambda" as B`) is registered as a hierarchical alias `A.B`, and its qualified names are available as `A::B::name`.
+
+Rules and behaviors:
+
+- Paths inside module files resolve relative to that file’s directory.
+- Dotted aliases are accepted by `:module import` and `:module with`:
+  - `:module import A.B::{x as xB, inc}`
+  - `:module with A.B => (inc 41)`
+- `:module unload A` unloads `A` and all its hierarchical children (`A.B`, `A.B.C`, …). Imported unqualified names persist.
+- Cyclic module loads are detected and reported.
+
+Example structure:
+
+```lambda
+# submodA.lambda
+:module load "submodB.lambda" as B
+a = 1
+ax = plus a B::x     # becomes A::a and A::B::x when loaded as A
+
+# submodB.lambda
+x = 99
+inc = \n. plus n 1
+
+# REPL
+:module load "submodA.lambda" as A
+A::a            # 1
+A::B::x         # 99
+A::ax           # 100
+:module import A.B::{inc as incB}
+incB 41         # 42
+:module unload A
+```
+f1 1            # still 42 (import persists)
+```
+
+Limitations:
+
+- `:module with` cannot be embedded inside an expression; it is a top-level command that evaluates and prints the result.
+- Aliasing changes the registry key only; qualified identifiers published earlier retain the original alias text.
 
 ### Macro System
 

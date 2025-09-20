@@ -272,15 +272,13 @@ public record Expr(
                     if (a.AbsBody is null || b.AbsBody is null) return a.AbsBody is null && b.AbsBody is null;
                     var aVar = a.AbsVarName!;
                     var bVar = b.AbsVarName!;
-                    // shadowing support: record previous mapping (if any)
+                    // Proper shadowing: temporarily override any existing mappings for these binders
                     bool hadA = map.TryGetValue(aVar, out var prevB);
                     bool hadB = reverse.TryGetValue(bVar, out var prevA);
-                    if (hadA && prevB != bVar) return false; // inconsistent mapping reuse
-                    if (hadB && prevA != aVar) return false; // inconsistent reverse
                     map[aVar] = bVar;
                     reverse[bVar] = aVar;
                     var ok = AlphaEq(a.AbsBody!, b.AbsBody!, map, reverse);
-                    // restore prior state
+                    // restore prior state after leaving this scope
                     if (hadA) map[aVar] = prevB!; else map.Remove(aVar);
                     if (hadB) reverse[bVar] = prevA!; else reverse.Remove(bVar);
                     return ok;

@@ -9,7 +9,7 @@ public partial class Interpreter
     {
     new(":clear", ":clear [macros|defs|ops|cache|all]", "Clear state (default=all): macros, defs, ops (infix), cache (memoization), or all (env+macros+ops+stats+caches)"),
         new(":depth", ":depth [n]", "Show or set maximum recursion depth (range 10-10000)"),
-        new(":env", ":env [defs|macros|infix|native|all]", "Display environment subsets; default all"),
+    new(":env", ":env [defs|modules|macros|infix|native|all]", "Display environment subsets; default all"),
         new(":exit", ":exit | :quit", "Exit the interpreter"),
         new(":help", ":help", "Show help summary"),
         new(":infix", ":infix [op prec assoc]", "Define or list infix operators (assoc = left|right)"),

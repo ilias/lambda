@@ -91,6 +91,7 @@ This table is synchronized with the interpreter's internal command metadata (sho
 | :env | `:env [defs\|macros\|infix\|native\|all]` | Display environment (optionally filtered); default all |
 | :exit | `:exit \| :quit` | Exit the interpreter |
 | :help | `:help` | Show help summary |
+| :module | `:module <load\|list\|reload\|unload\|alias\|import\|with\|clear-imports> ...` | Module management: load files into a namespaced alias (supports hierarchical submodules), list, reload/unload, alias rename (registry only), selective import into unqualified scope, temporary with-scope eval, clear imported names |
 | :infix | `:infix [op prec assoc]` | Define or list infix operators (assoc = left\|right) |
 | :lazy | `:lazy on\|off` | Toggle lazy (on) vs eager (off) evaluation |
 | :load | `:load <file>` | Load a .lambda file (may contain defs, macros, infix) |
@@ -247,6 +248,63 @@ Choosing a helper:
 | `tapdv` (macro) | value | value | Pipeline delayed value-only |
 
 Tip: Replace `tap` with `traceSilent` (via a macro edit) or swap `tap`→`tapd` to make instrumentation lazy-safe without changing shape. Use delayed forms inside both branches of a large recursive conditional to prevent unnecessary evaluation.
+
+### Modules & Imports (REPL)
+
+The REPL supports loading lambda files as modules under an alias, exposing qualified names `ALIAS::name` and offering selective imports into the unqualified scope.
+
+Quick tour:
+
+```lambda
+:module load "math.lambda" as M
+M::pi                       # qualified access
+:module import M::{add as addM, double}
+addM 1 2                    # imported with rename
+double 21                   # imported without rename
+:module with M => (add a 1) # temporary with-scope for a single expression
+:module list                # see loaded modules
+:module reload M            # reprocess source file and update module symbols
+:module unload M            # remove qualified symbols; imports remain
+
+Submodules:
+
+- A module file can load its own submodules using `:module load` inside the file.
+- When loading a parent module as `A`, any submodule loaded inside (e.g., `:module load "B.lambda" as B`) is registered as a hierarchical alias `A.B`, and its qualified names appear as `A::B::name`.
+- Paths used inside a module file are resolved relative to that file’s directory.
+- `:module import` and `:module with` accept dotted aliases: `:module import A.B::{x as xB}`.
+- `:module unload A` also unloads `A.B`, `A.B.C`, etc. Imported unqualified names persist.
+
+Example:
+
+```lambda
+# submodA.lambda
+:module load "submodB.lambda" as B
+a = 1
+ax = plus a B::x     # resolves to A::a and A::B::x when loaded as A
+
+# submodB.lambda
+x = 99
+inc = \n. plus n 1
+
+# REPL
+:module load "submodA.lambda" as A
+A::a            # 1
+A::B::x         # 99
+A::ax           # 100
+:module import A.B::{inc as incB}
+incB 41         # 42
+:module unload A   # removes A::* and A::B::*; incB persists
+```
+
+```
+
+Notes:
+
+- Qualified identifiers use the form `ALIAS::name`.
+- `:module alias OLD as NEW` renames the registry key; previously published qualified names keep their original alias.
+- Imports copy the current value into the unqualified scope (they persist after `:module unload`).
+- `:module with A => expr` is a command (not an expression); use it at the top level to evaluate `expr` with all `A` names temporarily mapped unqualified.
+- Name rewriting inside a loaded module is binding‑aware: only free references to names defined by that module are qualified; bound variables are not.
 
 ### Show / Pretty Helper Additions
 
@@ -1003,7 +1061,6 @@ A: Use `:clear` (or `:clear all`) to reset everything, or selectively `:clear de
 
 - No floating-point or rational literal support yet (only Church integers; extension planned).
 - No hygienic macro system or quasiquotation (planned).
-- Module/import system absent (single global environment unless manually isolated).
 - Error objects are string-based (structured diagnostics planned).
 - Sandboxing (timeouts, memory quotas) not yet enforced—use caution in multi-user setups.
 - Pattern matching construct (`match`) not yet implemented (macros approximate use cases).

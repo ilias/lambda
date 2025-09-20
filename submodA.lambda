@@ -1,0 +1,5 @@
+# Parent module A that loads B as a submodule
+:module load "submodB.lambda" as B
+
+a = 1
+ax = plus a B::x    # should rewrite to A::a and A::B::x when loaded as A

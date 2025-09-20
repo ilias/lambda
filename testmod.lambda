@@ -1,0 +1,14 @@
+# Simple test module
+# Defines a, b = succ a, and functions f, g, h
+
+a = 41
+b = succ a
+
+# f adds the module-local a to its input
+f = \x. plus x a
+
+# g defers to f (module self-reference)
+g = \y. f y
+
+# h shadows external plus; ensure bound var 'plus' is not qualified
+h = \plus. plus 1 2

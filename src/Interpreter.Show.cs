@@ -7,14 +7,16 @@ public partial class Interpreter
         var f = (filter ?? string.Empty).Trim().ToLowerInvariant();
         if (string.IsNullOrEmpty(f) || f == "all")
         {
-            // Existing export already prints definitions, macros, infix, natives meta
-            return await SaveFileAsync("console");
+            // Grouped full environment view: defs (with modules), infix, macros, native
+            return await Task.FromResult(ShowEnvAll());
         }
 
         switch (f)
         {
             case "defs":
                 return ShowDefsOnly();
+            case "modules":
+                return ShowModulesOnly();
             case "macros":
                 return ShowMacrosOnly();
             case "infix":
@@ -22,31 +24,76 @@ public partial class Interpreter
             case "native":
                 return ShowNativeOnly();
             default:
-                return $"Unknown env filter: {filter}. Use :env [defs|macros|infix|native|all]";
+                return $"Unknown env filter: {filter}. Use :env [defs|modules|macros|infix|native|all]";
         }
+    }
+
+    private string ShowEnvAll()
+    {
+        // These helpers log their respective sections; we aggregate summaries
+        var summaries = new List<string>();
+        summaries.Add(ShowDefsOnly());
+        summaries.Add(ShowInfixOnly());
+        summaries.Add(ShowMacrosOnly());
+        summaries.Add(ShowNativeOnly());
+        return string.Join(" | ", summaries);
     }
 
     private string ShowDefsOnly()
     {
-        // Reuse save logic but limit to definitions section only
-        // We'll directly construct similar output subset
+        // Display top-level definitions and module-defined members grouped by module
         var lines = new List<string>();
         lines.Add("# =============================================================================");
         lines.Add("# VARIABLE DEFINITIONS");
         lines.Add("# =============================================================================\n");
-        if (_contextUnevaluated.Count == 0)
+        var topLevel = _contextUnevaluated.Where(kv => !kv.Key.Contains("::")).OrderBy(k => k.Key).ToList();
+        if (topLevel.Count == 0) lines.Add("(no top-level definitions)");
+        else foreach (var kv in topLevel) lines.Add($"  {kv.Key} = {FormatWithNumerals(kv.Value)}");
+
+        // Module sections
+        if (_modules.Count > 0)
         {
-            lines.Add("(none)");
-        }
-        else
-        {
-            foreach (var kv in _contextUnevaluated.OrderBy(k => k.Key))
+            lines.Add("\n# =============================================================================");
+            lines.Add("# MODULE DEFINITIONS");
+            lines.Add("# =============================================================================\n");
+            foreach (var (alias, mod) in _modules.OrderBy(kv => kv.Key))
             {
-                lines.Add($"  {kv.Key} = {FormatWithNumerals(kv.Value)}");
+                lines.Add($"# {alias}  -> {mod.SourcePath}");
+                if (mod.Env.Count == 0)
+                {
+                    lines.Add("  (none)");
+                }
+                else
+                {
+                    foreach (var kv in mod.Env.OrderBy(k => k.Key))
+                        lines.Add($"  {alias}::{kv.Key} = {FormatWithNumerals(kv.Value)}");
+                }
+                lines.Add("");
             }
         }
         foreach (var l in lines) _logger.Log(l);
-        return $"# Displayed {_contextUnevaluated.Count} definition(s).";
+        var moduleDefCount = _modules.Sum(m => m.Value.Env.Count);
+        return $"# Displayed {topLevel.Count} top-level and {moduleDefCount} module definition(s) across {_modules.Count} module(s).";
+    }
+
+    private string ShowModulesOnly()
+    {
+        if (_modules.Count == 0) return "# (no modules)";
+        var lines = new List<string>();
+        lines.Add("\n# MODULES\n");
+        foreach (var (alias, mod) in _modules.OrderBy(kv => kv.Key))
+        {
+            var childCount = _modules.Keys.Count(a => a.StartsWith(alias + ".", StringComparison.Ordinal));
+            lines.Add($"  {alias} -> {mod.SourcePath} ({mod.Env.Count} symbols{(childCount > 0 ? ", " + childCount + " submodule(s)" : string.Empty)})");
+            if (mod.Env.Count > 0)
+            {
+                foreach (var kv in mod.Env.OrderBy(k => k.Key))
+                    lines.Add($"    {alias}::{kv.Key} = {FormatWithNumerals(kv.Value)}");
+            }
+        }
+        foreach (var l in lines) _logger.Log(l);
+        var totalDefs = _modules.Sum(m => m.Value.Env.Count);
+        return $"# Displayed {_modules.Count} module(s), {totalDefs} definition(s).";
     }
 
     private string ShowMacrosOnly()
@@ -300,7 +347,7 @@ public partial class Interpreter
         -- Command Effects / Desugarings --
             :clear                ≈ reset (macros|defs|ops|cache|stats) scope; :clear macros clears only macros, etc.
             :depth n              Set maximum recursion depth guard to n
-            :env part             Show environment subset (defs, macros, infix, native, all)
+            :env part             Show environment subset (defs, modules, macros, infix, native, all)
             :exit / :quit         Terminate process
             :infix op p a         Register infix op (precedence p, associativity a)
             :lazy on|off          Toggle evaluation strategy (on = lazy, off = eager)
