@@ -8,6 +8,14 @@
 			"problemMatcher": [
 				"$msCompile"
 			]
+		},
+		{
+			"label": "build",
+			"type": "shell",
+			"command": "dotnet build --nologo",
+			"problemMatcher": [
+				"$msCompile"
+			]
 		}
 	]
 }

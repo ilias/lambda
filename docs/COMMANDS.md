@@ -61,6 +61,14 @@ Help & Session
 ```text
 :help                   # Summary help (abbreviated)
 :exit | :quit           # Terminate session
+Documentation & Search
+
+```text
+:doc <name>             # Show doc or brief descriptor for symbol
+:doc <name> = "text"   # Set/overwrite doc text
+:doc export <file>      # Export collected docs to a Markdown file
+:find <name>            # Locate where a symbol exists (top/module/macro/native/infix)
+:grep <pattern>         # Case-insensitive substring search across names
 ```
 
 ---
@@ -111,6 +119,9 @@ Help & Session
 | :stats  | `:stats` | Performance & cache metrics |
 | :step   | `:step on\|off` | Toggle CEK tracing |
 | :test   | `:test clear` / `:test result` | Structural equality counters |
+| :doc    | `:doc <name>` / `:doc <name> = "text"` / `:doc export <file>` | Show/set/export symbol docs (supports inline `## name: text`) |
+| :find   | `:find <name>` | Locate a symbol across top-level, modules, macros, natives, infix |
+| :grep   | `:grep <pattern>` | Case-insensitive substring search across names |
 
 Tip: To restore a clean baseline without losing macros/infix, use `:clear defs` then `:load stdlib.lambda`.
 

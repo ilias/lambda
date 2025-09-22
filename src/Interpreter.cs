@@ -10,6 +10,8 @@ public partial class Interpreter
         public Dictionary<string, Expr> Env { get; } = new(StringComparer.Ordinal); // unqualified -> qualified expr
         public HashSet<string> QualifiedKeys { get; } = new(StringComparer.Ordinal);
         public DateTime LoadedAt { get; } = DateTime.UtcNow;
+        public HashSet<string>? ExportOnly { get; set; } = null; // if null => export all; else whitelist
+        public HashSet<string> Hidden { get; } = new(StringComparer.Ordinal); // explicit hide
     }
 
     private readonly Dictionary<string, ModuleInfo> _modules = new(StringComparer.Ordinal);
@@ -292,6 +294,9 @@ public partial class Interpreter
             ":pretty" or ":pp"=> HandlePrettyPrint(arg),
             ":macro" => HandleMacroDefinition(arg),
             ":module" => await HandleModuleCommandAsync(arg),
+            ":doc" => HandleDoc(arg),
+            ":find" => HandleFind(arg),
+            ":grep" => HandleGrep(arg),
             _ => $"Unknown command: {command}"
         };
     }
@@ -394,16 +399,24 @@ public partial class Interpreter
 
         // Load into an isolated interpreter to capture its definitions, then rewrite qualified
         var temp = new Interpreter(new Logger(), new Statistics());
-        var loadRes = await temp.LoadFileAsync(resolvedPath);
+    var loadRes = await temp.LoadFileAsync(resolvedPath);
         _ = loadRes; // ignore text
         try
         {
             var mod = new ModuleInfo { Alias = alias, SourcePath = abs };
             var moduleNames = new HashSet<string>(temp._contextUnevaluated.Keys, StringComparer.Ordinal);
 
-            // Copy only direct (unqualified) definitions from temp as the parent module's own members
+            // Consume export/hide directives detected in temp (stored on a special module marker)
+            HashSet<string>? exportOnly = null;
+            if (temp._modules.TryGetValue("__exports__", out var expMod) && expMod.ExportOnly is not null)
+                exportOnly = new HashSet<string>(expMod.ExportOnly, StringComparer.Ordinal);
+            var hiddenSet = temp._modules.TryGetValue("__exports__", out var hideMod) ? hideMod.Hidden : new HashSet<string>(StringComparer.Ordinal);
+
+            // Copy only direct (unqualified) definitions from temp as the parent module's own members, respecting export/hide
             foreach (var kv in temp._contextUnevaluated.Where(kv => !kv.Key.Contains("::")))
             {
+                if (hiddenSet.Contains(kv.Key)) continue;
+                if (exportOnly is not null && !exportOnly.Contains(kv.Key)) continue;
                 var qualifiedName = Qualify(alias, kv.Key);
                 var rewritten = RewriteQualifiedNames(kv.Value, alias, moduleNames);
                 mod.Env[kv.Key] = rewritten;

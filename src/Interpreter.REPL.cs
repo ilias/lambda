@@ -32,9 +32,59 @@ public partial class Interpreter
         int lastProgress = -1;
         _currentSourceFile = path;
     _isLoadingFile = true;
-        foreach (var line in lines)
+    foreach (var line in lines)
         {
             _currentSourceLine = lineCount + 1; // 1-based line number
+            // Inline doc directive: lines starting with '## name: text' capture doc without affecting evaluation
+            var trimmed = line.TrimEnd();
+            if (trimmed.StartsWith("## "))
+            {
+                // Format: ## symbol: doc text
+                var payload = trimmed[3..].Trim();
+                var colon = payload.IndexOf(':');
+                if (colon > 0)
+                {
+                    var name = payload[..colon].Trim();
+                    var text = payload[(colon + 1)..].Trim();
+                    _docs[name] = text;
+                    lineCount++;
+                    continue;
+                }
+            }
+            // Also capture minimal module export/hide pseudo-directives when loading modules
+            if (_isLoadingFile)
+            {
+                var trimmed2 = line.Trim();
+                if (trimmed2.StartsWith(":module export "))
+                {
+                    // :module export {a,b,c}
+                    var inner = trimmed2[":module export ".Length..].Trim();
+                    if (inner.StartsWith("{") && inner.EndsWith("}"))
+                    {
+                        var items = inner[1..^1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        var set = new HashSet<string>(items, StringComparer.Ordinal);
+                        var exp = _modules.GetValueOrDefault("__exports__") ?? new ModuleInfo { Alias = "__exports__", SourcePath = _currentSourceFile ?? "" };
+                        exp.ExportOnly = set;
+                        _modules["__exports__"] = exp;
+                        lineCount++;
+                        continue;
+                    }
+                }
+                if (trimmed2.StartsWith(":module hide "))
+                {
+                    // :module hide {a,b}
+                    var inner = trimmed2[":module hide ".Length..].Trim();
+                    if (inner.StartsWith("{") && inner.EndsWith("}"))
+                    {
+                        var items = inner[1..^1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        var mod = _modules.GetValueOrDefault("__exports__") ?? new ModuleInfo { Alias = "__exports__", SourcePath = _currentSourceFile ?? "" };
+                        foreach (var it in items) mod.Hidden.Add(it);
+                        _modules["__exports__"] = mod;
+                        lineCount++;
+                        continue;
+                    }
+                }
+            }
             await ProcessLineWithContinuation(line, currentInput, ProcessAndDisplayInputAsync, true, lineCount++);
             var pct = (int)((long)lineCount * 100 / total);
             if (pct != lastProgress && (pct == 100 || pct - lastProgress >= 5)) // every 5% + final

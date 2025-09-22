@@ -2,6 +2,102 @@ namespace LambdaCalculus;
 
 public partial class Interpreter
 {
+    // --- Documentation & discovery --------------------------------------------------------
+    private readonly Dictionary<string, string> _docs = new(StringComparer.Ordinal);
+
+    private string HandleDoc(string arg)
+    {
+        // :doc <name>
+        // :doc <name> = "text"
+        // :doc export <file>
+        if (string.IsNullOrWhiteSpace(arg))
+            return "Usage: :doc <name> | :doc <name> = \"text\" | :doc export <file>";
+
+        var parts = arg.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 1 && parts[0].Equals("export", StringComparison.OrdinalIgnoreCase))
+        {
+            var file = parts.Length > 1 ? parts[1].Trim() : "docs.md";
+            try
+            {
+                var lines = new List<string> { "# Documentation", "" };
+                foreach (var kv in _docs.OrderBy(k => k.Key))
+                {
+                    lines.Add($"## {kv.Key}");
+                    lines.Add("");
+                    lines.Add(kv.Value);
+                    lines.Add("");
+                }
+                File.WriteAllLines(file, lines);
+                return $"Exported {_docs.Count} doc entries to {file}";
+            }
+            catch (Exception ex) { return $"Error exporting docs: {ex.Message}"; }
+        }
+
+        var eq = arg.IndexOf('=');
+        if (eq > 0)
+        {
+            var name = arg[..eq].Trim();
+            var value = arg[(eq + 1)..].Trim();
+            value = value.Trim();
+            if (value.StartsWith('"') && value.EndsWith('"') && value.Length >= 2)
+                value = value[1..^1];
+            _docs[name] = value;
+            return $"Doc updated: {name}";
+        }
+        else
+        {
+            var name = arg.Trim();
+            if (_docs.TryGetValue(name, out var doc))
+                return doc;
+            // Fallback: show a short descriptor if exists
+            var sb = new System.Text.StringBuilder();
+            if (_contextUnevaluated.TryGetValue(name, out var expr))
+                sb.AppendLine($"def {name} = {FormatWithNumerals(expr)}");
+            else if (_contextUnevaluated.TryGetValue(name.Replace("::", ":"), out var expr2))
+                sb.AppendLine($"def {name} = {FormatWithNumerals(expr2)}");
+            if (_parser._macros.ContainsKey(name)) sb.AppendLine("macro: defined");
+            if (_nativeFunctions.ContainsKey(name)) sb.AppendLine("native: defined");
+            if (_parser._infixOperators.ContainsKey(name))
+            {
+                var op = _parser._infixOperators[name];
+                sb.AppendLine($"infix: prec {op.Precedence} {op.Associativity.ToString().ToLower()}");
+            }
+            var m = _modules.FirstOrDefault(kv => kv.Value.Env.ContainsKey(name));
+            if (!string.IsNullOrEmpty(m.Key)) sb.AppendLine($"module member: {m.Key}::{name}");
+            return sb.Length == 0 ? $"No doc for {name}" : sb.ToString().TrimEnd();
+        }
+    }
+
+    private string HandleFind(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg)) return "Usage: :find <name>";
+        var name = arg.Trim();
+        var lines = new List<string>();
+        if (_contextUnevaluated.ContainsKey(name)) lines.Add($"top-level: {name}");
+        foreach (var (alias, mod) in _modules)
+            if (mod.Env.ContainsKey(name)) lines.Add($"module: {alias}::{name}");
+        if (_parser._macros.ContainsKey(name)) lines.Add("macro: defined");
+        if (_nativeFunctions.ContainsKey(name)) lines.Add("native: defined");
+        if (_parser._infixOperators.ContainsKey(name)) lines.Add("infix: defined");
+        return lines.Count == 0 ? $"Not found: {name}" : string.Join('\n', lines);
+    }
+
+    private string HandleGrep(string arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg)) return "Usage: :grep <pattern>";
+        var pat = arg.Trim();
+        var comp = StringComparison.OrdinalIgnoreCase;
+        var lines = new List<string>();
+        lines.AddRange(_contextUnevaluated.Keys.Where(k => k.Contains(pat, comp)).OrderBy(s => s).Select(s => $"def: {s}"));
+        foreach (var (alias, mod) in _modules)
+        {
+            lines.AddRange(mod.Env.Keys.Where(k => k.Contains(pat, comp)).OrderBy(s => s).Select(s => $"mod {alias}::{s}"));
+        }
+        lines.AddRange(_parser._macros.Keys.Where(k => k.Contains(pat, comp)).OrderBy(s => s).Select(s => $"macro: {s}"));
+        lines.AddRange(_nativeFunctions.Keys.Where(k => k.Contains(pat, comp)).OrderBy(s => s).Select(s => $"native: {s}"));
+        lines.AddRange(_parser._infixOperators.Keys.Where(k => k.Contains(pat, comp)).OrderBy(s => s).Select(s => $"infix: {s}"));
+        return lines.Count == 0 ? "No matches" : string.Join('\n', lines);
+    }
     // Command handling helpers extracted from Interpreter
     private string HandleNativeArithmetic(string arg)
     {

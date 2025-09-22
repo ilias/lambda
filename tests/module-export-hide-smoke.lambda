@@ -1,0 +1,13 @@
+# Module export/hide smoke harness
+
+# Load the module file as an actual module alias "M"
+:module load "tests/module-export-hide.lambda" as M
+
+# Access exported names
+M::pub           # expect 41
+M::subInc 5      # expect 6
+
+# Discovery: exported names should be findable under module category; hidden should not
+:find pub        # should list module M
+:find subInc     # should list module M
+:find secret     # should not list module M (hidden)

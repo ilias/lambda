@@ -393,6 +393,8 @@ A::ax           # 100
 incB 41         # 42
 :module unload A
 ```
+
+```lambda
 f1 1            # still 42 (import persists)
 ```
 
@@ -400,6 +402,31 @@ Limitations:
 
 - `:module with` cannot be embedded inside an expression; it is a top-level command that evaluates and prints the result.
 - Aliasing changes the registry key only; qualified identifiers published earlier retain the original alias text.
+
+### Documentation & Discovery Aids
+
+- Inline docs inside files: lines starting with `## name: text` attach documentation to `name` without affecting evaluation.
+- REPL commands:
+  - `:doc <name>` shows doc text if available, or a brief descriptor (def/macro/native/infix locations).
+  - `:doc <name> = "text"` sets/overwrites a doc entry.
+  - `:doc export <file>` writes all collected docs to a Markdown file.
+  - `:find <name>` locates where a symbol is defined (top-level, module members, macros, natives, infix).
+  - `:grep <pattern>` searches names across defs/modules/macros/natives/infix (case-insensitive substring).
+
+### Module Export/Hide in Source Files
+
+Inside a module source file, you may control which symbols are published when the file is loaded via `:module load` by adding pseudo-directives at top-level:
+
+```lambda
+:module export {a, b, subInc}  # Only these names are published (whitelist)
+:module hide {internal}        # Names to exclude (blacklist)
+```
+
+Rules:
+
+- If an export set is present, only those names are published. The hide set removes names (applies after export filtering).
+- These directives are effective only when loading the file as a module; they do not affect plain `:load` into the global scope.
+- Submodules loaded from within the file are still available under hierarchical aliases; you can re-expose a submodule binding by binding a parent name to `Sub::name` and including that name in the export set.
 
 ### Macro System
 

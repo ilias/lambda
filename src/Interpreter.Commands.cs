@@ -24,6 +24,9 @@ public partial class Interpreter
         new(":step", ":step on|off", "Toggle step-by-step CEK trace output"),
         new(":test", ":test clear | :test result | :test json | :test text", "Reset counters, show results, or change result output mode (text/json)"),
         new(":module", ":module <load|reload|unload|list|import|alias|with|clear-imports> ...", "Module system: load/list/reload/unload/import/alias/with/clear-imports"),
+    new(":doc", ":doc <name> | :doc <name> = \"text\" | :doc export <file>", "Show/set/export documentation for symbols (supports qualified names)"),
+    new(":find", ":find <name>", "Find where a symbol is defined (top-level, module, macro, native, infix)"),
+    new(":grep", ":grep <pattern>", "Search names across defs, modules, macros, natives, infix (case-insensitive substring)"),
         // QoL additions
         new(":hist", ":hist [n]", "Show last n (default 20) entered top-level inputs"),
         new(":repeat", ":repeat <index| -k>", "Re-run history entry by index (as shown in :hist) or negative offset (-1 = last)"),

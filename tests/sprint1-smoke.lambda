@@ -1,0 +1,24 @@
+# Sprint 1 smoke tests: :doc, :find, :grep
+
+## add: Adds two numbers
+add = \a b.plus a b
+
+## Ten: a constant ten
+Ten = 10
+
+# Set and get doc via command
+:doc add = "Adds two numbers"
+:doc Ten = "The number ten"
+
+# Query docs
+:doc add
+:doc Ten
+
+# Find symbols
+:find add
+:find Ten
+
+# Grep searches
+:grep ad
+:grep ten
+

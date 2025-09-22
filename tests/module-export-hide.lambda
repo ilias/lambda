@@ -1,0 +1,12 @@
+# Module export/hide smoke
+# Parent module file that declares exports/hide and a submodule
+
+:module export {pub, subInc}
+:module hide {secret}
+
+pub = 41
+secret = 999
+
+# Load a submodule and re-expose a function via parent name
+:module load "submod.lambda" as S
+subInc = S::inc

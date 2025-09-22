@@ -1,0 +1,3 @@
+# Submodule used by module-export-hide.lambda
+x = 99
+inc = \n.plus n 1

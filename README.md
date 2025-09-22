@@ -91,7 +91,7 @@ This table is synchronized with the interpreter's internal command metadata (sho
 | :env | `:env [defs\|macros\|infix\|native\|all]` | Display environment (optionally filtered); default all |
 | :exit | `:exit \| :quit` | Exit the interpreter |
 | :help | `:help` | Show help summary |
-| :module | `:module <load\|list\|reload\|unload\|alias\|import\|with\|clear-imports> ...` | Module management: load files into a namespaced alias (supports hierarchical submodules), list, reload/unload, alias rename (registry only), selective import into unqualified scope, temporary with-scope eval, clear imported names |
+| :module | `:module <load\|list\|reload\|unload\|alias\|import\|with\|clear-imports> ...` | Module management: load files into a namespaced alias (supports hierarchical submodules), list, reload/unload, alias rename (registry only), selective import into unqualified scope, temporary with-scope eval, clear imported names. Inside module files, support `:module export {..}` and `:module hide {..}` to control published symbols. |
 | :infix | `:infix [op prec assoc]` | Define or list infix operators (assoc = left\|right) |
 | :lazy | `:lazy on\|off` | Toggle lazy (on) vs eager (off) evaluation |
 | :load | `:load <file>` | Load a .lambda file (may contain defs, macros, infix) |
@@ -104,6 +104,9 @@ This table is synchronized with the interpreter's internal command metadata (sho
 | :stats | `:stats` | Show performance statistics & cache metrics |
 | :step | `:step on\|off` | Toggle step-by-step CEK trace output |
 | :test | `:test clear` / `:test result` | Reset or display structural equality test counters |
+| :doc | `:doc <name>` / `:doc <name> = "text"` / `:doc export <file>` | Symbol docs: show, set, and export collected docs (supports inline `## name: text` in files) |
+| :find | `:find <name>` | Locate a symbol across top-level, modules, macros, natives, infix |
+| :grep | `:grep <pattern>` | Case-insensitive substring search across defs, modules, macros, natives, infix |
 | :hist | `:hist [n]` | Show last n (default 20) entered top-level inputs |
 | :repeat | `:repeat <index\|-k>` | Re-run history entry by index or negative offset -1 means last |
 | :reload | `:reload` | Reload the most recently :load'ed file |

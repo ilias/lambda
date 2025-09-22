@@ -10,20 +10,26 @@ public class Program
         Console.InputEncoding = System.Text.Encoding.UTF8;
 
         var interpreter = new Interpreter(logger: new());
+        // Basic arg parsing: support --no-repl to run files non-interactively
+        var noRepl = args.Any(a => string.Equals(a, "--no-repl", StringComparison.OrdinalIgnoreCase));
+        var fileArgs = args.Where(a => !string.Equals(a, "--no-repl", StringComparison.OrdinalIgnoreCase)).ToArray();
 
-    await interpreter.LoadFileIfExistsAsync("stdlib.lambda");
+        await interpreter.LoadFileIfExistsAsync("stdlib.lambda");
 
-        foreach (var filePath in args)
+        foreach (var filePath in fileArgs)
         {
             var result = await interpreter.LoadFileIfExistsAsync(filePath);
             if (result.StartsWith("File not found:"))
                 Console.WriteLine(result);
         }
 
-        Logger.LogToConsole("");
-        Logger.LogToConsole("Lambda Calculus Interpreter - Interactive Mode");
-        Logger.LogToConsole("Type ':help' for a list of commands or ':exit' to quit");
-        await interpreter.RunInteractiveLoopAsync();
+        if (!noRepl)
+        {
+            Logger.LogToConsole("");
+            Logger.LogToConsole("Lambda Calculus Interpreter - Interactive Mode");
+            Logger.LogToConsole("Type ':help' for a list of commands or ':exit' to quit");
+            await interpreter.RunInteractiveLoopAsync();
+        }
         return 0;
     }
 }
