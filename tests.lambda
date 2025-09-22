@@ -882,6 +882,10 @@ fib6 = Y (\f.\n. if (leq n 2) 1 (plus (f (pred n)) (f (pred (pred n)))))
 alphaEq (fib6 10) 55
 fib7 = Y (\f. \n. if (n <= 2) 1 ((f (n - 1)) + (f (n - 2))))
 alphaEq (fib7 10) 55
+fib8 = n -> if (n <= 2) 1 ((fib8 . -- n) + (fib8 . -- . -- n))
+alphaEq (fib8 10) 55
+fib9 = n -> if (n <= 2) 1 ((fib9 $ -- n) + (fib9 $ -- $ -- n))
+alphaEq (fib9 10) 55
 
 # ============================================================================
 # Added Extended Coverage (new)
