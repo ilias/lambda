@@ -281,3 +281,29 @@ Segments processed left→right; errors abort remaining segments.
 ---
 
 See `LANGUAGE.md` for grammar & syntactic sugar; `COMPILER.md` for building / embedding; `THEORY.md` for background.
+
+---
+
+### Appendix: Non-Interactive Mode (`--no-repl`)
+
+When invoking the CLI you can pass `--no-repl` before any list of `.lambda` files to execute them and terminate without entering the interactive loop. This enables scripting, CI smoke tests, or automated documentation export.
+
+```text
+dotnet run --project src-cli -- --no-repl tests/sprint1-smoke.lambda
+dotnet run --project src-cli -- --no-repl tests/module-export-hide-smoke.lambda
+```
+
+Notes:
+
+- `stdlib.lambda` is loaded automatically first (if present).
+- Files are executed in the order given; failures to find a file produce a diagnostic but do not stop later files.
+- Combine multiple commands inside a file with `;` separators for batch workflows.
+
+Typical scripted doc export:
+
+```lambda
+# script.lambda
+:doc export docs/generated-symbol-docs.md
+```
+
+Run: `dotnet run --project src-cli -- --no-repl script.lambda`.

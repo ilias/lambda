@@ -114,6 +114,26 @@ This table is synchronized with the interpreter's internal command metadata (sho
 
 Tip: After heavy experimentation, run `:clear all` then `:load stdlib.lambda` to restore the baseline library. For only redefining functions without losing macro/infix definitions use `:clear defs`.
 
+### Non-Interactive / Script Mode
+
+The CLI supports a `--no-repl` flag. Supply one or more `.lambda` files after the flag to execute them (loading `stdlib.lambda` first) and then exit without entering the interactive REPL.
+
+Examples:
+
+```powershell
+dotnet run --project src-cli -- --no-repl tests/sprint1-smoke.lambda
+dotnet run --project src-cli -- --no-repl scripts/build(lambda tests/module-export-hide-smoke.lambda
+```
+
+Behavior:
+
+- Always loads `stdlib.lambda` first if present.
+- Processes each file in order; missing files emit `File not found:` lines but do not abort subsequent files.
+- Suppresses the interactive banner & prompt.
+- Useful for smoke tests, CI, or generating doc exports via `:doc export file.md` at the end of a script.
+
+To chain multiple operations in a single file, use `;` to separate commands: `:module load "m.lambda" as M; :doc export docs.md`.
+
 ## Examples (Extended)
 
 ### Fibonacci Sequence
