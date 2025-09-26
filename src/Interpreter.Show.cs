@@ -58,7 +58,7 @@ public partial class Interpreter
             lines.Add("# =============================================================================\n");
             foreach (var (alias, mod) in _modules.OrderBy(kv => kv.Key))
             {
-                lines.Add($"# {alias}  -> {mod.SourcePath}");
+                lines.Add($"# {alias.Replace(".", "::")}  -> {mod.SourcePath}");
                 if (mod.Env.Count == 0)
                 {
                     lines.Add("  (none)");
@@ -66,7 +66,7 @@ public partial class Interpreter
                 else
                 {
                     foreach (var kv in mod.Env.OrderBy(k => k.Key))
-                        lines.Add($"  {alias}::{kv.Key} = {FormatWithNumerals(kv.Value)}");
+                        lines.Add($"  {alias.Replace(".", "::")}::{kv.Key} = {FormatWithNumerals(kv.Value)}");
                 }
                 lines.Add("");
             }
