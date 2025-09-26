@@ -1,7 +1,7 @@
 # Module export/hide smoke harness
 
 # Load the module file as an actual module alias "M"
-:module load "tests/module-export-hide.lambda" as M
+:module load "module-export-hide.lambda" as M
 
 # Access exported names
 M::pub           # expect 41
