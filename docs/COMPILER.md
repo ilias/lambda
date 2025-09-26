@@ -61,6 +61,38 @@ dotnet run --project src-cli/lambda-cek.cli.csproj
 dotnet run --project src-cli/lambda-cek.cli.csproj -- myfile.lambda tests.lambda
 ```
 
+### Non-Interactive Script Mode (`--no-repl`)
+
+For CI, smoke tests, or batch processing you can run the CLI without entering the interactive REPL using `--no-repl`. Supply one or more `.lambda` files; `stdlib.lambda` is loaded automatically first (if present), then each file is executed in order, and the process exits.
+
+```powershell
+# Single script
+dotnet run --project src-cli/lambda-cek.cli.csproj -- --no-repl tests/sprint1-smoke.lambda
+
+# Multiple scripts (executed in order)
+dotnet run --project src-cli/lambda-cek.cli.csproj -- --no-repl tests/module-export-hide.lambda tests/module-export-hide-smoke.lambda
+```
+
+Behaviors & Notes:
+
+- Missing files print `File not found:` but do not abort subsequent files.
+- Suppresses the interactive banner and prompt.
+- Combine commands inside a file with `;` (e.g., `:doc export docs/generated-symbols.md; :stats`).
+- Useful in pipelines: documentation export, regression smoke runs, or reproducible examples.
+
+Minimal scripted doc export example:
+
+```lambda
+# script.lambda
+:doc export artifacts/docs.md
+```
+
+Run with:
+
+```powershell
+dotnet run --project src-cli/lambda-cek.cli.csproj -- --no-repl script.lambda
+```
+
 Web API:
 
 ```powershell
