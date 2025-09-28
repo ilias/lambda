@@ -398,6 +398,13 @@ alphaEq (maybeMap succ nothing) nothing
 
 # --- Maybe Monadic / Applicative Helpers (new 2025-09) ---
 alphaEq (maybeBind (just 3) (λx.just (plus x 1))) (just 4)
+
+# --- Quasiquote / Unquote (initial) ---
+# Quasiquote is a macro-only quoting form; after expansion, qq(expr) becomes expr.
+alphaEq (qq (plus 1 2)) 3
+alphaEq (` (mult 2 3)) 6
+alphaEq (qq (plus ~ (succ 1) 3)) 5
+alphaEq (qq ((λx.plus x 1) ~ 2)) 3
 alphaEq (maybeBind nothing (λx.just (plus x 1))) nothing
 alphaEq (maybeAp (just succ) (just 4)) (just 5)
 alphaEq (maybeAp nothing (just 4)) nothing
@@ -1827,6 +1834,101 @@ alphaEq A::ax 100
 # Selective import from a submodule using dotted alias
 :module import A.B::{inc as incB}
 alphaEq (incB 41) 42
+
+# --------------------------------------------------
+# Hygienic Macros – Smoke Tests (2025-09)
+# --------------------------------------------------
+
+# 1) Capture-avoidance: macro introduces a binder named x; should not capture a free x from the call site
+:macro (letX $e) => (qq ((\x. ~ $e) 0))
+def x = 42
+alphaEq (letX x) 42           # Without hygiene this would be 0 due to capture; with hygiene it's 42
+
+# 2) Splicing + hygiene sanity
+:macro (call2h $f $args) => (qq (~ $f ~@ $args))
+alphaEq (call2h plus [1, 2]) 3
+
+# --------------------------------------------------
+# Hygienic Macros – More Tests (2025-09)
+# --------------------------------------------------
+
+# 3) Nested binders introduced by a macro must not capture site vars
+:macro (letXY $e) => (qq ((\x. (\y. ~ $e) 0) 0))
+def y = 99
+alphaEq (letXY x) 42
+alphaEq (letXY y) 99
+
+# 4) Binder introduced by macro should not affect inner lambda parameters inside $e
+:macro (wrapX $e) => (qq (\x. ~ $e))
+alphaEq (((wrapX (\x. x)) 0) 5) 5
+
+# 5) Splicing with free variables in args should not be captured by introduced binder
+:macro (applyX $f $args) => (qq ((\x. ~ $f ~@ $args) 0))
+alphaEq (applyX plus [x, 1]) 43
+
+# 6) Unquote inside application argument amidst binder should remain a single arg and not be captured
+# Use parentheses with unquote to ensure grouping: ~( $a ) becomes one argument
+:macro (inArg $a) => (qq ((\x. plus ~( $a ) 1) 0))
+def x2 = 41
+alphaEq (inArg x2) 42
+
+# --------------------------------------------------
+# Quasiquote Splicing – Smoke Tests (2025-09)
+# --------------------------------------------------
+
+# Simple function and helpers
+def add3 a b c = plus (plus a b) c
+
+# Macro that builds a call with spliced argument list
+:macro (call2 $f $args) => (qq ($f ~@ $args))
+
+# Splice two args into add3 with a fixed first arg
+alphaEq (call2 (add3 1) [2,3]) 6
+
+# Macro that constructs a list with spliced inner list
+:macro (mklist $a $rest) => (qq [~ $a, ~@ $rest, 99])
+
+# Expect flattening of spliced list elements
+alphaEq (mklist 1 [2,3]) [1,2,3,99]
+
+# Additional Quasiquote/Unquote/Splice Edge Cases (2025-09)
+
+# Splicing empty list should contribute zero args/elements
+:macro (call2_empty $f $xs) => (qq (~ $f ~@ $xs))
+alphaEq (call2_empty add3 []) (add3)            # no extra args spliced
+alphaEq ([~@ []]) []                            # empty splice into list
+
+# Splicing singleton list and nested splicing
+alphaEq (call2 (add3 1) [2]) (add3 1 2)         # single arg splice
+:macro (call_nested $f $xs) => (qq (~ $f ~@ (cons 7 $xs)))
+alphaEq (call_nested add3 [1,2]) (add3 7 1 2)
+
+# Splicing Church list (cons/nil) should flatten
+alphaEq (call2 add3 (cons 1 (cons 2 nil))) (add3 1 2)
+alphaEq ([~@ (cons 9 (cons 8 nil))]) [9,8]
+
+# Atomic unquote in the middle of args remains a single argument
+:macro (midArg $a $b) => (qq (add3 0 ~( $a ) ~( $b )))
+alphaEq (midArg (plus 1 1) (plus 2 1)) (add3 0 2 3)
+
+# Multiple unquotes in one template are independent
+:macro (dup2 $a) => (qq ([~( $a ), ~( $a )]))
+alphaEq (dup2 (plus 1 1)) [2,2]
+
+# Splicing with zero, one, and many: apply to a 3-ary function with fixed prefix
+:macro (applyFlex $f $xs) => (qq (~( $f ) 1 ~@ ( $xs )))
+alphaEq (applyFlex add3 []) (add3 1)
+alphaEq (applyFlex add3 [2]) (add3 1 2)
+alphaEq (applyFlex add3 [2,3]) (add3 1 2 3)
+
+# Splice result that is itself produced by unquote expression
+:macro (join2 $a $b) => (qq ([~@ ( ~( $a )), ~@ ( ~( $b ))]))
+alphaEq (join2 [1,2] [3]) [1,2,3]
+
+# Hygiene with spliced free site vars
+:macro (applyH $f $xs) => (qq ((\tmp. ~( $f ) ~@ ( $xs )) 0))
+def site = 5
+alphaEq (applyH plus [site, 2]) 7
 
 # Unload A should also remove A.B symbols (qualified), but imported incB persists
 :module unload A

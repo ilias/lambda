@@ -452,7 +452,8 @@ Advanced capabilities:
 4. Wildcards `_` ignore subexpressions
 5. Integer literal patterns match exact numerals
 6. Specificity ordering (literal & structural > variable > rest) with tie break on arity then recency
-7. Safe placeholder substitution preventing accidental capture (hygiene roadmap)
+7. Hygienic expansion: macro‑introduced binders are gensym‑renamed to avoid capturing call‑site identifiers
+8. Quasiquote templates with unquote and splice: backtick quote `` `...``, unquote `~e`, and unquote‑splice `~@e`
 
 Examples:
 
@@ -463,7 +464,51 @@ Examples:
 list 1 2 3  # expands to [1,2,3]
 ```
 
-Planned enhancements: hygiene / gensym, quasiquote/unquote, macro removal, nested rest, compile‑time eval.
+#### Quasiquote, Unquote, and Splicing
+
+Use backtick to build code templates, `~` to evaluate and insert a single expression, and `~@` to splice a sequence of arguments/elements:
+
+```lambda
+# Simple unquote inside a template
+:macro (incr $x) => `(succ ~(x))
+incr 41  # → 42
+
+# Splicing into an application spine
+:macro (apply2 $f $xs ...) => `(~(f) ~@($xs))
+apply2 add 1 2  # → (add 1 2)
+
+# Splicing into list literals (pretty printed)
+:macro (list* $xs ...) => `[~@($xs)]
+list* 1 2 3  # → [1,2,3]
+```
+
+Semantics summary:
+
+- Application spines: `~e` inserts one argument position; `~@e` splices zero or more arguments produced by `e`.
+- List literals (and Church lists): `~@e` flattens elements; `~e` inserts a single element.
+- Nested unquotes: after expanding `~e`, the quasiquote walker re‑enters to allow splices produced by that expansion to take effect at the correct depth.
+- Atomicity: a plain `~e` inside application arguments is treated as one argument (it is not flattened like splice).
+
+Supported splicing sources:
+
+- Native list literals (`[a, b, c]`) are flattened by `~@`.
+- Church lists are also recognized and flattened by `~@` (e.g., `(cons 1 (cons 2 nil))`).
+
+#### Hygiene model
+
+Macro expansion is hygienic by default:
+
+- Any binders introduced by a macro (e.g., from `λ`/`let`) are replaced with fresh gensym names so they cannot accidentally capture call‑site variables.
+- Unquoted regions (`~...` / `~@...`) are treated as call‑site code and are not renamed; free variables coming from the site remain free.
+- Variable resolution prefers the current environment, with a safe fallback to top‑level definitions when appropriate, ensuring expanded code refers to the intended bindings.
+
+Practical effect: you can write macros that introduce helpers or temporary variables without worrying about collisions with names at the invocation site.
+
+Notes:
+
+- Macro expansion order respects pattern specificity (more structural/literal patterns match before generic ones). Guards (`when`) are evaluated in match order.
+- For macro debugging, turn pretty printing off (`:pretty off`) and optionally enable stepping/logging to inspect the raw expanded forms.
+- Unquote precedence tip: `~` binds to the following expression. If you write `plus ~ a 1`, it parses as `plus ~(a 1)`. To insert a site variable as a single argument, parenthesize the unquote: `plus ~(a) 1`.
 
 ---
 

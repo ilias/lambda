@@ -54,6 +54,8 @@ Language Extension
 ```text
 :infix <op> <prec> <assoc>
 :macro (pattern) => body
+# Macros support quasiquote/unquote/splice and are hygienic by default.
+# See LANGUAGE.md (Macro System) for syntax and semantics.
 ```
 
 Help & Session

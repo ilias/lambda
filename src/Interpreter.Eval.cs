@@ -37,7 +37,10 @@ public partial class Interpreter
             var (control, env, kont) = stateStack.Pop();
             if (_showStep)
                 _logger.Log($"Step {currentStep++}: CEK \tC: {FormatWithNumerals(control)}, K: {kont.Type}");
-            if (!disableEvalCache && GetEvalCache(control, out var cachedResult))
+            // Do not use eval cache for variables to ensure they always resolve
+            // against the current environment or top-level context (important
+            // for macro hygiene scenarios and dynamic definitions).
+            if (!disableEvalCache && control.Type != ExprType.Var && GetEvalCache(control, out var cachedResult))
             {
                 ApplyContinuation(cachedResult, env, kont, stateStack, ref finalResult);
                 continue;
@@ -60,7 +63,11 @@ public partial class Interpreter
             switch (control)
             {
                 case { Type: ExprType.Var, VarName: var v }:
-                    var value = env.TryGetValue(v!, out var envValue) ? envValue : control;
+                    // Resolve variable from current environment; if missing, fall back to top-level context
+                    // so that free variables can reference global definitions (e.g., after macro expansion).
+                    var value = env.TryGetValue(v!, out var envValue)
+                        ? envValue
+                        : (_context.TryGetValue(v!, out var ctxValue) ? ctxValue : control);
                     ApplyContinuation(value, env, kont, stateStack, ref finalResult);
                     break;
                 case { Type: ExprType.Abs }:

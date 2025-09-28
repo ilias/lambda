@@ -16,6 +16,29 @@ internal sealed class Tokenizer
         for (int i = 0; i < input.Length; i++)
         {
             var ch = input[i]; pos++;
+            // Quasiquote shorthand: backtick `
+            if (ch == '`')
+            {
+                Flush();
+                result.Add(new Token(TokenType.QuasiQuote, pos));
+                continue;
+            }
+
+            // Unquote / Unquote-splicing: ~ and ~@
+            if (ch == '~')
+            {
+                Flush();
+                if (i + 1 < input.Length && input[i+1] == '@')
+                {
+                    result.Add(new Token(TokenType.UnquoteSplice, pos, "~@"));
+                    i++; pos++;
+                }
+                else
+                {
+                    result.Add(new Token(TokenType.Unquote, pos, "~"));
+                }
+                continue;
+            }
             if (ch == '#') { // comment rest of line (support inline comments)
                 while (i + 1 < input.Length && input[i+1] != '\n' && input[i+1] != '\r') { i++; pos++; }
                 continue; // skip to newline

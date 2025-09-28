@@ -178,6 +178,9 @@ public partial class Parser
         var token = tokens[pos];
         return token.Type switch
         {
+            TokenType.QuasiQuote => ParseQuasiQuote(tokens, ref pos, end),
+            TokenType.Unquote => ParseUnquote(tokens, ref pos, end),
+            TokenType.UnquoteSplice => ParseUnquoteSplice(tokens, ref pos, end),
             TokenType.LParen => ParseParenthesizedExpr(tokens, ref pos, end),
             TokenType.LBracket => ParseListExpr(tokens, ref pos, end),
             TokenType.Lambda => ParseLambdaExpr(tokens, ref pos, end),
@@ -190,7 +193,7 @@ public partial class Parser
     }
 
     private static bool IsPrimaryStart(TokenType t)
-        => t is TokenType.LParen or TokenType.LBracket or TokenType.Lambda or TokenType.Term or TokenType.Integer or TokenType.Y or TokenType.Let;
+        => t is TokenType.LParen or TokenType.LBracket or TokenType.Lambda or TokenType.Term or TokenType.Integer or TokenType.Y or TokenType.Let or TokenType.QuasiQuote or TokenType.Unquote or TokenType.UnquoteSplice;
 
     private static bool IsArrowParamListAheadStrict(List<Token> tokens, int pos, int end)
     {
@@ -222,6 +225,34 @@ public partial class Parser
         }
         if (!sawAny) return false;
         return j <= end && tokens[j].Type == TokenType.Arrow;
+    }
+
+    // ---------- Quasiquote / Unquote ----------
+    private Expr ParseQuasiQuote(List<Token> tokens, ref int pos, int end)
+    {
+        // Consume qq or backtick token and quote the next expression (full expression, not only primary)
+        pos++; // skip quasiquote
+        if (pos > end) throw new ParseException(TreeErrorType.EmptyExprList, tokens[Math.Max(0, pos - 1)].Position);
+        var quoted = ParseExpression(tokens, ref pos, end, 0);
+        return Expr.Quote(quoted);
+    }
+
+    private Expr ParseUnquote(List<Token> tokens, ref int pos, int end)
+    {
+        // Unquote token must appear only within a quasiquote body; parser permits parse here, expander will enforce context.
+        pos++; // skip '~'
+        if (pos > end) throw new ParseException(TreeErrorType.EmptyExprList, tokens[Math.Max(0, pos - 1)].Position);
+        var inner = ParseExpression(tokens, ref pos, end, 0);
+        return Expr.Unquote(inner);
+    }
+
+    private Expr ParseUnquoteSplice(List<Token> tokens, ref int pos, int end)
+    {
+        // Unquote-splicing token ~@, only meaningful inside list and application spines within quasiquote.
+        pos++; // currently token already UnquoteSplice; move past it
+        if (pos > end) throw new ParseException(TreeErrorType.EmptyExprList, tokens[Math.Max(0, pos - 1)].Position);
+        var inner = ParseExpression(tokens, ref pos, end, 0);
+        return Expr.UnquoteSplice(inner);
     }
 
     private Expr DesugarInfix(InfixOperator op, Expr left, Expr right)

@@ -1,6 +1,6 @@
 namespace LambdaCalculus;
 
-public enum ExprType : byte { Var, Abs, App, Thunk, YCombinator }
+public enum ExprType : byte { Var, Abs, App, Thunk, YCombinator, Quote, Unquote, UnquoteSplice }
 
 // Thunk represents a delayed computation (mutable for in-place update).
 public class Thunk(Expr expr, Dictionary<string, Expr> env)
@@ -26,7 +26,9 @@ public record Expr(
     string? VarName = null,
     string? AbsVarName = null, Expr? AbsBody = null,
     Expr? AppLeft = null, Expr? AppRight = null,
-    Thunk? ThunkValue = null)
+    Thunk? ThunkValue = null,
+    Expr? QuoteBody = null,
+    Expr? UnquoteBody = null)
 {
     public static int HashCodeCount { get; private set; }
     private int? _hashCode;
@@ -35,6 +37,9 @@ public record Expr(
     public static Expr App(Expr left, Expr right) => new(ExprType.App, AppLeft: left, AppRight: right);
     public static Expr Thunk(Expr expr, Dictionary<string, Expr> env) => new(ExprType.Thunk, ThunkValue: new Thunk(expr, env));
     public static Expr YCombinator() => new(ExprType.YCombinator);
+    public static Expr Quote(Expr body) => new(ExprType.Quote, QuoteBody: body);
+    public static Expr Unquote(Expr body) => new(ExprType.Unquote, UnquoteBody: body);
+    public static Expr UnquoteSplice(Expr body) => new(ExprType.UnquoteSplice, UnquoteBody: body);
     
     public override string ToString() => ToString(false, null);
     
@@ -92,6 +97,9 @@ public record Expr(
                     $"<forced:{ThunkValue.ForcedValue?.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor) ?? "null"}>" :
                     $"<thunk:{ThunkValue.Expression.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor)}>",
                 ExprType.YCombinator => "Y",
+                ExprType.Quote => $"qq({QuoteBody?.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor) ?? "null"})",
+                ExprType.Unquote => $"~({UnquoteBody?.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor) ?? "null"})",
+                ExprType.UnquoteSplice => $"~@({UnquoteBody?.ToStringWithOptions(maxDepth - 1, visited, prettyPrint, churchNumeralExtractor) ?? "null"})",
                 _ => "?"
             };
         }
@@ -240,6 +248,21 @@ public record Expr(
                         return false;
                     break;
                 case ExprType.YCombinator: break;
+                case ExprType.Quote when left.QuoteBody is null && right.QuoteBody is null: continue;
+                case ExprType.Quote when left.QuoteBody is null || right.QuoteBody is null: return false;
+                case ExprType.Quote:
+                    stack.Push((left.QuoteBody!, right.QuoteBody!));
+                    break;
+                case ExprType.Unquote when left.UnquoteBody is null && right.UnquoteBody is null: continue;
+                case ExprType.Unquote when left.UnquoteBody is null || right.UnquoteBody is null: return false;
+                case ExprType.Unquote:
+                    stack.Push((left.UnquoteBody!, right.UnquoteBody!));
+                    break;
+                case ExprType.UnquoteSplice when left.UnquoteBody is null && right.UnquoteBody is null: continue;
+                case ExprType.UnquoteSplice when left.UnquoteBody is null || right.UnquoteBody is null: return false;
+                case ExprType.UnquoteSplice:
+                    stack.Push((left.UnquoteBody!, right.UnquoteBody!));
+                    break;
                 default: return false;
             }
         }
@@ -344,6 +367,36 @@ public record Expr(
                     break;
                 case ExprType.YCombinator:
                     current._hashCode = HashCode.Combine(current.Type);
+                    break;
+                case ExprType.Quote when current.QuoteBody is null:
+                    current._hashCode = HashCode.Combine(current.Type);
+                    break;
+                case ExprType.Quote when current.QuoteBody is not null && current.QuoteBody._hashCode.HasValue:
+                    current._hashCode = HashCode.Combine(current.Type, current.QuoteBody._hashCode ?? 0);
+                    break;
+                case ExprType.Quote:
+                    stack.Push(current);
+                    stack.Push(current.QuoteBody!);
+                    break;
+                case ExprType.Unquote when current.UnquoteBody is null:
+                    current._hashCode = HashCode.Combine(current.Type);
+                    break;
+                case ExprType.Unquote when current.UnquoteBody is not null && current.UnquoteBody._hashCode.HasValue:
+                    current._hashCode = HashCode.Combine(current.Type, current.UnquoteBody._hashCode ?? 0);
+                    break;
+                case ExprType.Unquote:
+                    stack.Push(current);
+                    stack.Push(current.UnquoteBody!);
+                    break;
+                case ExprType.UnquoteSplice when current.UnquoteBody is null:
+                    current._hashCode = HashCode.Combine(current.Type);
+                    break;
+                case ExprType.UnquoteSplice when current.UnquoteBody is not null && current.UnquoteBody._hashCode.HasValue:
+                    current._hashCode = HashCode.Combine(current.Type, current.UnquoteBody._hashCode ?? 0);
+                    break;
+                case ExprType.UnquoteSplice:
+                    stack.Push(current);
+                    stack.Push(current.UnquoteBody!);
                     break;
             }
         }

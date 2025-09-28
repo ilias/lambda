@@ -33,7 +33,7 @@ namespace LambdaCalculus;
 // -----------------------------------------------------------------------------
 // Parser overview / informal grammar (see earlier discussion in PR notes)
 // -----------------------------------------------------------------------------
-public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar, Semicolon, Ellipsis }
+public enum TokenType : byte { LParen, RParen, Lambda, Term, Equals, Integer, LBracket, RBracket, Comma, Dot, Y, Let, In, Rec, InfixOp, Arrow, Range, Macro, FatArrow, Dollar, Semicolon, Ellipsis, QuasiQuote, Unquote, UnquoteSplice }
 public record Token(TokenType Type, int Position, string? Value = null);
 public enum TreeErrorType : byte { UnclosedParen, UnopenedParen, MissingLambdaVar, MissingLambdaBody, EmptyExprList, IllegalAssignment, MissingLetVariable, MissingLetEquals, MissingLetIn, MissingLetValue, MissingLetBody, UnexpectedSemicolon, UnexpectedLambda, UnexpectedDot }
 public class ParseException(TreeErrorType errorType, int position) : Exception($"{errorType} at position {position}")
@@ -107,6 +107,7 @@ public partial class Parser
         "let" => TokenType.Let,
         "in" => TokenType.In,
         "rec" => TokenType.Rec,
+        "qq" => TokenType.QuasiQuote,
         ":macro" => TokenType.Macro,
     // Explicitly treat common shorthand increment/decrement tokens as function identifiers.
     // They are not special forms here; users can bind them, e.g.  ++ = x -> succ x

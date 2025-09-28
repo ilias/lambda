@@ -8,6 +8,9 @@ internal sealed class MacroExpander
     private readonly Parser _parser;
     private readonly Logger? _logger;
     private readonly Interpreter? _interpreter;
+    // Gensym counter for hygienic renaming of macro-introduced binders
+    private int _gensymCounter = 0;
+    private string Gensym(string hint) => $"__g_{hint}_{++_gensymCounter}";
     public MacroExpander(Parser parser, Logger? logger = null, Interpreter? interpreter = null)
     {
         _parser = parser;
@@ -114,8 +117,157 @@ internal sealed class MacroExpander
         {
             ExprType.Abs => Expr.Abs(expr.AbsVarName!, ExpandRecursive(expr.AbsBody!, depth)),
             ExprType.App => Expr.App(ExpandRecursive(expr.AppLeft!, depth), ExpandRecursive(expr.AppRight!, depth)),
+            ExprType.Quote => ExpandQuasiQuote(expr.QuoteBody!, depth),
             _ => expr
         };
+    }
+
+    // Expand a quoted template: walk it, replace Unquote nodes by their macro-expanded content, keep Quote context as plain structure
+    private Expr ExpandQuasiQuote(Expr body, int depth)
+    {
+        return QQ(body, depth);
+
+        Expr QQ(Expr node, int d)
+        {
+            switch (node.Type)
+            {
+                case ExprType.Unquote:
+                    // Unquote: expand macros inside, then re-enter QQ to allow ~@ splicing
+                    // in case the expanded expression is an application or list literal.
+                    // This preserves expected semantics for templates like qq(~(f ~@ args)).
+                    {
+                        var expandedInner = ExpandRecursive(node.UnquoteBody!, d + 1);
+                        return QQ(expandedInner, d);
+                    }
+                case ExprType.UnquoteSplice:
+                    // Splice must be handled by caller context (application spine or list). Here, treat as-is marker.
+                    // We'll signal back by returning the same node; wrapping contexts will detect and expand.
+                    return Expr.UnquoteSplice(ExpandRecursive(node.UnquoteBody!, d + 1));
+                case ExprType.Abs:
+                    return Expr.Abs(node.AbsVarName!, QQ(node.AbsBody!, d));
+                case ExprType.App:
+                    // Special-case: cons-list construction to support splicing inside list literals
+                    if (Expr.TryExtractListElements(node, out var rawElems))
+                    {
+                        var flat = new List<Expr>();
+                        foreach (var el in rawElems)
+                        {
+                            var qel = QQ(el, d);
+                            if (qel.Type == ExprType.UnquoteSplice)
+                            {
+                                var expanded = ExpandRecursive(qel.UnquoteBody!, d + 1);
+                                if (Expr.TryExtractListElements(expanded, out var elems))
+                                {
+                                    flat.AddRange(elems);
+                                }
+                                else if (Expr.TryExtractChurchListElements(expanded, out var celems, Interpreter.ExtractChurchNumeralValue))
+                                {
+                                    flat.AddRange(celems);
+                                }
+                                else
+                                {
+                                    // Fallback: treat as single element
+                                    flat.Add(expanded);
+                                }
+                            }
+                            else if (qel.Type == ExprType.Unquote)
+                            {
+                                flat.Add(ExpandRecursive(qel.UnquoteBody!, d + 1));
+                            }
+                            else
+                            {
+                                flat.Add(qel);
+                            }
+                        }
+                        // Rebuild cons-list from flattened elements
+                        Expr list = Expr.Var("nil");
+                        for (int k = flat.Count - 1; k >= 0; k--)
+                            list = Expr.App(Expr.App(Expr.Var("cons"), flat[k]), list);
+                        return list;
+                    }
+                    // Build application spine to support splicing of arguments
+                    var spine = new List<Expr>();
+                    var cur = node;
+                    while (cur.Type == ExprType.App)
+                    {
+                        spine.Insert(0, cur.AppRight!);
+                        cur = cur.AppLeft!;
+                    }
+                    spine.Insert(0, cur);
+                    // First element is head; rest are arguments
+                    var head = QQ(spine[0], d);
+                    var args = new List<Expr>();
+                    for (int i = 1; i < spine.Count; i++)
+                    {
+                        // Special handling: if the original node at this position is an Unquote, insert its expanded body as a single arg
+                        // without re-walking via QQ (to avoid it accidentally absorbing following args). Splice (~@) still supported.
+                        if (spine[i].Type == ExprType.Unquote)
+                        {
+                            args.Add(ExpandRecursive(spine[i].UnquoteBody!, d + 1));
+                            continue;
+                        }
+                        if (spine[i].Type == ExprType.UnquoteSplice)
+                        {
+                            // Evaluate and splice a list of arguments; support church/cons lists
+                            varseq(head, args, spine[i].UnquoteBody!, d);
+                            continue;
+                        }
+
+                        var qarg = QQ(spine[i], d);
+                        if (qarg.Type == ExprType.UnquoteSplice)
+                        {
+                            // Evaluate and splice a list of arguments; support church/cons lists
+                            varseq(head, args, qarg.UnquoteBody!, d);
+                        }
+                        else if (qarg.Type == ExprType.Unquote)
+                        {
+                            // Defensive: if Unquote surfaced after QQ, expand its body and insert as single arg
+                            args.Add(ExpandRecursive(qarg.UnquoteBody!, d + 1));
+                        }
+                        else
+                        {
+                            args.Add(qarg);
+                        }
+                    }
+                    return RebuildApp(head, args);
+                case ExprType.Thunk:
+                    // Do not force thunks here; preserve structure
+                    return Expr.Thunk(QQ(node.ThunkValue!.Expression, d), node.ThunkValue.Environment);
+                case ExprType.Quote:
+                    // Nested quote: flatten and continue (MVP: no depth semantics)
+                    return QQ(node.QuoteBody!, d);
+                default:
+                    return node;
+            }
+        }
+
+        // Rebuild application from head and args
+        static Expr RebuildApp(Expr head, List<Expr> args)
+        {
+            var res = head;
+            foreach (var a in args) res = Expr.App(res, a);
+            return res;
+        }
+
+        void varseq(Expr head, List<Expr> args, Expr seqExpr, int d)
+        {
+            // Expand macros in the splice expression
+            var expanded = ExpandRecursive(seqExpr, d + 1);
+            // Try to extract a plain cons-list
+            if (Expr.TryExtractListElements(expanded, out var elems))
+            {
+                args.AddRange(elems);
+                return;
+            }
+            // Try to extract a Church-encoded list
+            if (Expr.TryExtractChurchListElements(expanded, out var celems, Interpreter.ExtractChurchNumeralValue))
+            {
+                args.AddRange(celems);
+                return;
+            }
+            // If it's nil, do nothing; otherwise, treat as single arg (fallback)
+            args.Add(expanded);
+        }
     }
 
     private static int ComputeSpecificityScore(MacroDefinition macro)
@@ -267,11 +419,76 @@ internal sealed class MacroExpander
         return true;
     }
 
-    private Expr SubstituteMacroVariables(Expr transformation, Dictionary<string, Expr> bindings) => transformation.Type switch
-    { ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_VAR_") => ExtractMacroVar(transformation.VarName, bindings) ?? transformation, ExprType.Var when transformation.VarName != null && transformation.VarName.StartsWith("__MACRO_INT_") => ConvertMacroInt(transformation.VarName), ExprType.Var when transformation.VarName != null && bindings.TryGetValue(transformation.VarName, out var val) => val, ExprType.Abs => SubstituteInLambda(transformation, bindings), ExprType.App => Expr.App(SubstituteMacroVariables(transformation.AppLeft!, bindings), SubstituteMacroVariables(transformation.AppRight!, bindings)), _ => transformation };
+    private Expr SubstituteMacroVariables(Expr transformation, Dictionary<string, Expr> bindings, string? renameOld = null, string? renameNew = null)
+    {
+        // Do not traverse inside quotes here; quotes/unquotes handled later by ExpandRecursive
+        switch (transformation.Type)
+        {
+            case ExprType.Quote:
+                // Process quoted templates so that placeholders inside Unquote/Splice are substituted;
+                // also allow hygiene renaming for binders that the macro introduces inside the template.
+                return Expr.Quote(SubstituteMacroVariables(transformation.QuoteBody!, bindings, renameOld, renameNew));
+
+            case ExprType.Unquote:
+                // Substitute placeholders inside the unquoted expression, but do NOT apply binder renaming
+                // so that site code is not captured by macro renames.
+                return Expr.Unquote(SubstituteMacroVariables(transformation.UnquoteBody!, bindings));
+
+            case ExprType.UnquoteSplice:
+                return Expr.UnquoteSplice(SubstituteMacroVariables(transformation.UnquoteBody!, bindings));
+
+            case ExprType.Var:
+                {
+                    var name = transformation.VarName!;
+                    // Macro placeholders: substitute and do not apply renames inside substituted tree
+                    if (!string.IsNullOrEmpty(name) && name.StartsWith("__MACRO_VAR_"))
+                        return ExtractMacroVar(name, bindings) ?? transformation;
+                    if (!string.IsNullOrEmpty(name) && name.StartsWith("__MACRO_INT_"))
+                        return ConvertMacroInt(name);
+                    // Direct binding by plain name
+                    if (!string.IsNullOrEmpty(name) && bindings.TryGetValue(name, out var val))
+                        return val;
+                    // Apply scoped literal rename if requested
+                    if (renameOld is not null && renameNew is not null && name == renameOld)
+                        return Expr.Var(renameNew);
+                    return transformation;
+                }
+
+            case ExprType.Abs:
+                {
+                    var lambda = transformation;
+                    var param = lambda.AbsVarName!;
+                    // If parameter originates from a macro variable placeholder, extract a safe name
+                    if (param.StartsWith("__MACRO_VAR_"))
+                    {
+                        var extracted = ExtractMacroVar(param, bindings);
+                        string paramName;
+                        if (extracted?.Type == ExprType.Var && extracted.VarName is not null)
+                            paramName = extracted.VarName;
+                        else
+                            paramName = Gensym("p"); // Fallback to fresh if not a variable
+                        var bodyProcessed = SubstituteMacroVariables(lambda.AbsBody!, bindings);
+                        return Expr.Abs(paramName, bodyProcessed);
+                    }
+
+                    // Hygienic default: macro-introduced binder gets a fresh name
+                    var fresh = Gensym(param);
+                    var newBody = SubstituteMacroVariables(lambda.AbsBody!, bindings, renameOld: param, renameNew: fresh);
+                    return Expr.Abs(fresh, newBody);
+                }
+
+            case ExprType.App:
+                return Expr.App(
+                    SubstituteMacroVariables(transformation.AppLeft!, bindings, renameOld, renameNew),
+                    SubstituteMacroVariables(transformation.AppRight!, bindings, renameOld, renameNew));
+
+            default:
+                return transformation;
+        }
+    }
 
     private Expr SubstituteInLambda(Expr lambda, Dictionary<string, Expr> bindings)
-    { var param = lambda.AbsVarName!; if (param.StartsWith("__MACRO_VAR_")) { var extracted = ExtractMacroVar(param, bindings); if (extracted?.Type == ExprType.Var && extracted.VarName != null) param = extracted.VarName; } return Expr.Abs(param, SubstituteMacroVariables(lambda.AbsBody!, bindings)); }
+    { var param = lambda.AbsVarName!; if (param.StartsWith("__MACRO_VAR_")) { var extracted = ExtractMacroVar(param, bindings); if (extracted?.Type == ExprType.Var && extracted.VarName != null) param = extracted.VarName; else param = Gensym("p"); return Expr.Abs(param, SubstituteMacroVariables(lambda.AbsBody!, bindings)); } var fresh = Gensym(param); return Expr.Abs(fresh, SubstituteMacroVariables(lambda.AbsBody!, bindings, param, fresh)); }
 
     private static Expr? ExtractMacroVar(string raw, Dictionary<string, Expr> bindings)
     { const string pfx = "__MACRO_VAR_"; if (raw.StartsWith(pfx)) { var name = raw[pfx.Length..]; if (bindings.TryGetValue(name, out var v)) return v; } return null; }

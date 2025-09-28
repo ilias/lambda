@@ -1,0 +1,3 @@
+:macro (letX $e) => (qq ((\x. ~ $e) 0))
+def x = 42
+alphaEq (letX x) 42
