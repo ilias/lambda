@@ -56,6 +56,13 @@ Language Extension
 :macro (pattern) => body
 # Macros support quasiquote/unquote/splice and are hygienic by default.
 # See LANGUAGE.md (Macro System) for syntax and semantics.
+
+Macro tips:
+
+- Use backtick `\`` (or `qq`) to build templates, `~(...)` to insert a single expression, and `~@(...)` to splice multiple args/elements.
+- Parenthesize atomic unquotes inside application args: `f ~(x) 1` inserts one argument; `f ~ x 1` parses as `f ~(x 1)`.
+- Only use `~@` under quasiquote; if you need to splice a list into a list literal, wrap it in a helper macro like `:macro (spliceList $xs) => (qq [~@ ($xs)])`.
+- For mid‑argument construction prefer splicing a list of args: define a helper like `call2` and pass `[$a, $b]` then splice inside the template.
 ```
 
 Help & Session

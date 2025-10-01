@@ -16,6 +16,8 @@ Sections
 - Operator Precedence & Associativity Ladder
 - Formal Grammar (EBNF‑style)
 - Macro System (Basic → Advanced Enhancements)
+  - Quasiquote, Unquote, Splice (qq / ~ / ~@)
+  - Hygiene (gensym capture-avoidance)
 - Pretty Printing Rules (Output Representation)
 - REPL Convenience Commands (History / Reload / Last)
 - Module System (Aliases, Qualified Names, Import, With-scope)
@@ -494,6 +496,15 @@ Supported splicing sources:
 - Native list literals (`[a, b, c]`) are flattened by `~@`.
 - Church lists are also recognized and flattened by `~@` (e.g., `(cons 1 (cons 2 nil))`).
 
+Best practices & pitfalls:
+
+- Parenthesize atomic unquotes in app args: `plus ~(x) 1` inserts one argument; `plus ~ x 1` parses as `plus ~(x 1)`.
+- Use `~@` only inside quasiquote. If you need to splice a list outside, wrap with a helper macro such as `:macro (spliceList $xs) => (qq [~@ ($xs)])` then call `spliceList [1,2,3]`.
+- Building calls with mid-arguments? Prefer splicing a list of args rather than nested templates, e.g. `:macro (call2 $f [$a, $b]) => (qq (~($f) ~@ ([$a, $b])))` and `:macro (midArg $a $b) => (call2 (add3 0) [$a, $b])`.
+- Nested unquotes re-enter the walker: code produced by `~(...)` is re-walked so inner `~@` splices take effect at the correct depth.
+- Lists vs apps: `~@` flattens list elements and application spines; `~` inserts exactly one element/arg.
+- Modules: quasiquoted symbols resolve exactly as written (qualified names remain qualified). Use `Mod::f` or `A::B::x` inside `qq` if you need specific module bindings.
+
 #### Hygiene model
 
 Macro expansion is hygienic by default:
@@ -510,6 +521,13 @@ Notes:
 - For macro debugging, turn pretty printing off (`:pretty off`) and optionally enable stepping/logging to inspect the raw expanded forms.
 - Unquote precedence tip: `~` binds to the following expression. If you write `plus ~ a 1`, it parses as `plus ~(a 1)`. To insert a site variable as a single argument, parenthesize the unquote: `plus ~(a) 1`.
 
+Guidance:
+
+- Prefer introducing temporary binders inside macros freely—gensym ensures they can't capture call-site variables.
+- Keep call-site code inside `~(...)` or `~@(...)` to preserve names and bindings from the invocation site.
+- If an expanded identifier seems to resolve unexpectedly, inspect with `:pretty off; :step on` and check for module qualification or shadowing.
+- For references intended to target a specific module binding, write them qualified in the template (e.g., `` `(Mod::f ~(x))``).
+
 ---
 
 ### Pretty Printing Rules
@@ -525,6 +543,17 @@ Enabled by default (`:pretty on`). Converts:
 | Thunk (unforced/forced) | `<thunk: …>` / `<forced: …>` |
 
 Negative literals preserved; output truncates after large length with suffix. Disable using `:pretty off` to inspect raw forms (useful for macro debugging & structural comparison).
+
+---
+
+### List Aggregations (mixed-list note)
+
+Sum and product in the stdlib are defined as pure folds over Church lists:
+
+- `sum = foldr plus 0`
+- `product = foldr mult 1`
+
+Because Church booleans and numerals are encodings, mixing them can yield non‑obvious results. In particular, Church `false` behaves like `0` under multiplication, so `product [1, false, 2]` evaluates to `0` (annihilator). Conversely, `sum` is not defined to ignore non‑numerics; it is a direct fold with `plus`. Therefore, `sum [1, true, 2]` is not equal to `sum [1,2]` in general. See `tests.lambda` for explicit examples.
 
 ---
 

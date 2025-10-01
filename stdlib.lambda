@@ -535,6 +535,10 @@ any      = λp l.foldr (λx acc.or (p x) acc) false l
 all      = λp l.foldr (λx acc.and (p x) acc) true l
 find     = λp l.foldl (λacc x.if (and (isnil acc) (p x)) x acc) nil l
 sum      = λl.foldr plus zero l
+# Note on mixed lists: due to Church encodings, boolean false behaves like 0.
+# Therefore, product over a list containing false will yield 0 (annihilator), e.g.,
+#   product [1, false, 2]  ==> 0
+# Sum/product are pure fold-based; no native shortcuts are used here.
 product  = λl.foldr mult 1 l
 maximum  = λl.foldr (λx acc.if (gt x acc) x acc) zero l
 minimum  = λl.foldr (λx acc.if (lt x acc) x acc) (head l) (tail l)
