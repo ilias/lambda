@@ -1849,6 +1849,7 @@ clamp    = λmin max x.if (lt x min) min (if (gt x max) max x)
 # --- Recursive examples using Y-combinator and infix operators (less efficient) ---
 fibY       = Y (\f. \n. if (n <= 2) 1 ((f (n - 1)) + (f (n - 2))))
 fY         = Y (\f. \n. if (n <= 2) 1 ((n -- |> f) + (n -- |> -- |> f )))
+fYa        = Y (\f. \n. if (n <= 2) 1 ((f $ n --) + (f $ n - 2)))
 factY      = Y (\f. \n. if (n == 0) 1 (n * (f (n - 1))))
 sumUptoY   = Y (\f. \n. if (n == 0) 0 (n + (f (n - 1))))
 expY       = Y (\f. \b n. if (n == 0) 1 (b * (f b (n - 1))))

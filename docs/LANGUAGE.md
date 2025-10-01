@@ -546,16 +546,7 @@ Negative literals preserved; output truncates after large length with suffix. Di
 
 ---
 
-### List Aggregations (mixed-list note)
-
-Sum and product in the stdlib are defined as pure folds over Church lists:
-
-- `sum = foldr plus 0`
-- `product = foldr mult 1`
-
-Because Church booleans and numerals are encodings, mixing them can yield non‑obvious results. In particular, Church `false` behaves like `0` under multiplication, so `product [1, false, 2]` evaluates to `0` (annihilator). Conversely, `sum` is not defined to ignore non‑numerics; it is a direct fold with `plus`. Therefore, `sum [1, true, 2]` is not equal to `sum [1,2]` in general. See `tests.lambda` for explicit examples.
-
----
+ 
 
 ### Structural Equivalence Helpers (Always On)
 

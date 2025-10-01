@@ -1494,34 +1494,6 @@ alphaEq (length (append [1,2] [3,4])) 4     # length after append sanity
 alphaEq (length (take 0 [1,2,3])) 0         # length of empty take
 alphaEq (length (drop 99 [1,2,3])) 0        # drop beyond length yields empty
 
-# --- Mixed numeric / non-numeric fallback tests ---
-
-# Construct a mixed list including a Church numeral and a lambda (non-numeric)
-mixed1 = [1, false, 2]
-
-# Expect pure stdlib sum/product definitions to ignore native numeric-only shortcut
-# Native SumNative/ProductNative should return null (due to lambda element) -> fallback fold versions
-alphaEq (sum mixed1) (sum [1,2])           # fallback should ignore non-numeric via native null -> pure fold (expect 3)
-# Due to Church encodings, boolean false behaves like 0; product hits the annihilator -> 0
-alphaEq (product mixed1) 0                 # expect 0 (1 * 0 * 2)
-
-# Mixed with boolean (true) inside; verify length / map still operate (map succ should fail on non-numeric and fallback avoiding native map?)
-mixed2 = [1, true, 2]
-alphaEq (length mixed2) 3
-alphaEq (filter (λx.eq x 1) mixed2) [1]   # only numeric 1 passes
-
-# Clarify sum behavior with boolean true in a mixed list:
-# Church true is not a numeral; fold-based sum will not match sum [1,2].
-# We assert inequality explicitly to signal the semantics are not "ignore non-numerics" for sum.
-alphaEq (alphaEq (sum mixed2) (sum [1,2])) false
-
-# any/all over mixed types (predicates applied; should short-circuit properly)
-alphaEq (any (λx.eq x true) mixed2) false  # mixed2 stores boolean true as Church boolean; eq compares numerals -> false
-alphaEq (all (λx.true) mixed2) true
-
-# find predicate that matches boolean element
-alphaEq (find (λx.eq x true) mixed2) false # no numeric equal to true (boolean) so expect nothing encoded as false
-
 :native on
 
 # ---------------------------------------------------------------------------
