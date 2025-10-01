@@ -1,5 +1,0 @@
-:clear all
-:macro (inArg $a) => (qq ((\x. plus ~( $a ) 1) 0))
-def x2 = 41
-alphaEq (inArg x2) 42
-:exit

@@ -733,11 +733,12 @@ times    = λn.λf.λx.n f x
 #   mult_with_pair = uncurry mult            # Takes pair instead of two args
 #   mult_with_pair (pair 3 4)                # Returns 12
 # -----------------------------------------------------------------------------
-curry    = λf x y.f (pair x y)
-uncurry  = λf p.f (first p) (second p)
-partial  = λf.λx.λy.f x y   # Creates a unary function awaiting final arg when called as (partial f a)
+ curry    = λf x y.f (pair x y)
+ uncurry  = λf p.f (first p) (second p)
+ # Simpler helper: (partial f a) yields a unary function (f a)
+ partial  = λf x.f x          # So ((partial f a) b) ≡ f a b
 # Accumulating variant so ((partial2 plus 2 3) 4) = plus (plus 2 3) 4 = 9
-partial2 = λf.λx.λy.λz.f (f x y) z  # Fix first two args then combine third
+ partial2 = λf.λx.λy.λz.f (f x y) z  # Fix first two args then combine third
 # 3-arity curry helpers used in tests
 curry3   = λf x y z.f (pair x (pair y z))
 uncurry3 = λf p.f (first p) (first (second p)) (second (second p))

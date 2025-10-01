@@ -491,6 +491,8 @@ Semantics summary:
 - Nested unquotes: after expanding `~e`, the quasiquote walker re‑enters to allow splices produced by that expansion to take effect at the correct depth.
 - Atomicity: a plain `~e` inside application arguments is treated as one argument (it is not flattened like splice).
 
+Note (2025‑10): `~` and `~@` now bind to the following primary expression, avoiding greedy absorption of subsequent arguments. This makes simple forms like `plus ~x 1` behave as expected without extra parentheses.
+
 Supported splicing sources:
 
 - Native list literals (`[a, b, c]`) are flattened by `~@`.
@@ -498,7 +500,7 @@ Supported splicing sources:
 
 Best practices & pitfalls:
 
-- Parenthesize atomic unquotes in app args: `plus ~(x) 1` inserts one argument; `plus ~ x 1` parses as `plus ~(x 1)`.
+- Atomic unquotes in app args are single‑argument: `plus ~x 1` and `plus ~(x) 1` are equivalent. Use `~@` to splice multiple arguments.
 - Use `~@` only inside quasiquote. If you need to splice a list outside, wrap with a helper macro such as `:macro (spliceList $xs) => (qq [~@ ($xs)])` then call `spliceList [1,2,3]`.
 - Building calls with mid-arguments? Prefer splicing a list of args rather than nested templates, e.g. `:macro (call2 $f [$a, $b]) => (qq (~($f) ~@ ([$a, $b])))` and `:macro (midArg $a $b) => (call2 (add3 0) [$a, $b])`.
 - Nested unquotes re-enter the walker: code produced by `~(...)` is re-walked so inner `~@` splices take effect at the correct depth.
@@ -519,7 +521,7 @@ Notes:
 
 - Macro expansion order respects pattern specificity (more structural/literal patterns match before generic ones). Guards (`when`) are evaluated in match order.
 - For macro debugging, turn pretty printing off (`:pretty off`) and optionally enable stepping/logging to inspect the raw expanded forms.
-- Unquote precedence tip: `~` binds to the following expression. If you write `plus ~ a 1`, it parses as `plus ~(a 1)`. To insert a site variable as a single argument, parenthesize the unquote: `plus ~(a) 1`.
+- Unquote precedence tip: `~` binds to the following primary. `plus ~a 1` unquotes only `a`. To unquote a compound expression, wrap it in parentheses: `plus ~(f x) 1`.
 
 Guidance:
 

@@ -326,6 +326,26 @@ Key metrics: `Iterations`, `CacheHits/Misses`, `TimeInEvaluation`, `ThunkForceCo
 
 ---
 
+## Notes for Contributors: Unquote Parsing vs. QQ Walker
+
+Rationale for parsing `~`/`~@` as primaries (2025‑10):
+
+- Parser responsibility: keep unquotes atomic. The parser consumes exactly one primary after `~` and `~@` so forms like `qq (plus ~x 1)` pass `x` as a single argument rather than greedily absorbing `1` (which would happen if a full expression were parsed).
+- Expander responsibility: flattening. The quasiquote walker handles argument/list spine reconstruction and `~@` splicing (for both native list literals and Church lists). This separation avoids ambiguity and preserves intuitive argument boundaries.
+
+Where to look:
+
+- `src/Parser.Partials.Expressions.cs`: `ParseUnquote` and `ParseUnquoteSplice` use `ParsePrimary` to bind to a single atom.
+- `src/Parser.Macros.cs`: quasiquote walker and splice handling that rebuild application/list spines and applies `~@` flattening.
+
+Practical guidance:
+
+- Use `~expr` to inject one argument/element and `~@listExpr` to splice multiple.
+- To unquote a compound site expression, wrap it: `~(f x)`.
+- Tests around “Quasiquote / Unquote” in `tests.lambda` exercise these semantics; keep them green when modifying parser or macro expander.
+
+---
+
 ## Quick Commands (Cheat)
 
 | Target | Command |

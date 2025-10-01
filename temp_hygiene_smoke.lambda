@@ -1,7 +1,0 @@
-:macro (letX $e) => (qq ((\x. ~ $e) 0))
-
-def x = 42
-alphaEq (letX x) 42
-
-:macro (call2h $f $args) => (qq (~ $f ~@ $args))
-alphaEq (call2h plus [1, 2]) 3

@@ -242,7 +242,10 @@ public partial class Parser
         // Unquote token must appear only within a quasiquote body; parser permits parse here, expander will enforce context.
         pos++; // skip '~'
         if (pos > end) throw new ParseException(TreeErrorType.EmptyExprList, tokens[Math.Max(0, pos - 1)].Position);
-        var inner = ParseExpression(tokens, ref pos, end, 0);
+        // IMPORTANT: parse exactly one primary after ~ to keep it atomic in application/list spines.
+        // Using ParseExpression here would allow ~(e) to accidentally absorb following primaries (e.g., arguments)
+        // turning qq (f ~( (g x) ) y) into qq (f ~(g x y)), which is incorrect. Primary ensures a single unit.
+        var inner = ParsePrimary(tokens, ref pos, end);
         return Expr.Unquote(inner);
     }
 
@@ -251,7 +254,8 @@ public partial class Parser
         // Unquote-splicing token ~@, only meaningful inside list and application spines within quasiquote.
         pos++; // currently token already UnquoteSplice; move past it
         if (pos > end) throw new ParseException(TreeErrorType.EmptyExprList, tokens[Math.Max(0, pos - 1)].Position);
-        var inner = ParseExpression(tokens, ref pos, end, 0);
+        // Similarly to Unquote, restrict to a single primary unit to avoid greedy absorption of following args/elements.
+        var inner = ParsePrimary(tokens, ref pos, end);
         return Expr.UnquoteSplice(inner);
     }
 
