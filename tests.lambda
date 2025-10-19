@@ -2039,7 +2039,7 @@ alphaEq (runState lhsS 0) (runState rhsS 0)
 
 # --- Map–append fusion and times example ---
 alphaEq (map succ (append [1,2] [3])) (append (map succ [1,2]) (map succ [3]))
-alphaEq (times 5 succ 0) 5
+alphaEq (times 4 succ 1) 5
 
 # --- Pair/list encoding exercises ---
 alphaEq (pair 3 4 plus) 7
