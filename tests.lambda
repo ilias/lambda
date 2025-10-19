@@ -1979,3 +1979,72 @@ alphaEq (mbHyg 1) 2
 # Unload A should also remove A.B symbols (qualified), but imported incB persists
 :module unload A
 alphaEq (incB 41) 42
+
+##################################################################
+# Supplemental coverage block (focused, 2025-10)
+##################################################################
+
+# --- Module export/hide (from tests/module-export-hide.lambda) ---
+:module load "tests/module-export-hide.lambda" as ME
+alphaEq ME::pub 41
+alphaEq (ME::subInc 5) 6
+
+# --- for-macro result tests ---
+alphaEq (for x at [1,2,3] do (succ x)) [2,3,4]
+alphaEq (for x at [2,3,4] do (square x)) [4,9,16]
+
+# --- IO/string helpers ---
+alphaEq (getChar [72,105]) 72
+alphaEq ((putChar 65 nil)) [65]
+alphaEq (putStr [72,105] [33]) [72,105,33]
+alphaEq (getLine [72,101,10,33]) [72,101,33]
+
+# --- Currying / Uncurrying extensional laws ---
+addPair = \p.plus (first p) (second p)
+alphaEq (uncurry (curry addPair) (pair 3 4)) 7
+etaEq (curry (uncurry plus)) plus
+etaEq (uncurry (curry addPair)) addPair
+
+# --- Functor / Applicative laws (List/Maybe/Either) ---
+f = succ
+g = square
+alphaEq (map (f ∘ g) [1,2,3]) (map f (map g [1,2,3]))
+alphaEq (map (f o g) [1,2,3]) (map f (map g [1,2,3]))
+
+comp = \f g x.f (g x)
+alphaEq (maybeAp (just I) (just 5)) (just 5)
+fs = just succ
+gs = just (mult 2)
+xs = just 5
+lhs = maybeAp (maybeAp (maybeAp (just comp) fs) gs) xs
+rhs = maybeAp fs (maybeAp gs xs)
+alphaEq lhs rhs
+alphaEq (eitherAp (right I) (right 7)) (right 7)
+
+# --- Maybe/Either monad laws (instances) ---
+fM = \x.just (x + 1)
+gM = \y.just (y * 2)
+alphaEq (maybeBind (just 3) fM) (fM 3)
+alphaEq (maybeBind (just 4) maybeReturn) (just 4)
+alphaEq (maybeBind (maybeBind (just 2) fM) gM) (maybeBind (just 2) (\x.maybeBind (fM x) gM))
+alphaEq (eitherBind (right 5) eitherReturn) (right 5)
+
+# --- State monad associativity (instance) ---
+mS = returnState 1
+kS = \x.returnState (x + 2)
+hS = \y.returnState (y * 3)
+lhsS = bindState (bindState mS kS) hS
+rhsS = bindState mS (\x.bindState (kS x) hS)
+alphaEq (runState lhsS 0) (runState rhsS 0)
+
+# --- Map–append fusion and times example ---
+alphaEq (map succ (append [1,2] [3])) (append (map succ [1,2]) (map succ [3]))
+alphaEq (times 5 succ 0) 5
+
+# --- Pair/list encoding exercises ---
+alphaEq (pair 3 4 plus) 7
+alphaEq (foldr cons nil [1,2,3]) [1,2,3]
+
+# --- Composition alias parity ---
+alphaEq ((succ ∘ square) 3) ((succ o square) 3)
+etaEq (succ ∘ square) (succ o square)
