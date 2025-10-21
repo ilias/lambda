@@ -22,7 +22,7 @@ public partial class Interpreter
     /// </summary>
     public async Task<string> LoadFileAsync(string path)
     {
-    _lastLoadedFile = path; // store for :reload
+        _lastLoadedFile = path; // store for :reload
         int lineCount = 1;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         _logger.Log($"Loading commands from '{path}'");
@@ -31,8 +31,8 @@ public partial class Interpreter
         var currentInput = new System.Text.StringBuilder();
         int lastProgress = -1;
         _currentSourceFile = path;
-    _isLoadingFile = true;
-    foreach (var line in lines)
+        _isLoadingFile = true;
+        foreach (var line in lines)
         {
             _currentSourceLine = lineCount + 1; // 1-based line number
             // Inline doc directive: lines starting with '## name: text' capture doc without affecting evaluation
@@ -95,7 +95,7 @@ public partial class Interpreter
         }
         _currentSourceFile = null;
         _currentSourceLine = null;
-    _isLoadingFile = false;
+        _isLoadingFile = false;
         if (currentInput.Length > 0)
             await ProcessAndDisplayInputAsync(currentInput.ToString());
         if (lastProgress < 100)
@@ -364,7 +364,7 @@ public partial class Interpreter
         }
         return false;
     }
-    
+
     // Save the current environment to a file or to console if path is "console"
     internal async Task<string> SaveFileAsync(string path)
     {
