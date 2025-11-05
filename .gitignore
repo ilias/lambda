@@ -11,6 +11,10 @@ artifacts/
 # Publish folders
 **/publish/
 
+# visual studio
+.vs/
+*.user
+
 .fake
 readme.html
 src-webui/wwwroot/readme.html
