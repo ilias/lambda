@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for lambda-cek web UI (Linux, .NET 8)
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /workspace
 
 # Copy entire repository into isolated workspace (avoid clobbering system dirs like /bin)
@@ -12,10 +12,10 @@ RUN sed -i 's#<TargetFrameworks>net8.0;net9.0</TargetFrameworks>#<TargetFramewor
 
 # Restore & publish
 RUN dotnet restore src-webui/lambda-cek.webui.csproj \
- && dotnet publish src-webui/lambda-cek.webui.csproj -c Release -f net8.0 -o /app/publish -p:UseAppHost=false
+ && dotnet publish src-webui/lambda-cek.webui.csproj -c Release -f net10.0 -o /app/publish -p:UseAppHost=false
 
 # Runtime image (Alpine for small footprint)
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 WORKDIR /app
 
 # Base ASP.NET 8 alpine image already uses a non-root 'app' user; no need to recreate
