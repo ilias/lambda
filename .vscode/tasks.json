@@ -21,6 +21,11 @@
 			"label": "build-cli-and-run-smoke",
 			"type": "shell",
 			"command": "dotnet build --nologo && dotnet run --project src-cli -- temp_hygiene_smoke.lambda exit.lambda"
+		},
+		{
+			"label": "build",
+			"type": "shell",
+			"command": "dotnet build --nologo"
 		}
 	]
 }

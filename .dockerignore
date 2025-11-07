@@ -1,0 +1,12 @@
+# Ignore build outputs and IDE caches for Docker context performance & correctness
+bin/
+obj/
+.vs/
+artifacts/
+*.nupkg
+*.snupkg
+# Local docs output (HTML) not needed inside container
+**/docs/*.html
+# Git metadata unnecessary in image
+.git/
+# Keep .lambda files; web UI publishes these as content
