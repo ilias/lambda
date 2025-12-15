@@ -219,6 +219,109 @@ internal static class NativeRegistry
             Impl: (interp, name, args, env) => interp.ProductNative(args[0], env),
             Category: "list",
             Doc: "product list -> Church numeral product (empty => 1)"),
+        // Floating-point math functions (convert Church numeral to double, apply, round to int)
+        new(
+            Name: "sin",
+            Aliases: [],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                return interp.MakeChurchNumeral((int)Math.Round(Math.Sin(a * Math.PI / 180.0) * 1000));
+            },
+            Category: "math",
+            Doc: "sin degrees -> scaled Church numeral (sin(degrees) * 1000, rounded)"),
+        new(
+            Name: "cos",
+            Aliases: [],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                return interp.MakeChurchNumeral((int)Math.Round(Math.Cos(a * Math.PI / 180.0) * 1000));
+            },
+            Category: "math",
+            Doc: "cos degrees -> scaled Church numeral (cos(degrees) * 1000, rounded)"),
+        new(
+            Name: "tan",
+            Aliases: [],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                var radians = a * Math.PI / 180.0;
+                var result = Math.Tan(radians);
+                if (double.IsInfinity(result) || double.IsNaN(result)) return interp.MakeChurchNumeral(0);
+                return interp.MakeChurchNumeral((int)Math.Round(result * 1000));
+            },
+            Category: "math",
+            Doc: "tan degrees -> scaled Church numeral (tan(degrees) * 1000, rounded)"),
+        new(
+            Name: "log",
+            Aliases: ["ln"],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                if (a <= 0) return interp.MakeChurchNumeral(0);
+                return interp.MakeChurchNumeral((int)Math.Round(Math.Log(a) * 1000));
+            },
+            Category: "math",
+            Doc: "log n -> scaled Church numeral (ln(n) * 1000, rounded); returns 0 if n <= 0"),
+        new(
+            Name: "expReal",
+            Aliases: [],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                var result = Math.Exp(a / 1000.0);
+                if (double.IsInfinity(result)) return interp.MakeChurchNumeral(int.MaxValue);
+                return interp.MakeChurchNumeral((int)Math.Round(result));
+            },
+            Category: "math",
+            Doc: "expReal n -> Church numeral e^(n/1000) (scaled input, rounds result)"),
+        new(
+            Name: "absReal",
+            Aliases: [],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                return interp.MakeChurchNumeral(Math.Abs(a));
+            },
+            Category: "math",
+            Doc: "absReal n -> Church numeral |n| (absolute value)"),
+        new(
+            Name: "floor",
+            Aliases: [],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                return interp.MakeChurchNumeral(a); // Church numerals are already integers
+            },
+            Category: "math",
+            Doc: "floor n -> n (Church numerals are integers, identity operation)"),
+        new(
+            Name: "ceiling",
+            Aliases: [],
+            MinArity: 1,
+            MaxArity: 1,
+            Impl: (interp, name, args, env) =>
+            {
+                if (!interp.TryGetChurchInt(args[0], env, out var a)) return null;
+                return interp.MakeChurchNumeral(a); // Church numerals are already integers
+            },
+            Category: "math",
+            Doc: "ceiling n -> n (Church numerals are integers, identity operation)"),
     };
 
     private static NativeDescriptor ArithBinary(string name, string[] aliases, Func<int,int,int> f, string category="math", string? doc=null)

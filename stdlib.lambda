@@ -413,6 +413,28 @@ head     = λl.l (λx xs.x) nil
 tail     = λl.first (l (λx p.pair (second p) (cons x (second p))) (pair nil nil))
 # isempty  = isnil # Alias for isnil
 
+# Lisp-style aliases for head/tail
+car      = head
+cdr      = tail
+cadr     = λl.head (tail l)
+caddr    = λl.head (tail (tail l))
+cadddr   = λl.head (tail (tail (tail l)))
+# Nested accessors - only work if elements are themselves lists
+caar     = λl.head (head l)
+caadr    = λl.head (head (tail l))
+cadar    = λl.head (tail (head l))
+cdar     = λl.tail (head l)
+cddr     = λl.tail (tail l)
+cdddr    = λl.tail (tail (tail l))
+
+# List constructor from multiple arguments
+list     = λx.cons x nil
+list1    = list
+list2    = λa b.cons a (cons b nil)
+list3    = λa b c.cons a (cons b (cons c nil))
+list4    = λa b c d.cons a (cons b (cons c (cons d nil)))
+list5    = λa b c d e.cons a (cons b (cons c (cons d (cons e nil))))
+
 # -----------------------------------------------------------------------------
 # 3.3. Lists - Higher-Order Functions
 #
@@ -987,6 +1009,29 @@ safeInitMaybe = λl.if (or (isnil l) (isnil (tail l))) nothing (just (reverse (t
 maybeMap = λf m.if (isNothing m) nothing (just (f (fromJust m)))
 
 # -----------------------------------------------------------------------------
+# 5.4. Type Predicates (Lisp-style)
+#
+# Lisp-style type checking predicates. Note: In pure lambda calculus,
+# distinguishing all types is impossible since everything is a function.
+# These provide best-effort approximations based on structural patterns.
+#
+# USAGE EXAMPLES:
+#   pair? (pair 1 2)      # Returns true
+#   list? [1,2,3]         # Returns true
+#   list? nil             # Returns true
+#   null? nil             # Returns true (alias for isnil)
+#   procedure? succ       # Returns true (everything is a procedure in LC)
+# -----------------------------------------------------------------------------
+pair? = λp.not (or (isnil p) (isNothing p))  # Heuristic: not nil and not nothing
+list? = λl.true  # Everything can be treated as a list in Church encoding
+null? = isnil
+procedure? = λf.true  # Everything is a function in lambda calculus
+
+# Apply with list of arguments (Lisp-style)
+# applyList f [a, b, c] => f a b c
+applyList = λf args.foldr (λarg cont.λacc.cont (acc arg)) (λx.x) args f
+
+# -----------------------------------------------------------------------------
 # Roadmap Item 4: Monadic / Applicative helpers for Maybe & Either
 # Provides standard monadic operations enabling fluent chaining without
 # manually unpacking structures. Naming follows conventional FP libraries.
@@ -1292,6 +1337,12 @@ unlines  = intercalate (cons newline nil)
 break    = λp l.foldl (λacc x.if (p x) acc (pair (cons x (first acc)) (second acc))) (pair nil l) l
 intercalate = λsep l.if (isnil l) nil (if (isnil (tail l)) (head l) (foldr (λx acc.if (isnil acc) x (append x (cons sep acc))) nil l))
 
+# Lisp-style string operations (strings are lists of chars/ASCII codes)
+substring = λstr start end.take (minus end start) (drop start str)
+stringRef = λs n. nth n s    # Takes string first, index second (flipped from nth)
+stringAppend = append
+stringLength = length
+
 
 # =============================================================================
 # SECTION 8: DEBUGGING, ERRORS, AND PERFORMANCE
@@ -1515,6 +1566,22 @@ eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft
 :macro (unless $cond $expr) => (if $cond I $expr)
 :macro (for $var at $list do $body) => (map (λ$var.$body) $list)
 :macro (iff $p then $then else $else) => if $p $then $else
+
+# Cond macro - multi-branch conditional (Lisp-style)
+# Usage: (cond2 p1 e1 p2 e2) or (cond2 p1 e1 :else e2)
+# Conditions are evaluated expressions
+:macro (cond2 $p1 $e1 :else $e2) => (if $p1 $e1 $e2)
+:macro (cond2 $p1 $e1 $p2 $e2) => (if $p1 $e1 (if $p2 $e2 error))
+:macro (cond3 $p1 $e1 $p2 $e2 :else $e3) => (if $p1 $e1 (if $p2 $e2 $e3))
+:macro (cond3 $p1 $e1 $p2 $e2 $p3 $e3) => (if $p1 $e1 (if $p2 $e2 (if $p3 $e3 error)))
+
+# Case macro - pattern matching switch
+# Usage: (case2 expr v1 r1 v2 r2) or (case2 expr v1 r1 :else r2)
+# Values are compared with eq
+:macro (case2 $expr $v1 $r1 :else $r2) => (let x = $expr in (if (eq x $v1) $r1 $r2))
+:macro (case2 $expr $v1 $r1 $v2 $r2) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 error)))
+:macro (case3 $expr $v1 $r1 $v2 $r2 :else $r3) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 $r3)))
+:macro (case3 $expr $v1 $r1 $v2 $r2 $v3 $r3) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 (if (eq x $v3) $r3 error))))
 
 # -----------------------------------------------------------------------------
 # 9.2. Math and Comparison Macros

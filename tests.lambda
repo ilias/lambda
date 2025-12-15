@@ -1984,6 +1984,162 @@ alphaEq (incB 41) 42
 # Supplemental coverage block (focused, 2025-10)
 ##################################################################
 
+# -----------------------------------------------
+# Lisp-style Aliases Tests (car/cdr/cadr/etc.)
+# -----------------------------------------------
+testList = [1, 2, 3, 4, 5]
+
+# Basic car/cdr (head/tail aliases)
+alphaEq (car testList) 1
+alphaEq (cdr testList) [2, 3, 4, 5]
+
+# Composed accessors
+alphaEq (cadr testList) 2         # second element
+alphaEq (caddr testList) 3        # third element
+alphaEq (cadddr testList) 4       # fourth element
+
+# List constructors
+alphaEq (list1 42) [42]
+alphaEq (list2 1 2) [1, 2]
+alphaEq (list3 1 2 3) [1, 2, 3]
+alphaEq (list4 1 2 3 4) [1, 2, 3, 4]
+alphaEq (list5 1 2 3 4 5) [1, 2, 3, 4, 5]
+
+# Nested list accessors (only cddr/cdddr work with flat lists)
+alphaEq (cddr testList) [3, 4, 5] # cdr of cdr
+alphaEq (cdddr testList) [4, 5]   # cdr of cdr of cdr
+
+# Nested list tests - must use cons explicitly for nested structures
+nested1 = cons (cons 1 (cons 2 nil)) (cons (cons 3 (cons 4 nil)) (cons 5 nil))
+alphaEq (caar nested1) 1       # car of car: get first element of first list
+alphaEq (caadr nested1) 3      # car of car of cdr: get first element of second list
+
+# -----------------------------------------------
+# Cond and Case Macro Tests
+# -----------------------------------------------
+
+# Cond2 macro tests (2 branches)
+alphaEq (cond2 (lt 5 10) 1 :else 2) 1
+alphaEq (cond2 (gt 5 10) 1 :else 2) 2
+alphaEq (cond2 (eq 5 5) 100 :else 200) 100
+
+# Cond3 macro tests (3 branches)
+testCond3 = λn. cond3 (eq n 1) 10 (eq n 2) 20 :else 30
+alphaEq (testCond3 1) 10
+alphaEq (testCond3 2) 20
+alphaEq (testCond3 3) 30
+
+# Case2 macro tests  
+alphaEq (case2 2 1 10 2 20) 20
+alphaEq (case2 1 1 10 2 20) 10
+alphaEq (case2 5 1 10 :else 99) 99
+
+# Case3 macro tests
+testCase3 = λn. case3 n 1 100 2 200 3 300
+alphaEq (testCase3 1) 100
+alphaEq (testCase3 2) 200
+alphaEq (testCase3 3) 300
+
+testCase3Else = λn. case3 n 1 100 2 200 :else 999
+alphaEq (testCase3Else 1) 100
+alphaEq (testCase3Else 2) 200
+alphaEq (testCase3Else 7) 999
+
+# -----------------------------------------------
+# String Operations Tests (Lisp-style)
+# -----------------------------------------------
+
+# String is list of ASCII codes
+testStr = [72, 101, 108, 108, 111]  # "Hello"
+
+# substring: take slice from start to end
+alphaEq (substring testStr 0 3) [72, 101, 108]       # "Hel"
+alphaEq (substring testStr 1 4) [101, 108, 108]      # "ell"
+alphaEq (substring testStr 2 5) [108, 108, 111]      # "llo"
+
+# stringRef: get character at index (nth)
+alphaEq (stringRef testStr 0) 72    # 'H'
+alphaEq (stringRef testStr 1) 101   # 'e'
+alphaEq (stringRef testStr 4) 111   # 'o'
+
+# stringAppend: concatenate strings
+str1 = [72, 105]      # "Hi"
+str2 = [33, 33]       # "!!"
+alphaEq (stringAppend str1 str2) [72, 105, 33, 33]
+
+# stringLength
+alphaEq (stringLength testStr) 5
+alphaEq (stringLength nil) 0
+
+# -----------------------------------------------
+# Type Predicate Tests (Lisp-style)
+# -----------------------------------------------
+
+# null? - test for nil
+alphaEq (null? nil) true
+alphaEq (null? [1, 2]) false
+
+# pair? - heuristic test for pairs
+alphaEq (pair? (pair 1 2)) true
+alphaEq (pair? nil) false
+
+# list? - everything is a list in Church encoding
+alphaEq (list? [1, 2, 3]) true
+alphaEq (list? nil) true
+
+# procedure? - everything is a function
+alphaEq (procedure? succ) true
+alphaEq (procedure? 42) true  # Even numbers are functions in LC
+
+# -----------------------------------------------
+# applyList Tests (apply with list of arguments)
+# -----------------------------------------------
+
+# Apply function to list of arguments
+alphaEq (applyList plus [3, 4]) 7
+alphaEq (applyList mult [5, 6]) 30
+alphaEq (applyList max [10, 5]) 10
+
+# -----------------------------------------------
+# Native Math Functions Tests
+# -----------------------------------------------
+
+# Trigonometric functions (scaled by 1000, degrees)
+# sin(0) = 0, sin(90) = 1.0 => 1000
+alphaEq (sin 0) 0
+alphaEq (sin 90) 1000
+
+# cos(0) = 1.0 => 1000, cos(90) = 0
+alphaEq (cos 0) 1000
+alphaEq (cos 90) 0
+
+# tan(0) = 0, tan(45) ≈ 1.0 => 1000
+alphaEq (tan 0) 0
+alphaEq (geq (tan 45) 900) true   # tan(45) ≈ 1, scaled
+
+# log (natural logarithm, scaled by 1000)
+# ln(1) = 0
+alphaEq (log 1) 0
+# ln(e) ≈ 1 => but e ≈ 2.718, so ln(3) ≈ 1.099 => 1099
+alphaEq (geq (log 3) 1000) true
+alphaEq (leq (log 3) 1200) true
+
+# expReal (e^(n/1000))
+# e^0 = 1
+alphaEq (expReal 0) 1
+# e^1 ≈ 2.718, input 1000 gives e^1
+alphaEq (geq (expReal 1000) 2) true
+alphaEq (leq (expReal 1000) 3) true
+
+# absReal (absolute value)
+alphaEq (absReal 5) 5
+alphaEq (absReal 0) 0
+# Church numerals are non-negative, but test still works
+
+# floor/ceiling (identity for Church numerals)
+alphaEq (floor 42) 42
+alphaEq (ceiling 17) 17
+
 # --- Module export/hide (from tests/module-export-hide.lambda) ---
 :module load "tests/module-export-hide.lambda" as ME
 alphaEq ME::pub 41
