@@ -38,6 +38,8 @@ public partial class Interpreter
     internal int _nativeArithmetic = 0; // internal for services
     private bool _useNativeArithmetic = true;
     private bool _usedRandom = false;
+    private bool _useDeBruijnBinder = false;
+    private bool _showTime = true;
     internal EqualityService Equality { get; private set; } = null!;
     // Test output mode & records (for :test json/text)
     private enum TestOutputMode { Text, Json }
@@ -226,10 +228,13 @@ public partial class Interpreter
             if (resultStr.Length > 2)
                 await _logger.LogAsync($"Name: {resultStr}");
 
-            var timeInfo = elapsed.TotalSeconds >= 1
-                ? $"{elapsed.TotalSeconds:F2} s"
-                : $"{elapsed.TotalMilliseconds:F1} ms";
-            await _logger.LogAsync($"Time: {timeInfo}, iterations: {_stats.Iterations:#,##0}");
+            if (_showTime)
+            {
+                var timeInfo = elapsed.TotalSeconds >= 1
+                    ? $"{elapsed.TotalSeconds:F2} s"
+                    : $"{elapsed.TotalMilliseconds:F1} ms";
+                await _logger.LogAsync($"Time: {timeInfo}, iterations: {_stats.Iterations:#,##0}");
+            }
         }
 
         await _logger.LogAsync(result.str);
@@ -270,6 +275,9 @@ public partial class Interpreter
         var arg = parts.Length > 1 ? parts[1].Trim() : "";
         return command switch
         {
+            ":strategy" => HandleStrategy(arg),
+            ":steps" => HandleSteps(),
+            ":time" => HandleTime(arg),
             ":test" when arg.Equals("clear", StringComparison.OrdinalIgnoreCase) => TestClear(),
             ":test" when arg.Equals("result", StringComparison.OrdinalIgnoreCase) => TestResult(),
             ":test" when arg.Equals("json", StringComparison.OrdinalIgnoreCase) => SetTestOutputMode(TestOutputMode.Json),
@@ -293,6 +301,7 @@ public partial class Interpreter
             ":native" => HandleNativeArithmetic(arg),
             ":pretty" or ":pp"=> HandlePrettyPrint(arg),
             ":macro" => HandleMacroDefinition(arg),
+            ":binder" => HandleBinder(arg),
             ":module" => await HandleModuleCommandAsync(arg),
             ":doc" => HandleDoc(arg),
             ":find" => HandleFind(arg),

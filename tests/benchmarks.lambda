@@ -1,0 +1,29 @@
+# =============================================================================
+# Benchmarks - De Bruijn vs Named Substitution
+# =============================================================================
+
+# Enable time reporting
+:time on
+
+# Define a moderately heavy computation (factorial and fibonacci)
+# Using Church numerals to exercise substitution and evaluation
+alphaEq (fact 6) 720
+alphaEq (fib 10) 55
+
+# Named binder mode (default)
+:binder debruijn off
+fact 7
+fib 12
+
+# De Bruijn binder mode
+:binder debruijn on
+fact 7
+fib 12
+
+# Optional: a chain of beta-reductions
+# ((λx. λy. x) (succ 99)) should simplify under both modes
+alphaEq ((λx. λy. x) (succ 99)) (λy. (succ 99))
+
+# Notes:
+# - Compare the emitted Time: lines between named and debruijn binder modes.
+# - For more pronounced differences, increase arguments (e.g., fact 8 / fib 13)

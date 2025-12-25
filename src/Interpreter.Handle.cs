@@ -123,6 +123,58 @@ public partial class Interpreter
         return $"Lazy evaluation {(_lazyEvaluation ? "enabled" : "disabled")}";
     }
 
+    private string HandleStrategy(string arg)
+    {
+        // :strategy cbv | need | lazy | default
+        var choice = (arg ?? "").Trim().ToLowerInvariant();
+        switch (choice)
+        {
+            case "cbv": // call-by-value
+            case "call-by-value":
+                _evaluator = new CEKEvaluator(this);
+                _lazyEvaluation = false;
+                return "Strategy: CEK (call-by-value)";
+            case "need": // call-by-need (lazy + memoization via thunks)
+            case "call-by-need":
+            case "lazy":
+                _evaluator = new CEKEvaluator(this);
+                _lazyEvaluation = true;
+                return "Strategy: CEK (call-by-need)";
+            case "default":
+            case "cek":
+                _evaluator = new CEKEvaluator(this);
+                return $"Strategy: CEK ({(_lazyEvaluation ? "call-by-need" : "call-by-value")})";
+            default:
+                return "Usage: :strategy <cbv|need|lazy|cek|default>";
+        }
+    }
+
+    private string HandleSteps()
+    {
+        return $"Steps: {_stats.Iterations:#,##0}";
+    }
+
+    private string HandleTime(string arg)
+    {
+        _showTime = arg != "off";
+        return $"Time display {(_showTime ? "enabled" : "disabled")}";
+    }
+
+    private string HandleBinder(string arg)
+    {
+        // :binder debruijn on|off
+        var parts = (arg ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+            return $"Binder mode: {(_useDeBruijnBinder ? "debruijn" : "named")}";
+        if (!string.Equals(parts[0], "debruijn", StringComparison.OrdinalIgnoreCase))
+            return "Usage: :binder debruijn on|off";
+        if (parts.Length == 1)
+            return $"Binder mode: {(_useDeBruijnBinder ? "debruijn" : "named")}";
+        var on = string.Equals(parts[1], "on", StringComparison.OrdinalIgnoreCase);
+        _useDeBruijnBinder = on;
+        return $"Binder: {(_useDeBruijnBinder ? "debruijn" : "named")}";
+    }
+
     private string HandleRecursionDepth(string arg)
     {
         if (string.IsNullOrWhiteSpace(arg))

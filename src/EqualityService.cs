@@ -28,7 +28,10 @@ internal sealed class EqualityService
         if (rightVal.Type == ExprType.Thunk) rightVal = _interp.Force(rightVal);
         var normLeft = _interp.NormalizeExpression(leftVal);
         var normRight = _interp.NormalizeExpression(rightVal);
-        var equal = Expr.AlphaEquivalent(normLeft, normRight) || (!Expr.AlphaEquivalent(normLeft, normRight) && Expr.AlphaEquivalent(leftVal, rightVal));
+        // Prefer De Bruijn-style canonical comparison (name-insensitive) for alpha equivalence
+        var canonLeft = CanonicalFormString(normLeft);
+        var canonRight = CanonicalFormString(normRight);
+        var equal = canonLeft == canonRight;
         return _interp.MakeChurchBoolean(LogAndUpdateStructEq("alpha", normLeft, normRight, equal));
     }
 
@@ -57,55 +60,8 @@ internal sealed class EqualityService
         var nL = _interp.NormalizeExpression(left);
         var nR = _interp.NormalizeExpression(right);
         // Logging will be handled by helper after computing equality outcome
-        string CanonicalHash(Expr expr)
-        {
-            var sb = new System.Text.StringBuilder();
-            var stack = new Stack<(Expr node, List<string> ctx)>();
-            stack.Push((expr, new List<string>()));
-            while (stack.Count > 0)
-            {
-                var (node, ctx) = stack.Pop();
-                switch (node.Type)
-                {
-                    case ExprType.Var:
-                        if (node.VarName != null)
-                        {
-                            int idx = ctx.LastIndexOf(node.VarName);
-                            if (idx >= 0) sb.Append('b').Append(ctx.Count - 1 - idx).Append(';');
-                            else sb.Append('f').Append(node.VarName).Append(';');
-                        }
-                        else sb.Append("v;");
-                        break;
-                    case ExprType.Abs:
-                        sb.Append('λ');
-                        var newCtx = new List<string>(ctx) { node.AbsVarName ?? "_" };
-                        stack.Push((node.AbsBody!, newCtx));
-                        break;
-                    case ExprType.App:
-                        sb.Append('(').Append('A').Append(')');
-                        stack.Push((node.AppRight!, new List<string>(ctx)));
-                        stack.Push((node.AppLeft!, new List<string>(ctx)));
-                        break;
-                    case ExprType.Thunk:
-                        var inner = node.ThunkValue!.IsForced && node.ThunkValue.ForcedValue is not null ? node.ThunkValue.ForcedValue : node.ThunkValue.Expression;
-                        stack.Push((inner!, new List<string>(ctx)));
-                        break;
-                    case ExprType.YCombinator:
-                        sb.Append("Y;");
-                        break;
-                }
-            }
-            unchecked
-            {
-                const uint offset = 2166136261;
-                const uint prime = 16777619;
-                uint hash = offset;
-                foreach (var ch in sb.ToString()) { hash ^= ch; hash *= prime; }
-                return hash.ToString("X8");
-            }
-        }
-        var hL = CanonicalHash(nL);
-        var hR = CanonicalHash(nR);
+        var hL = CanonicalHash(CanonicalFormString(nL));
+        var hR = CanonicalHash(CanonicalFormString(nR));
         var hashEq = hL == hR;
         return _interp.MakeChurchBoolean(LogAndUpdateStructEq("hash", nL, nR, hashEq));
     }
@@ -222,5 +178,59 @@ internal sealed class EqualityService
             current = current.AbsBody.AppRight;
         }
         return current;
+    }
+
+    // De Bruijn-style canonical form (name-insensitive) as a linearized string
+    private static string CanonicalFormString(Expr expr)
+    {
+        var sb = new System.Text.StringBuilder();
+        var stack = new Stack<(Expr node, List<string> ctx)>();
+        stack.Push((expr, new List<string>()));
+        while (stack.Count > 0)
+        {
+            var (node, ctx) = stack.Pop();
+            switch (node.Type)
+            {
+                case ExprType.Var:
+                    if (node.VarName != null)
+                    {
+                        int idx = ctx.LastIndexOf(node.VarName);
+                        if (idx >= 0) sb.Append('b').Append(ctx.Count - 1 - idx).Append(';');
+                        else sb.Append('f').Append(node.VarName).Append(';');
+                    }
+                    else sb.Append("v;");
+                    break;
+                case ExprType.Abs:
+                    sb.Append('λ');
+                    var newCtx = new List<string>(ctx) { node.AbsVarName ?? "_" };
+                    stack.Push((node.AbsBody!, newCtx));
+                    break;
+                case ExprType.App:
+                    sb.Append('(').Append('A').Append(')');
+                    stack.Push((node.AppRight!, new List<string>(ctx)));
+                    stack.Push((node.AppLeft!, new List<string>(ctx)));
+                    break;
+                case ExprType.Thunk:
+                    var inner = node.ThunkValue!.IsForced && node.ThunkValue.ForcedValue is not null ? node.ThunkValue.ForcedValue : node.ThunkValue.Expression;
+                    stack.Push((inner!, new List<string>(ctx)));
+                    break;
+                case ExprType.YCombinator:
+                    sb.Append("Y;");
+                    break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static string CanonicalHash(string canonicalForm)
+    {
+        unchecked
+        {
+            const uint offset = 2166136261;
+            const uint prime = 16777619;
+            uint hash = offset;
+            foreach (var ch in canonicalForm) { hash ^= ch; hash *= prime; }
+            return hash.ToString("X8");
+        }
     }
 }

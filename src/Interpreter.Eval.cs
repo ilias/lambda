@@ -2,6 +2,13 @@ namespace LambdaCalculus;
 
 public partial class Interpreter
 {
+    // Minimal De Bruijn AST used for optional binder mode
+    private abstract record DbExpr;
+    private sealed record DbVarBound(int Index) : DbExpr;
+    private sealed record DbVarFree(string Name) : DbExpr;
+    private sealed record DbAbs(DbExpr Body) : DbExpr;
+    private sealed record DbApp(DbExpr Left, DbExpr Right) : DbExpr;
+    private sealed record DbY() : DbExpr;
     // Delegate for native functions
     public delegate Expr? NativeFunction(string name, List<Expr> args, Dictionary<string, Expr> env);
 
@@ -235,8 +242,17 @@ public partial class Interpreter
 
                 if (funcToApply.Type == ExprType.Abs)
                 {
-                    // Beta reduction - substitute argument for parameter in function body
-                    var substituted = Substitute(funcToApply.AbsBody!, funcToApply.AbsVarName!, argument);
+                    // Beta reduction: either named-binder substitution or De Bruijn substitution
+                    Expr substituted;
+                    if (_useDeBruijnBinder)
+                    {
+                        var maybeDb = BetaReduceDeBruijn(funcToApply, argument);
+                        substituted = maybeDb ?? Substitute(funcToApply.AbsBody!, funcToApply.AbsVarName!, argument);
+                    }
+                    else
+                    {
+                        substituted = Substitute(funcToApply.AbsBody!, funcToApply.AbsVarName!, argument);
+                    }
                     stateStack.Push(new CEKState(substituted, env, next!));
                 }
                 else if (funcToApply.Type == ExprType.YCombinator)
@@ -271,6 +287,114 @@ public partial class Interpreter
                 var isTrue = Expr.TryExtractBoolean(value, out var boolVal) && boolVal;
                 stateStack.Push(new CEKState(isTrue ? thenBranch! : elseBranch!, condEnv!, next!));
                 break;
+        }
+    }
+
+    // --- De Bruijn beta-reduction (optional binder mode) ---------------------------------
+    private Expr? BetaReduceDeBruijn(Expr abs, Expr arg)
+    {
+        // Guard: only proceed if we can convert both to DB encodings we support (Var/Abs/App/Y)
+        if (abs.Type != ExprType.Abs || abs.AbsBody is null) return null;
+        if (!CanConvertToDb(abs.AbsBody!) || !CanConvertToDb(arg)) return null;
+
+        var dbBody = ToDb(abs.AbsBody!, new List<string>());
+        var dbArg = ToDb(arg, new List<string>());
+
+        // Substitute [0 -> dbArg] in body, with standard shift
+        var substituted = DbShift(-1, 0, DbSubst(0, DbShift(1, 0, dbArg), dbBody));
+        // Convert back to named Expr using generated binder names
+        var result = FromDb(substituted, 0);
+        return result;
+
+        bool CanConvertToDb(Expr e)
+        {
+            var stack = new Stack<Expr>();
+            stack.Push(e);
+            while (stack.Count > 0)
+            {
+                var n = stack.Pop();
+                switch (n.Type)
+                {
+                    case ExprType.Var:
+                    case ExprType.YCombinator:
+                        break;
+                    case ExprType.Abs:
+                        if (n.AbsBody is null) return false; stack.Push(n.AbsBody);
+                        break;
+                    case ExprType.App:
+                        if (n.AppLeft is null || n.AppRight is null) return false; stack.Push(n.AppRight); stack.Push(n.AppLeft);
+                        break;
+                    default:
+                        return false; // Thunk/Quote/etc not supported in DB path
+                }
+            }
+            return true;
+        }
+
+        DbExpr ToDb(Expr e, List<string> ctx)
+        {
+            return e.Type switch
+            {
+                ExprType.Var =>
+                    (e.VarName is null)
+                        ? new DbVarFree("_")
+                        : (ctx.LastIndexOf(e.VarName) is var idx && idx >= 0
+                            ? new DbVarBound(ctx.Count - 1 - idx)
+                            : new DbVarFree(e.VarName)),
+                ExprType.Abs =>
+                    new DbAbs(ToDb(e.AbsBody!, new List<string>(ctx) { e.AbsVarName ?? "_" })),
+                ExprType.App => new DbApp(ToDb(e.AppLeft!, ctx), ToDb(e.AppRight!, ctx)),
+                ExprType.YCombinator => new DbY(),
+                _ => throw new NotSupportedException("Unsupported node in DB conversion")
+            };
+        }
+
+        DbExpr DbShift(int d, int cutoff, DbExpr expr)
+        {
+            return expr switch
+            {
+                DbVarBound vb => new DbVarBound(vb.Index >= cutoff ? vb.Index + d : vb.Index),
+                DbVarFree vf => vf,
+                DbAbs a => new DbAbs(DbShift(d, cutoff + 1, a.Body)),
+                DbApp app => new DbApp(DbShift(d, cutoff, app.Left), DbShift(d, cutoff, app.Right)),
+                DbY y => y,
+                _ => expr
+            };
+        }
+
+        DbExpr DbSubst(int j, DbExpr s, DbExpr expr)
+        {
+            return expr switch
+            {
+                DbVarBound vb => vb.Index == j ? s : vb,
+                DbVarFree vf => vf,
+                DbAbs a => new DbAbs(DbSubst(j + 1, DbShift(1, 0, s), a.Body)),
+                DbApp app => new DbApp(DbSubst(j, s, app.Left), DbSubst(j, s, app.Right)),
+                DbY y => y,
+                _ => expr
+            };
+        }
+
+        Expr FromDb(DbExpr e, int depth)
+        {
+            switch (e)
+            {
+                case DbVarBound vb:
+                    // Bound var: refer to the binder name at distance vb.Index
+                    var name = $"x{depth - 1 - vb.Index}";
+                    return Expr.Var(name);
+                case DbVarFree vf:
+                    return Expr.Var(vf.Name);
+                case DbAbs a:
+                    var binder = $"x{depth}";
+                    return Expr.Abs(binder, FromDb(a.Body, depth + 1));
+                case DbApp app:
+                    return Expr.App(FromDb(app.Left, depth), FromDb(app.Right, depth));
+                case DbY:
+                    return Expr.YCombinator();
+                default:
+                    throw new NotSupportedException("Unknown DB node");
+            }
         }
     }
 

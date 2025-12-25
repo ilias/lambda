@@ -355,6 +355,10 @@ public partial class Interpreter
             :log file|off|clear   Append output to file / disable / truncate
             :macro (pat) => body  Add macro rewrite rule (applied before parse segment)
             :native on|off|show   Toggle/show native arithmetic & list primitives
+            :strategy cbv|need    Select evaluation strategy (cbv = call-by-value, need = call-by-need/lazy)
+            :time on|off          Toggle per-result timing display
+            :steps                Print CEK steps (Iterations) for last evaluation
+            :binder debruijn on|off Toggle De Bruijn-based beta-reduction path (falls back when unsupported)
             :pretty on|off        Toggle pretty printing of numerals/lists/booleans
             :save file            Persist current defs/macros/infix to file
             :stats                Display performance metrics & cache sizes
@@ -402,6 +406,13 @@ public partial class Interpreter
                     :macro (spec $x) => 0    # fallback
                     :macro (arity2 ($f $x $y)) => 2
                     :macro (arity2 $z) => 0
+
+                -- Quick Examples --
+                    :strategy cbv; (\x.x) 42           # eager evaluation
+                    :strategy need; if true 1 (omega)   # lazy avoids forcing omega
+                    :time on; fact 7                    # show timing alongside result
+                    :binder debruijn on; alphaEq (\x.x) (\y.y)  # true via canonical alpha
+                    :steps                               # print CEK steps from last eval
 
         {{multiLine}}
         See README 'Formal Grammar' for precise grammar & full desugarings.

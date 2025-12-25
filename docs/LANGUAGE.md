@@ -588,6 +588,38 @@ Limitations: Not a proof system; normalization bounds may yield conservative `fa
 
 ---
 
+### Evaluation Strategy, Timing, and Binder Modes
+
+The evaluator supports configurable strategy and binder behavior for experimentation and performance transparency:
+
+- `:strategy cbv|need`: selects call-by-value (eager) or call-by-need (lazy via thunks). `need` is the default in most sessions; `cbv` forces arguments before function application.
+- `:time on|off`: toggles per-result timing display alongside outputs. When on, each printed result is accompanied by a summary (e.g., `Time: 2.1 ms, iterations: 3`). Timings derive from internal tick counters; treat them comparatively.
+- `:steps`: prints the CEK machine steps performed for the last evaluation (`Iterations`). Useful for quick micro-benchmarks without full `:stats`.
+- `:binder debruijn on|off`: enables an optional De Bruijn–based beta-reduction path for pure lambda cores and uses a De Bruijn-style canonical comparison for alpha equivalence.
+
+De Bruijn binder mode details:
+
+- Scope: the DB beta path currently applies to `Var`, `Abs`, `App`, and `Y` forms. When an expression includes constructs outside this set (e.g., certain natives, quotes, or advanced macro artifacts), the interpreter safely falls back to named capture-avoiding substitution.
+- Alpha equivalence: `alphaEq` compares canonical De Bruijn-style linearized forms, making it insensitive to binder names while preserving distinctions between free vs bound variables.
+- Beta-reduction: in DB mode, reduction uses standard `shift`/`subst` operations over indices and converts back to named form for display. This reduces renaming overhead and improves capture avoidance robustness on lambda-heavy terms.
+- Guidance: prefer DB mode for purity-focused benchmarks or structural tests; keep it off when inspecting raw named structures or interacting with constructs not yet covered by the DB conversion. When in doubt, toggle and compare with `:steps` and `:time`.
+
+Examples:
+
+```lambda
+:binder debruijn on; :strategy cbv; (λx.λy.x) z  # DB beta path + cbv
+:steps                                         # prints last CEK iterations
+:time on; fact 7                               # show timing with result
+:binder debruijn off; alphaEq (λx.x) (λy.y)    # still true via canonicalization
+```
+
+Notes:
+
+- The DB canonicalization used by `alphaEq` is always enabled internally for the comparison (independent of binder toggle), but the beta-reduction path itself is controlled by `:binder debruijn`.
+- Pretty printing continues to recognize Church encodings regardless of binder mode.
+
+---
+
 ### Selected Extended Examples
 
 ```lambda
