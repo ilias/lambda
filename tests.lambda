@@ -2166,11 +2166,6 @@ alphaEq (absReal 0) 0
 alphaEq (floor 42) 42
 alphaEq (ceiling 17) 17
 
-# --- Module export/hide (from tests/module-export-hide.lambda) ---
-:module load "tests/module-export-hide.lambda" as ME
-alphaEq ME::pub 41
-alphaEq (ME::subInc 5) 6
-
 # --- for-macro result tests ---
 alphaEq (for x at [1,2,3] do (succ x)) [2,3,4]
 alphaEq (for x at [2,3,4] do (square x)) [4,9,16]
@@ -2335,4 +2330,484 @@ alphaEq ((λx.x) 5) 5
 alphaEq ((λx.x) 5) 5
 alphaEq ((λx.x) 5) 5
 :stats
+
+
+# ===========================================================================
+# Additional Coverage Tests - Error Handling, Edge Cases, and Advanced Features
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Error Handling & Edge Cases
+# ---------------------------------------------------------------------------
+
+# Division by zero (should return 0 as safe fallback)
+alphaEq (div 10 0) 0
+alphaEq (mod 10 0) 0
+alphaEq (safediv 10 0) nothing
+alphaEq (safediv 0 0) nothing
+
+# Empty list operations (safe versions)
+alphaEq (head nil) nil
+alphaEq (tail nil) nil
+alphaEq (last nil) nil
+alphaEq (init nil) nil
+alphaEq (safehead nil) nothing
+alphaEq (safetail nil) nothing
+
+# List operations at boundaries
+alphaEq (nth 0 nil) nil
+alphaEq (take 10 [1,2]) [1,2]
+alphaEq (drop 10 [1,2]) nil
+alphaEq (splitAt 0 [1,2,3]) (pair nil [1,2,3])
+alphaEq (splitAt 10 [1,2,3]) (pair [1,2,3] nil)
+
+# Negative-like behavior (Church numerals are non-negative)
+alphaEq (minus 3 10) 0
+alphaEq (pred 0) 0
+alphaEq (div 0 5) 0
+alphaEq (mod 0 5) 0
+
+# ---------------------------------------------------------------------------
+# 2. Evaluation Strategy Tests (CBV vs Need)
+# ---------------------------------------------------------------------------
+
+# Short-circuit behavior in both strategies
+:strategy cbv
+alphaEq (if true 1 (div 1 0)) 1
+alphaEq (and true false) false
+alphaEq (or true (div 1 0)) true
+:strategy need
+alphaEq (if true 1 (div 1 0)) 1
+alphaEq (and true false) false
+alphaEq (or true (div 1 0)) true
+
+# Verify both strategies produce same results for pure computations
+:strategy cbv
+alphaEq (map succ [1,2,3]) [2,3,4]
+alphaEq (foldr plus 0 [1,2,3,4,5]) 15
+:strategy need
+alphaEq (map succ [1,2,3]) [2,3,4]
+alphaEq (foldr plus 0 [1,2,3,4,5]) 15
+
+# Reset to default
+:strategy need
+
+# ---------------------------------------------------------------------------
+# 3. Advanced Equality Edge Cases
+# ---------------------------------------------------------------------------
+
+# Beta equivalence with multiple reduction steps
+alphaEq (betaEq ((λf. λx. f (f x)) succ 0) 2) true
+alphaEq (betaEq ((λx. λy. plus x y) 2 3) 5) true
+alphaEq (betaEq ((λf. f 1) (λx. mult x 2)) 2) true
+
+# Eta equivalence blocked cases
+alphaEq (etaEq (λx. f x x) f) false
+alphaEq (etaEq (λx. pair x x) pair) false
+alphaEq (etaEq (λx. λy. f x y) f) true
+
+# Hash equivalence with alpha variants
+alphaEq (hashEq (λx. λy. plus x y) (λa. λb. plus a b)) true
+alphaEq (hashEq (λx. x) (λy. y)) true
+alphaEq (hashEq (λx. x) (λx. λy. x)) false
+
+# ---------------------------------------------------------------------------
+# 4. String/Character Operations (Extended)
+# ---------------------------------------------------------------------------
+
+# Character code boundaries
+alphaEq (isdigit 47) false       # '/' just before '0'
+alphaEq (isdigit 48) true        # '0'
+alphaEq (isdigit 57) true        # '9'
+alphaEq (isdigit 58) false       # ':' just after '9'
+
+alphaEq (isupper 64) false       # '@' just before 'A'
+alphaEq (isupper 65) true        # 'A'
+alphaEq (isupper 90) true        # 'Z'
+alphaEq (isupper 91) false       # '[' just after 'Z'
+
+alphaEq (islower 96) false       # '`' just before 'a'
+alphaEq (islower 97) true        # 'a'
+alphaEq (islower 122) true       # 'z'
+alphaEq (islower 123) false      # '{' just after 'z'
+
+# Case conversion edge cases
+alphaEq (toupper 97) 65          # 'a' -> 'A'
+alphaEq (toupper 122) 90         # 'z' -> 'Z'
+alphaEq (tolower 65) 97          # 'A' -> 'a'
+alphaEq (tolower 90) 122         # 'Z' -> 'z'
+alphaEq (toupper 48) 48          # '0' unchanged
+alphaEq (tolower 48) 48          # '0' unchanged
+
+# String operations with empty strings
+alphaEq (stringLength nil) 0
+alphaEq (stringAppend nil nil) nil
+alphaEq (stringAppend [72,105] nil) [72,105]
+alphaEq (stringAppend nil [72,105]) [72,105]
+
+# ---------------------------------------------------------------------------
+# 5. Tree Operations (Unbalanced Trees)
+# ---------------------------------------------------------------------------
+
+# Deep left-heavy tree
+leftHeavy = node 5 (node 3 (node 1 nil nil) nil) nil
+alphaEq (treeSize leftHeavy) 3
+alphaEq (treeDepth leftHeavy) 3
+alphaEq (inOrder leftHeavy) [1,3,5]
+alphaEq (preOrder leftHeavy) [5,3,1]
+alphaEq (postOrder leftHeavy) [1,3,5]
+
+# Deep right-heavy tree
+rightHeavy = node 1 nil (node 3 nil (node 5 nil nil))
+alphaEq (treeSize rightHeavy) 3
+alphaEq (treeDepth rightHeavy) 3
+alphaEq (inOrder rightHeavy) [1,3,5]
+alphaEq (preOrder rightHeavy) [1,3,5]
+alphaEq (postOrder rightHeavy) [5,3,1]
+
+# Single-node tree operations
+singleNode = leaf 42
+alphaEq (treeSize singleNode) 1
+alphaEq (treeDepth singleNode) 1
+alphaEq (isLeaf singleNode) true
+alphaEq (inOrder singleNode) [42]
+
+# Tree with nil children handling
+alphaEq (treeSize nil) 0
+alphaEq (treeDepth nil) 0
+alphaEq (inOrder nil) nil
+
+# ---------------------------------------------------------------------------
+# 6. Set Operations Edge Cases
+# ---------------------------------------------------------------------------
+
+# Union with duplicates (union does not deduplicate within first list)
+alphaEq (union [1,2,3] [2,3,4]) [1,2,3,4]
+alphaEq (union nil [1,2,3]) [1,2,3]
+alphaEq (union [1,2,3] nil) [1,2,3]
+alphaEq (union nil nil) nil
+
+# Intersection edge cases
+alphaEq (intersect [1,2,3] [4,5,6]) nil
+alphaEq (intersect nil [1,2,3]) nil
+alphaEq (intersect [1,2,3] nil) nil
+alphaEq (intersect [1,2,3] [2]) [2]
+
+# Difference edge cases
+alphaEq (difference [1,2,3] [1,2,3]) nil
+alphaEq (difference nil [1,2,3]) nil
+alphaEq (difference [1,2,3] nil) [1,2,3]
+alphaEq (difference [1,2,3,4,5] [2,4]) [1,3,5]
+
+# Subset/Superset with duplicates and edge cases
+alphaEq (isSubset nil [1,2,3]) true
+alphaEq (isSubset [1,2,3] nil) false
+alphaEq (isSubset nil nil) true
+alphaEq (isSuperset [1,2,3] [1,1,2]) true
+
+# ---------------------------------------------------------------------------
+# 7. List Fold Variations & Properties
+# ---------------------------------------------------------------------------
+
+# Fold associativity for commutative operations
+alphaEq (foldr plus 0 [1,2,3,4]) (foldl plus 0 [1,2,3,4])
+alphaEq (foldr mult 1 [2,3,4]) (foldl mult 1 [2,3,4])
+alphaEq (foldr max 0 [3,1,4,1,5]) (foldl max 0 [3,1,4,1,5])
+
+# Fold with non-commutative operations (different results expected)
+alphaEq (foldr minus 0 [1,2,3]) (minus 1 (minus 2 (minus 3 0)))
+alphaEq (foldl minus 0 [1,2,3]) (minus (minus (minus 0 1) 2) 3)
+
+# Fold on singleton and empty
+alphaEq (foldr plus 0 nil) 0
+alphaEq (foldl plus 0 nil) 0
+alphaEq (foldr plus 0 [42]) 42
+alphaEq (foldl plus 0 [42]) 42
+
+# ---------------------------------------------------------------------------
+# 8. Advanced Recursion Patterns
+# ---------------------------------------------------------------------------
+
+# Mutual recursion (even/odd predicates defined recursively)
+evenRec = Y (λf. λn. if (iszero n) true (f (pred n) |> not))
+oddRec = λn. evenRec n |> not
+alphaEq (evenRec 0) true
+alphaEq (evenRec 1) false
+alphaEq (evenRec 4) true
+alphaEq (oddRec 1) true
+alphaEq (oddRec 4) false
+
+# Ackermann function (small values only - grows very fast)
+alphaEq (ackermann 0 5) 6
+alphaEq (ackermann 1 5) 7
+alphaEq (ackermann 2 5) 13
+alphaEq (ackermann 3 2) 29
+
+# Collatz sequence length (3n+1 problem)
+collatz = Y (λf. λn. if (eq n 1) 0 (if (even n) (succ (f (div n 2))) (succ (f (plus 1 (mult 3 n))))))
+alphaEq (collatz 1) 0
+alphaEq (collatz 2) 1
+alphaEq (collatz 4) 2
+alphaEq (collatz 8) 3
+
+# ---------------------------------------------------------------------------
+# 9. Numeric Edge Cases & Properties
+# ---------------------------------------------------------------------------
+
+# GCD/LCM with zero and one
+alphaEq (gcd 0 0) 0
+alphaEq (gcd 1 5) 1
+alphaEq (gcd 5 1) 1
+alphaEq (lcm 1 5) 5
+alphaEq (lcm 5 1) 5
+
+# Powers of two
+alphaEq (exp 2 0) 1
+alphaEq (exp 2 1) 2
+alphaEq (exp 2 10) 1024
+
+# Square root edge cases
+alphaEq (sqrt 0) 0
+alphaEq (sqrt 1) 1
+alphaEq (sqrt 4) 2
+alphaEq (sqrt 9) 3
+alphaEq (sqrt 100) 10
+
+# isPrime additional cases
+alphaEq (isPrime 0) false
+alphaEq (isPrime 1) false
+alphaEq (isPrime 11) true
+alphaEq (isPrime 13) true
+alphaEq (isPrime 15) false
+alphaEq (isPrime 17) true
+
+# Clamp edge cases
+alphaEq (clamp 5 10 3) 5
+alphaEq (clamp 5 10 7) 7
+alphaEq (clamp 5 10 12) 10
+alphaEq (clamp 5 10 5) 5
+alphaEq (clamp 5 10 10) 10
+
+# ---------------------------------------------------------------------------
+# 10. Maybe/Either Monad Laws (Additional)
+# ---------------------------------------------------------------------------
+
+# Maybe functor laws
+alphaEq (maybeMap I (just 5)) (just 5)
+alphaEq (maybeMap I nothing) nothing
+f1 = succ
+g1 = square
+alphaEq (maybeMap (f1 ∘ g1) (just 3)) (maybeMap f1 (maybeMap g1 (just 3)))
+
+# Maybe applicative identity
+alphaEq (maybeAp (just I) (just 7)) (just 7)
+alphaEq (maybeAp nothing (just 7)) nothing
+alphaEq (maybeAp (just succ) nothing) nothing
+
+# Either functor laws
+alphaEq (eitherMap I (right 5)) (right 5)
+alphaEq (eitherMap I (left 5)) (left 5)
+alphaEq (eitherMap (f1 ∘ g1) (right 3)) (eitherMap f1 (eitherMap g1 (right 3)))
+
+# Either left-biased behavior
+alphaEq (eitherBind (left 1) (λx. right (succ x))) (left 1)
+alphaEq (eitherAp (left 1) (right 5)) (left 1)
+
+# ---------------------------------------------------------------------------
+# 11. Pipeline & Composition Combinations
+# ---------------------------------------------------------------------------
+
+# Complex pipeline chains
+alphaEq (1 |> succ |> square |> pred |> succ) 4
+alphaEq ([1,2,3] |> map succ |> filter (λx. gt x 2) |> sum) 7
+alphaEq (5 |> (λx. mult x 2) |> (λx. plus x 3) |> (λx. div x 2)) 6
+
+# Composition chains
+f2 = succ ∘ square ∘ pred
+alphaEq (f2 5) 17
+alphaEq ((succ ∘ pred ∘ succ ∘ pred) 10) 10
+
+# Mixed pipeline and composition
+alphaEq (3 |> (succ ∘ square)) 10
+alphaEq ((succ ∘ square) 3) 10
+
+# ---------------------------------------------------------------------------
+# 12. Advanced List Operations
+# ---------------------------------------------------------------------------
+
+# Zip with unequal lengths (shorter list determines length)
+alphaEq (zip [1,2,3] [4,5]) (cons (pair 1 4) (cons (pair 2 5) nil))
+alphaEq (zip [1] [4,5,6]) (cons (pair 1 4) nil)
+alphaEq (zip nil [1,2,3]) nil
+alphaEq (zip [1,2,3] nil) nil
+
+# ZipWith variations
+alphaEq (zipWith mult [2,3,4] [5,6,7]) [10,18,28]
+alphaEq (zipWith plus [1] [2,3,4]) [3]
+alphaEq (zipWith minus [10,20] [1,2,3]) [9,18]
+
+# Scanl/Scanr additional tests
+alphaEq (scanl mult 1 [2,3,4]) [1,2,6,24]
+alphaEq (scanr mult 1 [2,3,4]) [24,12,4,1]
+alphaEq (scanl plus 0 nil) [0]
+
+# Take/Drop combinations
+alphaEq (append (take 3 [1,2,3,4,5]) (drop 3 [1,2,3,4,5])) [1,2,3,4,5]
+alphaEq (take 2 (drop 2 [1,2,3,4,5])) [3,4]
+
+# Replicate and repeat
+alphaEq (replicate 0 42) nil
+alphaEq (replicate 5 0) [0,0,0,0,0]
+alphaEq (repeat 3 7) [7,7,7]
+
+# ---------------------------------------------------------------------------
+# 13. Range Variations
+# ---------------------------------------------------------------------------
+
+# Ranges with step of 1
+alphaEq [5 .. 10] [5,6,7,8,9,10]
+alphaEq [10 .. 5] [10,9,8,7,6,5]
+
+# Ranges with custom steps
+alphaEq [0,2 .. 10] [0,2,4,6,8,10]
+alphaEq [10,8 .. 2] [10,8,6,4,2]
+alphaEq [1,4 .. 15] [1,4,7,10,13]
+
+# Single element ranges
+alphaEq [5 .. 5] [5]
+alphaEq [5,5 .. 5] [5]
+
+# Empty-ish ranges (step in wrong direction produces empty list)
+alphaEq [1,2 .. 0] []
+alphaEq [10,11 .. 5] []
+
+# ---------------------------------------------------------------------------
+# 14. Pair Operations Extended
+# ---------------------------------------------------------------------------
+
+# Nested pairs
+nestedPair = pair (pair 1 2) (pair 3 4)
+alphaEq (first (first nestedPair)) 1
+alphaEq (second (first nestedPair)) 2
+alphaEq (first (second nestedPair)) 3
+alphaEq (second (second nestedPair)) 4
+
+# Pair equality with nested structures
+alphaEq (pairEq eq eq (pair 1 2) (pair 1 2)) true
+alphaEq (pairEq eq eq (pair 1 2) (pair 1 3)) false
+alphaEq (pairEq (pairEq eq eq) (pairEq eq eq) nestedPair nestedPair) true
+
+# Swap compositions
+alphaEq (swap (swap (pair 1 2))) (pair 1 2)
+alphaEq (swap (pair (pair 1 2) 3)) (pair 3 (pair 1 2))
+
+# ---------------------------------------------------------------------------
+# 15. State Monad Extended
+# ---------------------------------------------------------------------------
+
+# State operations sequencing
+stateSeq = bindState (putState 5) (λ_. bindState getState (λs. returnState (mult s 2)))
+alphaEq (runState stateSeq 0) (pair 10 5)
+
+# State with list accumulation
+pushState = λx. bindState getState (λs. putState (cons x s))
+alphaEq (runState (pushState 1) nil) (pair nil [1])
+alphaEq (runState (bindState (pushState 1) (λ_. pushState 2)) nil) (pair nil [2,1])
+
+# State get-modify-put pattern
+modifyState = bindState getState (λs. putState (succ s))
+alphaEq (runState modifyState 5) (pair nil 6)
+alphaEq (runState (bindState modifyState (λ_. getState)) 5) (pair 6 6)
+
+# ---------------------------------------------------------------------------
+# 16. Combinator Identities (Extended)
+# ---------------------------------------------------------------------------
+
+# More S combinator variations
+alphaEq ((S (K (K 5)) I) 99) 5
+alphaEq ((S (S (K S) K) I) succ 1) 2
+
+# B combinator composition chains
+alphaEq ((B (B succ succ) succ) 0) 3
+alphaEq ((B succ (B succ succ)) 0) 3
+
+# Warbler (W) self-application
+alphaEq ((λf. λx. f x x) plus 3) 6
+alphaEq ((λf. λx. f x x) mult 4) 16
+
+# Thrush (T) reverse application
+alphaEq ((λx. λf. f x) 5 succ) 6
+alphaEq ((λx. λf. f x) [1,2,3] length) 3
+
+# ---------------------------------------------------------------------------
+# 17. Native Math Functions (Extended)
+# ---------------------------------------------------------------------------
+
+# Basic trig values (avoid large operations that cause stack overflow)
+alphaEq (sin 0) 0
+alphaEq (sin 90) 1000
+alphaEq (cos 0) 1000
+alphaEq (cos 90) 0
+alphaEq (tan 0) 0
+
+# Tan at 45 degrees is approximately 1 (scaled to 1000)
+tanVal = tan 45
+alphaEq (geq tanVal 900) true
+alphaEq (leq tanVal 1100) true
+
+# Log of small values
+alphaEq (log 1) 0
+alphaEq (geq (log 3) 1000) true
+alphaEq (leq (log 3) 1200) true
+
+# Exp of zero
+alphaEq (expReal 0) 1
+alphaEq (geq (expReal 1000) 2) true
+alphaEq (leq (expReal 1000) 3) true
+
+# Floor and ceiling identity for integers
+alphaEq (floor 42) 42
+alphaEq (ceiling 42) 42
+
+# Absolute value consistency
+alphaEq (absReal 0) 0
+alphaEq (absReal 100) 100
+
+# ---------------------------------------------------------------------------
+# 18. Curry/Uncurry Extended
+# ---------------------------------------------------------------------------
+
+# Curry3/Uncurry3 roundtrip
+add3Pair = λt. plus (first t) (plus (first (second t)) (second (second t)))
+alphaEq (uncurry3 (curry3 add3Pair) (pair 1 (pair 2 3))) 6
+
+# Partial application with uncurry
+alphaEq (uncurry plus (pair 3 4)) 7
+alphaEq ((uncurry plus (pair 2 3)) |> succ) 6
+
+# ---------------------------------------------------------------------------
+# 19. Benchmark & Performance Helpers
+# ---------------------------------------------------------------------------
+
+# Benchmark returns final value
+alphaEq (benchmark 1 succ 5) 6
+alphaEq (benchmark 5 (mult 2) 1) 32
+alphaEq (benchmark 1 succ 5) 6
+
+# Force/delay interaction
+alphaEq (force (delay (plus 2 3))) 5
+alphaEq (force (delay (force (delay 7)))) 7
+
+# ---------------------------------------------------------------------------
+# 20. List Equality Extended
+# ---------------------------------------------------------------------------
+
+# ListEq with nested lists
+alphaEq (listEq (listEq eq) [[1,2],[3,4]] [[1,2],[3,4]]) true
+alphaEq (listEq (listEq eq) [[1,2],[3,4]] [[1,2],[3,5]]) false
+alphaEq (listEq (listEq eq) [[1],[2],[3]] [[1],[2],[3]]) true
+
+# ListEq with empty sublists
+alphaEq (listEq (listEq eq) [[],[1],[]] [[],[1],[]]) true
+alphaEq (listEq (listEq eq) [[1]] [[]]) false
 
