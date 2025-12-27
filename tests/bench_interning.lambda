@@ -1,0 +1,37 @@
+# Interning benchmark: compare :opt off vs on
+# Shows timing and interning hit counters in :stats
+
+:time on
+
+# Phase 1: interning OFF
+:opt off
+# Build identical abstractions/applications repeatedly
+alphaEq (\x.x) (\y.y)
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+:stats
+
+# Phase 2: interning ON
+:opt on
+alphaEq (\x.x) (\y.y)
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+(\x.x) 5
+:stats
+
+:exit

@@ -116,7 +116,7 @@ public partial class Parser
             pos++; // consume '->'
             var paramList = new ParameterList(paramNames, paramStart, paramEnd, parenthesized);
             var body = ParseExpression(tokens, ref pos, end, 0);
-            left = paramList.Names.AsEnumerable().Reverse().Aggregate(body, (acc, n) => Expr.Abs(n, acc));
+            left = paramList.Names.AsEnumerable().Reverse().Aggregate(body, (acc, n) => _interpreter?.MakeAbs(n, acc) ?? Expr.Abs(n, acc));
         }
         else
         {
@@ -155,15 +155,19 @@ public partial class Parser
             if (firstIsOp && !secondIsOp)
             {
                 var opName = exprs[0].VarName!;
-                return Expr.App(Expr.Var(MapIncDec(opName)), exprs[1]);
+                return _interpreter?.MakeApp(Expr.Var(MapIncDec(opName)), exprs[1]) ?? Expr.App(Expr.Var(MapIncDec(opName)), exprs[1]);
             }
             if (!firstIsOp && secondIsOp)
             {
                 var opName = exprs[1].VarName!;
-                return Expr.App(Expr.Var(MapIncDec(opName)), exprs[0]);
+                return _interpreter?.MakeApp(Expr.Var(MapIncDec(opName)), exprs[0]) ?? Expr.App(Expr.Var(MapIncDec(opName)), exprs[0]);
             }
         }
-        return BuildApplicationChain(exprs);
+        // Build left-nested application chain using interning-aware constructor when available
+        var result = exprs[0];
+        for (int i = 1; i < exprs.Count; i++)
+            result = _interpreter?.MakeApp(result, exprs[i]) ?? Expr.App(result, exprs[i]);
+        return result;
     }
 
     private static bool IsIncDecVar(Expr e) => e is { Type: ExprType.Var } ve && (ve.VarName == "++" || ve.VarName == "--");
@@ -186,6 +190,7 @@ public partial class Parser
             TokenType.Lambda => ParseLambdaExpr(tokens, ref pos, end),
             TokenType.Integer => (pos++, CreateChurchNumeral(int.TryParse(token.Value, out int n) ? n : 0)).Item2,
             TokenType.Term => (pos++, Expr.Var(token.Value!)).Item2,
+            TokenType.InfixOp => (pos++, Expr.Var(token.Value!)).Item2, // Allow infix ops as regular terms in certain contexts
             TokenType.Y => (pos++, Expr.YCombinator()).Item2,
             TokenType.Let => ParseLetExpr(tokens, ref pos, end),
             _ => throw new ParseException(TreeErrorType.IllegalAssignment, token.Position)

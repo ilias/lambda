@@ -206,7 +206,19 @@ public partial class Interpreter
         return forced;
     }
 
-    private void PutEvalCache(int step, Expr expr, Expr result) => _evaluationCache.TryAdd(expr, result);
+    private void PutEvalCache(int step, Expr expr, Expr result) 
+    {
+        // Prevent unbounded cache growth by limiting size
+        if (_evaluationCache.Count > 10000)
+        {
+            // Clear oldest 20% of entries when limit reached
+            var toRemove = _evaluationCache.Take(_evaluationCache.Count / 5).Select(kv => kv.Key).ToList();
+            foreach (var key in toRemove)
+                _evaluationCache.Remove(key);
+            _stats.CacheEvictions++;
+        }
+        _evaluationCache.TryAdd(expr, result);
+    }
     private bool GetEvalCache(Expr expr, out Expr result) => GetFromCache(_evaluationCache, expr, out result);
 
     private void ApplyContinuation(Expr value, Dictionary<string, Expr> env, Kontinuation kont, Stack<CEKState> stateStack, ref Expr? finalResult)
@@ -258,8 +270,8 @@ public partial class Interpreter
                 else if (funcToApply.Type == ExprType.YCombinator)
                 {
                     // Y f becomes a thunk for f (Y f) to delay recursion.
-                    var yf = Expr.App(Expr.YCombinator(), argument);
-                    var recursiveExpr = Expr.App(argument, yf);
+                    var yf = MakeApp(Expr.YCombinator(), argument);
+                    var recursiveExpr = MakeApp(argument, yf);
                     var thunkExpr = Expr.Thunk(recursiveExpr, env);
                     ApplyContinuation(thunkExpr, env, next!, stateStack, ref finalResult);
                 }
@@ -267,7 +279,7 @@ public partial class Interpreter
                 {
                     // Not a function - create application and continue with next continuation
                     // This prevents infinite loops with undefined variables
-                    var app = Expr.App(funcToApply, argument);
+                    var app = MakeApp(funcToApply, argument);
                     // Try native arithmetic at every application node
                     var nativeResult = TryNativeArithmetic(app, env);
                     if (nativeResult != null)
@@ -387,9 +399,9 @@ public partial class Interpreter
                     return Expr.Var(vf.Name);
                 case DbAbs a:
                     var binder = $"x{depth}";
-                    return Expr.Abs(binder, FromDb(a.Body, depth + 1));
+                    return MakeAbs(binder, FromDb(a.Body, depth + 1));
                 case DbApp app:
-                    return Expr.App(FromDb(app.Left, depth), FromDb(app.Right, depth));
+                    return MakeApp(FromDb(app.Left, depth), FromDb(app.Right, depth));
                 case DbY:
                     return Expr.YCombinator();
                 default:

@@ -40,6 +40,10 @@ public partial class Interpreter
     private bool _usedRandom = false;
     private bool _useDeBruijnBinder = false;
     private bool _showTime = true;
+    // Structural interning toggle and pools (Abs/App)
+    private bool _optimizeInterning = false;
+    private readonly Dictionary<Expr, Expr> _internAbsPool = new(8192, new ExprEqualityComparer());
+    private readonly Dictionary<Expr, Expr> _internAppPool = new(8192, new ExprEqualityComparer());
     internal EqualityService Equality { get; private set; } = null!;
     // Test output mode & records (for :test json/text)
     private enum TestOutputMode { Text, Json }
@@ -278,6 +282,7 @@ public partial class Interpreter
             ":strategy" => HandleStrategy(arg),
             ":steps" => HandleSteps(),
             ":time" => HandleTime(arg),
+            ":opt" => HandleOptimization(arg),
             ":test" when arg.Equals("clear", StringComparison.OrdinalIgnoreCase) => TestClear(),
             ":test" when arg.Equals("result", StringComparison.OrdinalIgnoreCase) => TestResult(),
             ":test" when arg.Equals("json", StringComparison.OrdinalIgnoreCase) => SetTestOutputMode(TestOutputMode.Json),
@@ -308,6 +313,46 @@ public partial class Interpreter
             ":grep" => HandleGrep(arg),
             _ => $"Unknown command: {command}"
         };
+    }
+
+    // --- Optimization toggle -------------------------------------------------------------
+    private string HandleOptimization(string arg)
+    {
+        arg = (arg ?? "").Trim().ToLowerInvariant();
+        return arg switch
+        {
+            "on" => (_optimizeInterning = true, "Optimization: interning ON").Item2,
+            "off" => (_optimizeInterning = false, "Optimization: interning OFF").Item2,
+            "status" or "" => $"Optimization status: interning {(_optimizeInterning ? "ON" : "OFF")}",
+            _ => "Usage: :opt on|off|status"
+        };
+    }
+
+    // --- Interning constructors ----------------------------------------------------------
+    public Expr MakeAbs(string name, Expr body)
+    {
+        var created = Expr.Abs(name, body);
+        if (!_optimizeInterning) return created;
+        if (_internAbsPool.TryGetValue(created, out var existing))
+        {
+            _stats.InternAbsHits++;
+            return existing;
+        }
+        _internAbsPool[created] = created;
+        return created;
+    }
+
+    public Expr MakeApp(Expr left, Expr right)
+    {
+        var created = Expr.App(left, right);
+        if (!_optimizeInterning) return created;
+        if (_internAppPool.TryGetValue(created, out var existing))
+        {
+            _stats.InternAppHits++;
+            return existing;
+        }
+        _internAppPool[created] = created;
+        return created;
     }
 
     // --- Module commands -------------------------------------------------------------------

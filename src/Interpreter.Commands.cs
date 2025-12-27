@@ -18,6 +18,7 @@ public partial class Interpreter
         new(":log", ":log <file|off|clear>", "Log output to file, disable or clear current file"),
         new(":macro", ":macro (<pattern>) => <body>", "Define a macro clause (supports guards & rest)"),
         new(":native", ":native on|off|show", "Toggle native arithmetic or list native primitives"),
+        new(":opt", ":opt on|off|status", "Toggle structural interning for Abs/App to improve sharing"),
         new(":strategy", ":strategy cbv|need", "Select evaluation strategy: call-by-value (cbv) or call-by-need (need/lazy)"),
         new(":time", ":time on|off", "Toggle per-result timing display alongside outputs"),
         new(":steps", ":steps", "Print CEK steps (Iterations) for the last evaluation"),

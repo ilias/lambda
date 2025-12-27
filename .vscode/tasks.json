@@ -26,6 +26,14 @@
 			"label": "build",
 			"type": "shell",
 			"command": "dotnet build --nologo"
+		},
+		{
+			"label": "build-verify",
+			"type": "shell",
+			"command": "dotnet build --nologo",
+			"problemMatcher": [
+				"$tsc"
+			]
 		}
 	]
 }

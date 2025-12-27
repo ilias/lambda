@@ -1,0 +1,9 @@
+# Test infix operator assignment
+:infix o 9 right
+o = λf g x. f (g x)
+compose = o
+# Test that it works
+succ = λn f x. f (n f x)
+double = λn. n succ 0
+result = (succ o double) 5
+result

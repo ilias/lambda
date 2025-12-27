@@ -597,6 +597,10 @@ The evaluator supports configurable strategy and binder behavior for experimenta
 - `:steps`: prints the CEK machine steps performed for the last evaluation (`Iterations`). Useful for quick micro-benchmarks without full `:stats`.
 - `:binder debruijn on|off`: enables an optional De Bruijn–based beta-reduction path for pure lambda cores and uses a De Bruijn-style canonical comparison for alpha equivalence.
 
+Optimization & Sharing:
+
+- `:opt on|off|status`: toggles structural interning (hash‑consing) of abstractions and applications. When ON, identical `λx.body` and `f x` structures are shared, reducing allocations and improving cache effectiveness. `:stats` shows interning hit counters when enabled.
+
 De Bruijn binder mode details:
 
 - Scope: the DB beta path currently applies to `Var`, `Abs`, `App`, and `Y` forms. When an expression includes constructs outside this set (e.g., certain natives, quotes, or advanced macro artifacts), the interpreter safely falls back to named capture-avoiding substitution.
@@ -611,6 +615,9 @@ Examples:
 :steps                                         # prints last CEK iterations
 :time on; fact 7                               # show timing with result
 :binder debruijn off; alphaEq (λx.x) (λy.y)    # still true via canonicalization
+:opt on; :steps; (
+  (λx.x) 5; (λx.x) 5; (λx.x) 5                 # repeated identical structures → interning hits
+); :stats
 ```
 
 Notes:

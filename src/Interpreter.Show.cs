@@ -239,6 +239,11 @@ public partial class Interpreter
         sb.AppendLine(Line("Normalizations", _stats.NormalizeCEKCount.ToString("#,##0")));
         sb.AppendLine(Line("Thunks forced", _stats.ThunkForceCount.ToString("#,##0")));
         sb.AppendLine(Line("Hash code calls", Expr.HashCodeCount.ToString("#,##0")));
+        if (_optimizeInterning)
+        {
+            sb.AppendLine(Line("Intern Abs hits", _stats.InternAbsHits.ToString("#,##0")));
+            sb.AppendLine(Line("Intern App hits", _stats.InternAppHits.ToString("#,##0")));
+        }
         sb.AppendLine(Line("Native arithmetic calls", _nativeArithmetic.ToString("#,##0")));
         sb.AppendLine(Line("Alpha equivalence tests", $"{_stats.StructEqCalls:#,##0} (success {Percent(_stats.StructEqSuccesses, _stats.StructEqCalls)} )"));
         sb.AppendLine(Line("Alpha equivalence success", Bar(structEqFrac)));

@@ -63,10 +63,12 @@ public partial class Parser
     private readonly Tokenizer _tokenizer;
     private readonly MacroExpander _macroExpander;
     private readonly Logger? _logger;
+    private readonly Interpreter? _interpreter;
 
     public Parser()
     {
         _logger = null;
+        _interpreter = null;
     DefineInfixOperator("|>", 1, "left");
     DefineInfixOperator("$", 1, "right");
     DefineInfixOperator(".", 9, "right"); // application chaining
@@ -78,6 +80,7 @@ public partial class Parser
     public Parser(Logger logger, Interpreter interpreter)
     {
         _logger = logger;
+        _interpreter = interpreter;
     DefineInfixOperator("|>", 1, "left");
     DefineInfixOperator("$", 1, "right");
     DefineInfixOperator(".", 9, "right");
@@ -218,9 +221,12 @@ public partial class Parser
             }
             if (slice.Count > 2 && (slice[0].Type == TokenType.Term || slice[0].Type == TokenType.InfixOp) && slice[1].Type == TokenType.Equals)
             {
+                // Handle assignment to regular variables or infix operators
+                // For infix ops, temporarily treat the symbol as a regular term during RHS parsing
+                var varName = slice[0].Value!;
                 var expr = BuildExpressionTree(slice, 2, slice.Count - 1);
                 expr = ExpandMacros(expr);
-                stmts.Add(Statement.AssignmentStatement(slice[0].Value!, expr));
+                stmts.Add(Statement.AssignmentStatement(varName, expr));
                 continue;
             }
             if (slice[0].Type == TokenType.Let)

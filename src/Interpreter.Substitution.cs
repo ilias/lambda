@@ -88,7 +88,17 @@ public partial class Interpreter
     }
 
     private void PutSubCache(Expr root, string var, Expr val, Expr result)
-        => _substitutionCache[new SubstitutionCacheKey(root, var, val)] = result;
+    {
+        // Prevent unbounded cache growth
+        if (_substitutionCache.Count > 10000)
+        {
+            var toRemove = _substitutionCache.Take(_substitutionCache.Count / 5).Select(kv => kv.Key).ToList();
+            foreach (var key in toRemove)
+                _substitutionCache.Remove(key);
+            _stats.CacheEvictions++;
+        }
+        _substitutionCache[new SubstitutionCacheKey(root, var, val)] = result;
+    }
 
     private Expr Substitute(Expr root, string var, Expr val)
     {
@@ -154,10 +164,10 @@ public partial class Interpreter
             {
                 ExprType.Abs when root.AbsVarName != var && QuickFreeVarCheck(val, root.AbsVarName!) =>
                     AlphaConvert(root.AbsVarName!, root.AbsBody!) is var (newVar, newBody)
-                        ? Expr.Abs(newVar, Substitute(newBody, var, val))
+                        ? MakeAbs(newVar, Substitute(newBody, var, val))
                         : throw new InvalidOperationException("Alpha conversion failed"),
 
-                ExprType.Abs => Expr.Abs(root.AbsVarName!, Substitute(root.AbsBody!, var, val)),
+                ExprType.Abs => MakeAbs(root.AbsVarName!, Substitute(root.AbsBody!, var, val)),
 
                 ExprType.App when root.AppLeft != null && root.AppRight != null =>
                     CreateOptimizedApplication(root.AppLeft, root.AppRight, var, val),
@@ -212,10 +222,10 @@ public partial class Interpreter
     private Expr CreateOptimizedApplication(Expr left, Expr right, string var, Expr val)
     => (ContainsVariable(left, var), ContainsVariable(right, var)) switch
     {
-        (false, false) => Expr.App(left, right),
-        (false, true) => Expr.App(left, Substitute(right, var, val)),
-        (true, false) => Expr.App(Substitute(left, var, val), right),
-        (true, true) => Expr.App(Substitute(left, var, val), Substitute(right, var, val))
+        (false, false) => MakeApp(left, right),
+        (false, true) => MakeApp(left, Substitute(right, var, val)),
+        (true, false) => MakeApp(Substitute(left, var, val), right),
+        (true, true) => MakeApp(Substitute(left, var, val), Substitute(right, var, val))
     };
 
     private bool ContainsVariable(Expr expr, string var)
@@ -352,13 +362,13 @@ public partial class Interpreter
                 case SubstOp.BuildAbs:
                     var newBody = resultStack.Pop();
                     var varName = (string)extra!;
-                    resultStack.Push(Expr.Abs(varName, newBody));
+                    resultStack.Push(MakeAbs(varName, newBody));
                     break;
 
                 case SubstOp.BuildApp:
                     var right = resultStack.Pop();
                     var left = resultStack.Pop();
-                    resultStack.Push(Expr.App(left, right));
+                    resultStack.Push(MakeApp(left, right));
                     break;
                     
                 case SubstOp.SubstituteInBody:

@@ -10,6 +10,9 @@ public class Statistics
     public int NormalizeCEKCount { get; set; }
     public int CacheHits { get; set; }
     public int CacheMisses { get; set; }
+        // Interning / sharing metrics
+        public int InternAbsHits { get; set; }
+        public int InternAppHits { get; set; }
     public int TotalIterations { get; set; }
     public int Iterations { get; set; }
     public int SubstitutionExprCount { get; set; }
@@ -18,6 +21,7 @@ public class Statistics
     public int MaxRecursionDepth { get; set; } = 20;
     public int StructEqCalls { get; set; }
     public int StructEqSuccesses { get; set; }
+    public int CacheEvictions { get; set; }
     public Dictionary<string, int> MacroUsage { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, int> NativeUsage { get; } = new(StringComparer.Ordinal);
     public void Reset()
@@ -29,6 +33,8 @@ public class Statistics
         NormalizeCEKCount = 0;
         CacheHits = 0;
         CacheMisses = 0;
+            InternAbsHits = 0;
+            InternAppHits = 0;
         TotalIterations = 0;
         Iterations = 0;
         SubstitutionExprCount = 0;
@@ -36,5 +42,6 @@ public class Statistics
         VarCounter = 0;
         StructEqCalls = 0;
         StructEqSuccesses = 0;
+        CacheEvictions = 0;
     }
 }

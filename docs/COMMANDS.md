@@ -38,6 +38,7 @@ Evaluation / Mode
 :time on|off            # Toggle per-result timing display
 :steps                  # Print CEK steps for last evaluation
 :binder debruijn on|off # Toggle De Bruijn binder for beta-reduction
+:opt on|off|status      # Toggle structural interning (Abs/App) for sharing & fewer allocations
 :native on|off|show     # Toggle numeric & list native fast paths / list natives
 :pretty on|off          # Pretty printing of Church encodings
 :step on|off            # CEK step trace output
@@ -106,6 +107,7 @@ Documentation & Search
 | `:time on/off`      | Toggle per-result timing display |
 | `:steps`            | Print CEK steps for last evaluation |
 | `:binder debruijn on/off` | Enable/disable De Bruijn-based beta-reduction path |
+| `:opt on/off/status` | Enable/disable structural interning (hash-consing) of abstractions/applications; `status` shows current mode |
 | `:clear`            | Reset interpreter state |
 | `:pretty on/off`    | Toggle pretty printer |
 | `:step on/off`      | Toggle CEK trace |
@@ -133,6 +135,7 @@ Documentation & Search
 | :macro  | `:macro (pattern) => body` | Add macro clause |
 | :native | `:native on\|off\|show` | Toggle/list numeric & list natives |
 | :binder | `:binder debruijn on\|off` | Toggle De Bruijn binder mode for beta-reduction |
+| :opt    | `:opt on\|off\|status` | Toggle structural interning (Abs/App) to improve sharing; `status` prints current state |
 | :time   | `:time on\|off` | Toggle per-result timing display (shown alongside output) |
 | :steps  | `:steps` | Print CEK steps performed in last evaluation |
 | :pretty | `:pretty on\|off` | Toggle pretty printer |

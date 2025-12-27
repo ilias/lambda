@@ -1,3 +1,4 @@
+# :opt on   # enable structural interning for Abs/App
 # -----------------------------------------------
 # Complex Combinator Tests (SKIBC and composition)
 # -----------------------------------------------
@@ -2229,3 +2230,109 @@ alphaEq (foldr cons nil [1,2,3]) [1,2,3]
 # --- Composition alias parity ---
 alphaEq ((succ ∘ square) 3) ((succ o square) 3)
 etaEq (succ ∘ square) (succ o square)
+
+# ---------------------------------------------------------------------------
+# Interning Emphasis Block (:opt on) – repeated identical shapes
+# ---------------------------------------------------------------------------
+
+# Goal: generate clear Intern App/Abs hits visible in :stats.
+# Keep expressions simple to minimize runtime and avoid divergence.
+
+:opt on
+
+# Define a canonical identity to reuse
+def id = \x.x
+
+# Warm-up alphaEq to ensure canonicalization and caches engaged
+alphaEq (id 5) 5
+alphaEq (id (id 5)) 5
+
+# Repeated identical applications (should increase Intern App hits)
+(id 5)
+(id 5)
+(id 5)
+(id 5)
+(id 5)
+(id 5)
+(id 5)
+(id 5)
+(id 5)
+(id 5)
+
+# Nested identical applications
+(id (id 5))
+(id (id 5))
+(id (id 5))
+(id (id 5))
+(id (id 5))
+(id (id 5))
+(id (id 5))
+(id (id 5))
+(id (id 5))
+(id (id 5))
+
+# Repeated identical abstractions (aiming for Intern Abs hits)
+\x.x
+\x.x
+\x.x
+\x.x
+\x.x
+\x.x
+\x.x
+\x.x
+\x.x
+\x.x
+
+:stats
+
+
+# ---------------------------------------------------------------------------
+# New Additions Smoke Tests (strategy/time/steps/opt) – 2025-12
+# ---------------------------------------------------------------------------
+
+# Strategy status and simple toggles (avoid divergence; sanity only)
+:strategy status
+:strategy need
+alphaEq ((λx. plus x 1) 5) 6
+:strategy cbv
+alphaEq ((λx. plus x 1) 5) 6
+:strategy need
+
+# Time toggle shows timing lines; ensure evaluation still returns expected value
+:time on
+alphaEq (plus 2 3) 5
+alphaEq ((λx.x) 7) 7
+:time off
+
+# Steps toggle (instrumentation only)
+:steps on
+alphaEq ((λx.succ x) 4) 5
+alphaEq ((λf. f 3) succ) 4
+:steps off
+
+# Binder toggle (De Bruijn) – additional quick checks
+:binder debruijn on
+alphaEq (λx.λy.x) (λa.λb.a)
+alphaEq ((λx.λy.x) y) (λt.y)
+:binder debruijn off
+alphaEq (λx.λy.x) (λa.λb.a)
+
+# Optimization toggle (:opt) – interning ON/OFF with small repeated shapes
+# Phase A: OFF
+:opt off
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+:stats
+
+# Phase B: ON
+:opt on
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+alphaEq ((λx.x) 5) 5
+:stats
+
