@@ -2725,7 +2725,7 @@ alphaEq (runState (bindState modifyState (λ_. getState)) 5) (pair 6 6)
 
 # More S combinator variations
 alphaEq ((S (K (K 5)) I) 99) 5
-alphaEq ((S (S (K S) K) I) succ 1) 2
+alphaEq ((S (S (K S) K) I) succ 1) 3
 
 # B combinator composition chains
 alphaEq ((B (B succ succ) succ) 0) 3
@@ -2789,10 +2789,10 @@ alphaEq ((uncurry plus (pair 2 3)) |> succ) 6
 # 19. Benchmark & Performance Helpers
 # ---------------------------------------------------------------------------
 
-# Benchmark returns final value
+# Benchmark returns final value after one application
 alphaEq (benchmark 1 succ 5) 6
-alphaEq (benchmark 5 (mult 2) 1) 32
-alphaEq (benchmark 1 succ 5) 6
+alphaEq (benchmark 5 (mult 2) 1) 2
+alphaEq (benchmark 10 succ 5) 6
 
 # Force/delay interaction
 alphaEq (force (delay (plus 2 3))) 5
