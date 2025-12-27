@@ -2811,3 +2811,262 @@ alphaEq (listEq (listEq eq) [[1],[2],[3]] [[1],[2],[3]]) true
 alphaEq (listEq (listEq eq) [[],[1],[]] [[],[1],[]]) true
 alphaEq (listEq (listEq eq) [[1]] [[]]) false
 
+# ---------------------------------------------------------------------------
+# 21. Curry/Uncurry 2-arg Functions
+# ---------------------------------------------------------------------------
+
+# Basic curry - convert pair function to curried
+addPair = λp.plus (first p) (second p)
+multPair = λp.mult (first p) (second p)
+
+alphaEq ((curry addPair) 3 4) 7
+alphaEq ((curry multPair) 5 6) 30
+alphaEq ((curry addPair) 10 20) 30
+
+# Basic uncurry - convert curried to pair function
+alphaEq (uncurry plus (pair 3 4)) 7
+alphaEq (uncurry mult (pair 5 6)) 30
+alphaEq (uncurry minus (pair 10 3)) 7
+
+# Curry/Uncurry roundtrip (isomorphism)
+alphaEq (uncurry (curry addPair) (pair 5 7)) 12
+alphaEq ((curry (uncurry plus)) 8 9) 17
+
+# Curry with partial application
+curriedAdd = curry addPair
+add10 = curriedAdd 10
+alphaEq (add10 5) 15
+alphaEq (add10 20) 30
+
+# Uncurry with constructed pairs
+alphaEq (uncurry plus (pair 1 (plus 2 3))) 6
+alphaEq (uncurry mult (pair (succ 2) (pred 5))) 12
+
+# Extensional equality (curry/uncurry preserve behavior)
+etaEq (curry (uncurry plus)) plus
+etaEq (uncurry (curry addPair)) addPair
+
+# ---------------------------------------------------------------------------
+# 22. Advanced State Monad Sequencing
+# ---------------------------------------------------------------------------
+
+# Counter example - increment state and return old value
+counter = bindState getState (λn. bindState (putState (succ n)) (λ_. returnState n))
+alphaEq (runState counter 0) (pair 0 1)
+alphaEq (runState counter 5) (pair 5 6)
+alphaEq (runState counter 10) (pair 10 11)
+
+# Multiple sequential counter operations
+twoCounters = bindState counter (λ_. counter)
+alphaEq (runState twoCounters 0) (pair 1 2)
+alphaEq (runState twoCounters 5) (pair 6 7)
+
+threeCounters = bindState counter (λ_. bindState counter (λ_. counter))
+alphaEq (runState threeCounters 0) (pair 2 3)
+alphaEq (runState threeCounters 10) (pair 12 13)
+
+# State accumulation - build a list by pushing elements
+pushElem = λx. bindState getState (λs. putState (cons x s))
+alphaEq (runState (pushElem 1) nil) (pair nil [1])
+alphaEq (runState (pushElem 5) [1,2]) (pair nil [5,1,2])
+
+# Multiple pushes in sequence
+pushTwo = bindState (pushElem 1) (λ_. pushElem 2)
+alphaEq (runState pushTwo nil) (pair nil [2,1])
+
+pushThree = bindState (pushElem 1) (λ_. bindState (pushElem 2) (λ_. pushElem 3))
+alphaEq (runState pushThree nil) (pair nil [3,2,1])
+
+# Push and then read the state
+pushAndRead = bindState (pushElem 42) (λ_. getState)
+alphaEq (runState pushAndRead nil) (pair [42] [42])
+alphaEq (runState pushAndRead [1,2]) (pair [42,1,2] [42,1,2])
+
+# Conditional state update based on current state
+conditionalIncr = bindState getState (λs. if (lt s 5) (putState (succ s)) (putState 0))
+alphaEq (runState conditionalIncr 3) (pair nil 4)
+alphaEq (runState conditionalIncr 6) (pair nil 0)
+alphaEq (runState conditionalIncr 4) (pair nil 5)
+alphaEq (runState conditionalIncr 5) (pair nil 0)
+
+# State transformation with computation
+doubleState = bindState getState (λs. bindState (putState (mult s 2)) (λ_. returnState s))
+alphaEq (runState doubleState 5) (pair 5 10)
+alphaEq (runState doubleState 7) (pair 7 14)
+
+# Chain doubling
+doubleTwice = bindState doubleState (λ_. doubleState)
+alphaEq (runState doubleTwice 3) (pair 6 12)
+
+# State-dependent computation
+stateDependent = bindState getState (λs. returnState (mult s s))
+alphaEq (runState stateDependent 5) (pair 25 5)
+alphaEq (runState stateDependent 10) (pair 100 10)
+
+# Complex: update state and return transformed value
+updateAndTransform = bindState getState (λold. \
+  bindState (putState (plus old 10)) (λ_. \
+    returnState (mult old 2)))
+alphaEq (runState updateAndTransform 5) (pair 10 15)
+alphaEq (runState updateAndTransform 8) (pair 16 18)
+
+# ---------------------------------------------------------------------------
+# 23. State Monad Laws Verification
+# ---------------------------------------------------------------------------
+
+# Left identity: bindState (returnState x) f ≡ f x (for state s)
+f_state = λx. bindState (putState (succ x)) (λ_. returnState (mult x 2))
+leftId_lhs = runState (bindState (returnState 5) f_state) 0
+leftId_rhs = runState (f_state 5) 0
+alphaEq leftId_lhs leftId_rhs
+
+# Right identity: bindState m returnState ≡ m
+m_state = bindState getState (λs. putState (succ s))
+rightId_lhs = runState (bindState m_state returnState) 10
+rightId_rhs = runState m_state 10
+alphaEq rightId_lhs rightId_rhs
+
+# Associativity: bindState (bindState m f) g ≡ bindState m (λx. bindState (f x) g)
+m_assoc = returnState 3
+f_assoc = λx. bindState (putState x) (λ_. returnState (succ x))
+g_assoc = λy. bindState getState (λs. returnState (plus y s))
+
+assoc_lhs = runState (bindState (bindState m_assoc f_assoc) g_assoc) 0
+assoc_rhs = runState (bindState m_assoc (λx. bindState (f_assoc x) g_assoc)) 0
+alphaEq assoc_lhs assoc_rhs
+
+# Another associativity test with different operations
+m2 = bindState getState (λs. returnState (mult s 2))
+f2 = λx. putState (plus x 5)
+g2 = λ_. bindState getState (λs. returnState (square s))
+
+assoc2_lhs = runState (bindState (bindState m2 f2) g2) 3
+assoc2_rhs = runState (bindState m2 (λx. bindState (f2 x) g2)) 3
+alphaEq assoc2_lhs assoc2_rhs
+
+# ---------------------------------------------------------------------------
+# 24. State Monad Advanced Patterns
+# ---------------------------------------------------------------------------
+
+# Stateful map - apply stateful operation to each element
+statefulSucc = λx. bindState getState (λs. \
+  bindState (putState (succ s)) (λ_. \
+    returnState (plus x s)))
+
+# Apply to single element (state threading)
+alphaEq (runState (statefulSucc 10) 5) (pair 15 6)
+alphaEq (runState (statefulSucc 20) 5) (pair 25 6)
+
+# Sequence two stateful operations
+twoStatefulOps = bindState (statefulSucc 10) (λr1. \
+  bindState (statefulSucc 20) (λr2. \
+    returnState (pair r1 r2)))
+alphaEq (runState twoStatefulOps 5) (pair (pair 15 26) 7)
+
+# State-based filter (return value based on state predicate)
+statefulFilter = λx. bindState getState (λs. \
+  if (lt x s) \
+    (returnState true) \
+    (returnState false))
+alphaEq (runState (statefulFilter 3) 5) (pair true 5)
+alphaEq (runState (statefulFilter 7) 5) (pair false 5)
+
+# Accumulator pattern - sum with state
+accumulate = λx. bindState getState (λsum. \
+  bindState (putState (plus sum x)) (λ_. \
+    returnState sum))
+alphaEq (runState (accumulate 5) 0) (pair 0 5)
+alphaEq (runState (accumulate 5) 10) (pair 10 15)
+
+# Chain accumulations
+accumThree = bindState (accumulate 1) (λ_. \
+  bindState (accumulate 2) (λ_. \
+    bindState (accumulate 3) (λ_. \
+      getState)))
+alphaEq (runState accumThree 0) (pair 6 6)
+alphaEq (runState accumThree 10) (pair 16 16)
+
+# Reset state conditionally
+resetIfBig = bindState getState (λs. \
+  if (gt s 100) \
+    (putState 0) \
+    (returnState s))
+alphaEq (runState resetIfBig 50) (pair 50 50)
+alphaEq (runState resetIfBig 150) (pair nil 0)
+
+# Swap state with value
+swapWithState = λx. bindState getState (λold. \
+  bindState (putState x) (λ_. \
+    returnState old))
+alphaEq (runState (swapWithState 42) 10) (pair 10 42)
+alphaEq (runState (swapWithState 99) 5) (pair 5 99)
+
+# Complex: Fibonacci-like state computation
+fibState = bindState getState (λs. \
+  if (iszero s) \
+    (returnState 0) \
+    (if (eq s 1) \
+      (returnState 1) \
+      (bindState (putState (pred s)) (λ_. \
+        bindState fibState (λa. \
+          bindState (putState (pred (pred s))) (λ_. \
+            bindState fibState (λb. \
+              returnState (plus a b))))))))
+# Note: This is impractical but tests deep state sequencing
+alphaEq (runState fibState 0) (pair 0 0)
+alphaEq (runState fibState 1) (pair 1 1)
+alphaEq (runState fibState 2) (pair 1 0)
+
+# --- Additional Curry/Uncurry Tests ---
+# Test curry2/uncurry2 (aliases for curry/uncurry)
+alphaEq (uncurry2 plus (pair 3 4)) 7
+alphaEq (curry2 (uncurry2 mult) 5 6) 30
+alphaEq (uncurry2 (λx y.plus x y) (pair 10 20)) 30
+alphaEq (uncurry2 (curry2 (uncurry2 minus)) (pair 15 7)) 8
+
+# --- Comprehensive State Monad Sequencing Tests ---
+# Multi-step accumulation
+accumulate3 = bindState getState (λs. \
+  bindState (putState (plus s 1)) (λ_. \
+    bindState getState (λs2. \
+      bindState (putState (plus s2 2)) (λ_. \
+        bindState getState (λs3. \
+          bindState (putState (plus s3 3)) (λ_. \
+            returnState s3))))))
+alphaEq (runState accumulate3 10) (pair 13 16)
+alphaEq (runState accumulate3 0) (pair 3 6)
+
+# Conditional state updates based on previous value
+doubleIfEven = bindState getState (λs. \
+  if (even s) \
+    (bindState (putState (mult s 2)) (λ_.returnState (mult s 2))) \
+    (returnState s))
+alphaEq (runState doubleIfEven 4) (pair 8 8)
+alphaEq (runState doubleIfEven 5) (pair 5 5)
+alphaEq (runState doubleIfEven 0) (pair 0 0)
+
+# State accumulator pattern
+addAndAccumulate = λn. bindState getState (λs. \
+  bindState (putState (plus s n)) (λ_. \
+    returnState (plus s n)))
+alphaEq (runState (addAndAccumulate 5) 10) (pair 15 15)
+alphaEq (runState (addAndAccumulate 0) 42) (pair 42 42)
+
+# Sequence multiple state operations
+seq3adds = bindState (addAndAccumulate 1) (λ_. \
+  bindState (addAndAccumulate 2) (λ_. \
+    addAndAccumulate 3))
+alphaEq (runState seq3adds 0) (pair 6 6)
+alphaEq (runState seq3adds 10) (pair 16 16)
+
+# State monad left identity law: returnState a >>= f ≡ f a
+testLeftId = λa f s. eq (first (bindState (returnState a) f s)) (first (f a s))
+alphaEq (testLeftId 5 (λx s.pair (succ x) s) 0) true
+alphaEq (testLeftId 10 (λx s.pair (mult x 2) (plus s 1)) 42) true
+
+# State monad associativity: (m >>= f) >>= g ≡ m >>= (λx. f x >>= g)
+testAssoc = λm f g s. \
+  eq (first (bindState (bindState m f) g s)) \
+     (first (bindState m (λx. bindState (f x) g) s))
+alphaEq (testAssoc getState (λx s.pair (succ x) s) (λy s.pair (mult y 2) s) 10) true
+alphaEq (testAssoc (returnState 5) (λx s.pair x (plus s 1)) (λy s.pair (plus y 10) s) 0) true

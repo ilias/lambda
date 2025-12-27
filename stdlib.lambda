@@ -761,7 +761,9 @@ times    = λn.λf.λx.n f x
  partial  = λf x.f x          # So ((partial f a) b) ≡ f a b
 # Accumulating variant so ((partial2 plus 2 3) 4) = plus (plus 2 3) 4 = 9
  partial2 = λf.λx.λy.λz.f (f x y) z  # Fix first two args then combine third
-# 3-arity curry helpers used in tests
+# 2-arity and 3-arity curry helpers used in tests
+curry2   = curry
+uncurry2 = uncurry
 curry3   = λf x y z.f (pair x (pair y z))
 uncurry3 = λf p.f (first p) (first (second p)) (second (second p))
 
