@@ -365,6 +365,8 @@ alphaEq (isPrime 8) false
 alphaEq (isPrime 2) true
 alphaEq (isPrime 1) false
 alphaEq (primes 10) [2,3,5,7]
+alphaEq (primes 15) [2,3,5,7,11,13]
+alphaEq (primes 20) [2,3,5,7,11,13,17,19]
 
 # --- String/Character Operations ---
 # words / unwords expectations left descriptive due to encoding specifics
