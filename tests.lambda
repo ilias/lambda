@@ -3426,3 +3426,218 @@ alphaEq (repeat 0 7) []
 alphaEq (repeat 1 7) [7]
 alphaEq (repeat 4 0) [0, 0, 0, 0]
 alphaEq (length (repeat 10 42)) 10
+
+# ---------------------------------------------------------------------------
+# 45. Arithmetic Operation Properties
+# ---------------------------------------------------------------------------
+
+# Commutativity
+alphaEq (plus 3 5) (plus 5 3)
+alphaEq (mult 4 7) (mult 7 4)
+alphaEq (and true false) (and false true)
+alphaEq (or true false) (or false true)
+
+# Identity elements
+alphaEq (plus 0 7) 7
+alphaEq (mult 1 8) 8
+alphaEq (and true true) true
+alphaEq (or false true) true
+
+# Associativity samples
+alphaEq (plus (plus 2 3) 4) (plus 2 (plus 3 4))
+alphaEq (mult (mult 2 3) 4) (mult 2 (mult 3 4))
+
+# Distributivity
+alphaEq (mult 2 (plus 3 4)) (plus (mult 2 3) (mult 2 4))
+
+# ---------------------------------------------------------------------------
+# 46. List Traversal Properties
+# ---------------------------------------------------------------------------
+
+# Length preservation
+alphaEq (length (reverse [1, 2, 3])) (length [1, 2, 3])
+alphaEq (length (map succ [1, 2, 3])) (length [1, 2, 3])
+alphaEq (length (append [1, 2] [3, 4])) (plus (length [1, 2]) (length [3, 4]))
+
+# Reverse properties
+alphaEq (reverse (reverse [1, 2, 3])) [1, 2, 3]
+alphaEq (reverse []) []
+alphaEq (reverse [42]) [42]
+
+# ---------------------------------------------------------------------------
+# 47. All/Any with Edge Cases
+# ---------------------------------------------------------------------------
+
+# All on empty and singleton
+alphaEq (all (λ_. false) []) true  # vacuous truth
+alphaEq (all even [2]) true
+alphaEq (all odd [2]) false
+
+# Any on different list sizes
+alphaEq (any (λx. eq x 3) [3]) true
+alphaEq (any odd [2, 4, 6, 8]) false
+alphaEq (any odd [2, 4, 5, 8]) true
+
+# ---------------------------------------------------------------------------
+# 48. Take/Drop Combinations
+# ---------------------------------------------------------------------------
+
+# Take + drop = identity (when combined properly)
+lst48 = [1, 2, 3, 4, 5]
+alphaEq (append (take 2 lst48) (drop 2 lst48)) lst48
+alphaEq (append (take 0 lst48) (drop 0 lst48)) lst48
+alphaEq (append (take 5 lst48) (drop 5 lst48)) lst48
+
+# Take/drop beyond length
+alphaEq (take 10 [1, 2, 3]) [1, 2, 3]
+alphaEq (drop 10 [1, 2, 3]) []
+
+# ---------------------------------------------------------------------------
+# 49. Filter Properties
+# ---------------------------------------------------------------------------
+
+# Filter preserves order
+alphaEq (filter even [1, 2, 3, 4, 5, 6]) [2, 4, 6]
+alphaEq (filter (λx. true) [1, 2, 3]) [1, 2, 3]
+alphaEq (filter (λx. false) [1, 2, 3]) []
+
+# Double filter
+alphaEq (filter even (filter (λx. gt x 2) [1, 2, 3, 4, 5, 6])) [4, 6]
+
+# ---------------------------------------------------------------------------
+# 50. Map Properties
+# ---------------------------------------------------------------------------
+
+# Map composition: map f (map g xs) = map (f ∘ g) xs
+alphaEq (map succ (map double [1, 2, 3])) (map (λx. succ (double x)) [1, 2, 3])
+
+# Map preserves structure
+alphaEq (map (λx. x) [1, 2, 3]) [1, 2, 3]  # identity map
+
+# ---------------------------------------------------------------------------
+# 51. Comparison Edge Cases
+# ---------------------------------------------------------------------------
+
+# Equal numbers
+alphaEq (lt 5 5) false
+alphaEq (gt 5 5) false
+alphaEq (leq 5 5) true
+alphaEq (geq 5 5) true
+alphaEq (eq 5 5) true
+alphaEq (neq 5 5) false
+
+# Different numbers
+alphaEq (lt 3 7) true
+alphaEq (gt 7 3) true
+alphaEq (leq 3 7) true
+alphaEq (geq 7 3) true
+
+# Zero comparisons
+alphaEq (lt 0 1) true
+alphaEq (gt 1 0) true
+alphaEq (eq 0 0) true
+
+# ---------------------------------------------------------------------------
+# 52. Head/Tail Edge Cases with Single Elements
+# ---------------------------------------------------------------------------
+
+singleElem = [99]
+alphaEq (head singleElem) 99
+alphaEq (isnil (tail singleElem)) true
+alphaEq (length singleElem) 1
+
+# ---------------------------------------------------------------------------
+# 53. Sum/Product Properties
+# ---------------------------------------------------------------------------
+
+# Sum with negatives represented as zero (Church can't represent negatives)
+alphaEq (sum [1, 2, 3, 4]) 10
+alphaEq (sum [0, 0, 0]) 0
+alphaEq (sum [10]) 10
+
+# Product with zeros
+alphaEq (product [1, 2, 0, 4]) 0
+alphaEq (product [2, 5]) 10
+
+# ---------------------------------------------------------------------------
+# 54. Nth Edge Cases
+# ---------------------------------------------------------------------------
+
+lst54 = [10, 20, 30, 40, 50]
+alphaEq (nth 0 lst54) 10  # first
+alphaEq (nth 4 lst54) 50  # last (0-indexed)
+alphaEq (nth 2 lst54) 30  # middle
+
+# ---------------------------------------------------------------------------
+# 55. Init/Last Edge Cases
+# ---------------------------------------------------------------------------
+
+lst55 = [1, 2, 3, 4, 5]
+alphaEq (last lst55) 5
+alphaEq (init lst55) [1, 2, 3, 4]
+alphaEq (last (init lst55)) 4
+alphaEq (init (tail lst55)) [2, 3, 4]
+
+# ---------------------------------------------------------------------------
+# 56. Range Variations
+# ---------------------------------------------------------------------------
+
+# Consecutive ranges
+alphaEq (range 0) []
+alphaEq (range 1) [0]
+alphaEq (range 5) [0, 1, 2, 3, 4]
+
+# EnumFromTo with same start/end
+alphaEq (enumFromTo 5 5) [5]
+alphaEq (enumFromTo 3 3) [3]
+
+# ---------------------------------------------------------------------------
+# 57. SplitAt Edge Cases
+# ---------------------------------------------------------------------------
+
+lst57 = [1, 2, 3, 4, 5]
+alphaEq (first (splitAt 0 lst57)) []
+alphaEq (second (splitAt 0 lst57)) [1, 2, 3, 4, 5]
+alphaEq (first (splitAt 5 lst57)) [1, 2, 3, 4, 5]
+alphaEq (second (splitAt 5 lst57)) []
+alphaEq (first (splitAt 3 lst57)) [1, 2, 3]
+alphaEq (second (splitAt 3 lst57)) [4, 5]
+
+# ---------------------------------------------------------------------------
+# 58. Even/Odd Comprehensive
+# ---------------------------------------------------------------------------
+
+alphaEq (even 0) true
+alphaEq (odd 0) false
+alphaEq (even 1) false
+alphaEq (odd 1) true
+alphaEq (even 10) true
+alphaEq (odd 10) false
+alphaEq (even 99) false
+alphaEq (odd 99) true
+
+# ---------------------------------------------------------------------------
+# 59. Double/Triple/Quadruple/Half
+# ---------------------------------------------------------------------------
+
+alphaEq (double 0) 0
+alphaEq (double 7) 14
+alphaEq (triple 0) 0
+alphaEq (triple 5) 15
+alphaEq (quadruple 0) 0
+alphaEq (quadruple 5) 20
+alphaEq (half 0) 0
+alphaEq (half 1) 0  # integer division
+alphaEq (half 10) 5
+alphaEq (half 11) 5  # rounds down
+
+# ---------------------------------------------------------------------------
+# 60. Min/Max Properties
+# ---------------------------------------------------------------------------
+
+alphaEq (max 5 5) 5
+alphaEq (min 5 5) 5
+alphaEq (max 0 10) 10
+alphaEq (min 0 10) 0
+alphaEq (max 10 0) 10
+alphaEq (min 10 0) 0
