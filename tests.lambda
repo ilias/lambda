@@ -3231,3 +3231,198 @@ alphaEq (isSubset [] [1, 2, 3]) true
 alphaEq (isSubset [1, 2] [1, 2]) true
 alphaEq (isSuperset [1, 2, 3] []) true
 alphaEq (isSuperset [1, 2] [1, 2, 3]) false
+
+# ---------------------------------------------------------------------------
+# 31. Lisp-Style Accessors (caar, cadr, cddr, etc.)
+# ---------------------------------------------------------------------------
+
+# Test nested list accessors
+nestedList = [[1, 2], [3, 4], [5, 6]]
+alphaEq (caar nestedList) 1           # head of head
+alphaEq (caadr nestedList) 3          # head of head of tail
+alphaEq (cadar nestedList) 2          # head of tail of head
+alphaEq (cdar nestedList) [2]         # tail of head
+alphaEq (cddr nestedList) [[5, 6]]    # tail of tail
+alphaEq (cdddr [1, 2, 3, 4]) [4]      # tail of tail of tail
+
+# ---------------------------------------------------------------------------
+# 32. Boolean Logic Combinations
+# ---------------------------------------------------------------------------
+
+# XOR truth table
+alphaEq (xor false false) false
+alphaEq (xor false true) true
+alphaEq (xor true false) true
+alphaEq (xor true true) false
+
+# eqBool comprehensive
+alphaEq (eqBool false false) true
+alphaEq (eqBool (eq 2 2) (eq 3 3)) true
+alphaEq (eqBool (lt 5 3) (gt 2 8)) true  # both false
+
+# ---------------------------------------------------------------------------
+# 33. Conditional Utilities (when/unless)
+# ---------------------------------------------------------------------------
+
+# When only applies function if predicate is true
+alphaEq (when true succ 5) 6
+alphaEq (when false succ 5) 5
+alphaEq (when (gt 10 5) (mult 2) 7) 14
+alphaEq (when (lt 10 5) (mult 2) 7) 7
+
+# Unless only applies function if predicate is false
+alphaEq (unless false succ 5) 6
+alphaEq (unless true succ 5) 5
+alphaEq (unless (lt 10 5) (mult 2) 7) 14
+alphaEq (unless (gt 10 5) (mult 2) 7) 7
+
+# ---------------------------------------------------------------------------
+# 34. List Constructor Functions
+# ---------------------------------------------------------------------------
+
+# Test list1-list5 constructors
+alphaEq (list1 42) [42]
+alphaEq (list2 1 2) [1, 2]
+alphaEq (list3 1 2 3) [1, 2, 3]
+alphaEq (list4 1 2 3 4) [1, 2, 3, 4]
+alphaEq (list5 1 2 3 4 5) [1, 2, 3, 4, 5]
+
+# ---------------------------------------------------------------------------
+# 35. Partition Edge Cases
+# ---------------------------------------------------------------------------
+
+# Partition with all matching
+alphaEq (first (partition (λx. true) [1, 2, 3])) [1, 2, 3]
+alphaEq (second (partition (λx. true) [1, 2, 3])) []
+
+# Partition with none matching
+alphaEq (first (partition (λx. false) [1, 2, 3])) []
+alphaEq (second (partition (λx. false) [1, 2, 3])) [1, 2, 3]
+
+# Partition empty list
+alphaEq (first (partition even [])) []
+alphaEq (second (partition even [])) []
+
+# ---------------------------------------------------------------------------
+# 36. Concat and Flatten Operations
+# ---------------------------------------------------------------------------
+
+# Concat edge cases
+alphaEq (concat []) []
+alphaEq (concat [[]]) []
+alphaEq (concat [[], []]) []
+alphaEq (concat [[], [1, 2], []]) [1, 2]
+alphaEq (concat [[1], [2], [3]]) [1, 2, 3]
+
+# ---------------------------------------------------------------------------
+# 37. Unique/Nub Edge Cases
+# ---------------------------------------------------------------------------
+
+# Already unique list
+alphaEq (nub [1, 2, 3]) [3, 2, 1]  # nub reverses due to foldl cons
+alphaEq (unique [5, 4, 3]) [3, 4, 5]
+
+# All duplicates
+alphaEq (length (nub [1, 1, 1, 1])) 1
+alphaEq (head (nub [7, 7, 7])) 7
+
+# Mixed duplicates
+alphaEq (length (nub [1, 2, 1, 3, 2])) 3
+
+# ---------------------------------------------------------------------------
+# 38. Numeric Predicate Edge Cases
+# ---------------------------------------------------------------------------
+
+# isone, istwo, ispositive
+alphaEq (isone 1) true
+alphaEq (isone 0) false
+alphaEq (isone 2) false
+alphaEq (istwo 2) true
+alphaEq (istwo 1) false
+alphaEq (ispositive 1) true
+alphaEq (ispositive 0) false
+alphaEq (ispositive 100) true
+
+# ---------------------------------------------------------------------------
+# 39. NotElem Tests
+# ---------------------------------------------------------------------------
+
+alphaEq (notElem 1 [2, 3, 4]) true
+alphaEq (notElem 1 [1, 2, 3]) false
+alphaEq (notElem 5 []) true
+
+# ---------------------------------------------------------------------------
+# 40. Find Edge Cases
+# ---------------------------------------------------------------------------
+
+# Find with no match returns nil
+alphaEq (find (λx. gt x 10) [1, 2, 3]) nil
+
+# Find with match
+alphaEq (find even [1, 3, 5, 6, 7]) 6
+alphaEq (find (λx. gt x 5) [1, 2, 8, 3]) 8
+
+# Find in empty list
+alphaEq (find (λx. true) []) nil
+
+# ---------------------------------------------------------------------------
+# 41. Minimum/Maximum Edge Cases  
+# ---------------------------------------------------------------------------
+
+# Single element
+alphaEq (maximum [42]) 42
+alphaEq (minimum [42]) 42
+
+# Two elements
+alphaEq (maximum [3, 7]) 7
+alphaEq (minimum [3, 7]) 3
+
+# Maximum at different positions
+alphaEq (maximum [5, 1, 3]) 5  # first
+alphaEq (maximum [1, 5, 3]) 5  # middle
+alphaEq (maximum [1, 3, 5]) 5  # last
+
+# ---------------------------------------------------------------------------
+# 42. Pair Composition and Nesting
+# ---------------------------------------------------------------------------
+
+# Nested pairs
+p1 = pair 1 2
+p2 = pair 3 4
+pNested = pair p1 p2
+alphaEq (first (first pNested)) 1
+alphaEq (second (first pNested)) 2
+alphaEq (first (second pNested)) 3
+alphaEq (second (second pNested)) 4
+
+# Triple nesting
+deepPair = pair (pair 1 2) (pair (pair 3 4) 5)
+alphaEq (first (first deepPair)) 1
+alphaEq (first (first (second deepPair))) 3
+alphaEq (second (second deepPair)) 5
+
+# ---------------------------------------------------------------------------
+# 43. Fold Relationships
+# ---------------------------------------------------------------------------
+
+# For associative operations, foldl and foldr give same result
+alphaEq (foldl plus 0 [1, 2, 3, 4]) (foldr plus 0 [1, 2, 3, 4])
+alphaEq (foldl mult 1 [2, 3, 4]) (foldr mult 1 [2, 3, 4])
+
+# For non-associative operations, they differ
+# foldl minus: (((0-1)-2)-3) = -6
+# foldr minus: (1-(2-(3-0))) = 2  
+alphaEq (foldl minus 0 [1, 2, 3]) (minus (minus (minus 0 1) 2) 3)
+
+# Fold with single element
+alphaEq (foldl plus 10 [5]) 15
+alphaEq (foldr mult 2 [3]) 6
+
+# ---------------------------------------------------------------------------
+# 44. Repeat Tests
+# ---------------------------------------------------------------------------
+
+alphaEq (repeat 0 7) []
+alphaEq (repeat 1 7) [7]
+alphaEq (repeat 4 0) [0, 0, 0, 0]
+alphaEq (length (repeat 10 42)) 10
