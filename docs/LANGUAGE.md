@@ -819,6 +819,91 @@ Performance note: printing very large Church lists or deep normalized expression
 
 ---
 
+#### Tiny Haskell-style Functor / Monad Dictionaries
+
+On top of the raw encodings there is a small, Haskell-flavoured layer built using explicit dictionaries:
+
+| Class | Constructor | Selectors |
+|-------|-------------|-----------|
+| Functor | `Functor fmap` | `fmapF dict` |
+| Applicative | `Applicative pure ap` | `pureA dict`, `apA dict` |
+| Monad | `MonadCls return bind` | `returnM dict`, `bindM dict` |
+
+Predefined instances exist for lists, Maybe, Either and the State monad:
+
+```lambda
+functorList,  applicativeList,  monadList
+functorMaybe, applicativeMaybe, monadMaybe
+functorEither, applicativeEither, monadEither
+monadState
+```
+
+Basic usage mirrors Haskell’s typeclasses but uses explicit dictionaries:
+
+```lambda
+fmapF functorList  succ       [1,2,3]   # [2,3,4]
+fmapF functorMaybe succ       (just 4)  # just 5
+fmapF functorEither (λx.plus x 1) (right 4)  # right 5
+
+pureA  applicativeMaybe 7                 # just 7
+apA    applicativeList  [succ] [1,2]      # [2,3]
+
+returnM monadMaybe 5                      # just 5
+bindM   monadList  [1,2] (λx.[x,x])       # [1,1,2,2]
+```
+
+Two small helpers mimic the usual `(>>=)` / `(>>)` operators without introducing new symbolic operators:
+
+```lambda
+bindMOp dict m f   # ≈ bindM dict m f
+thenM   dict m k   # ≈ bindM dict m (λ_. k)
+
+bindMOp monadMaybe (just 3) (λx.just (plus x 1))   # just 4
+thenM   monadList  [1,2] [3]                       # [3,3]
+```
+
+`mapM` and `sequenceM` provide generic monadic traversals:
+
+```lambda
+mapM      : λmonad f xs. ...   # map with effects
+sequenceM : λmonad ms. ...     # flip list and monad
+
+sequenceM monadMaybe  [just 1, just 2]         # just [1,2]
+sequenceM monadEither [right 1, left 0, right 3]  # left 0
+sequenceM monadList   [[1,2],[3,4]]            # [[1,3],[1,4],[2,3],[2,4]]
+```
+
+For concise sequencing there are do-style helpers that take an explicit continuation lambda as their last argument:
+
+```lambda
+doM      dict m k   = bindM dict m k
+doMaybe  m    k     = bindM monadMaybe  m k
+doList   m    k     = bindM monadList   m k
+doEither m    k     = bindM monadEither m k
+doState  m    k     = bindM monadState  m k
+
+doM monadMaybe (just 3) (λx.just (plus x 1))
+  # just 4
+
+doList [1,2]
+       (λx. doList [10,20]
+                   (λy.[pair x y]))
+  # [pair 1 10, pair 1 20, pair 2 10, pair 2 20]
+
+# Small stateful workflow
+incState = λn.λs.pair (plus n s) (succ s)
+runState
+  (doState (returnState 0)
+           (λa. doState (incState a)
+                       (λb.returnState b)))
+  1
+  # pair 2 3
+```
+
+These helpers are entirely library-level; you can define additional dictionaries (e.g., Reader/Writer-style) without changing the core language.
+
+---
+
 ---
 
 ### See Also

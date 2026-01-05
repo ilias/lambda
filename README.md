@@ -24,6 +24,7 @@ High-performance lambda calculus environment in C# (.NET 8/9): lazy/eager CEK ma
 | Theory & background | docs/THEORY.md |
 | Standard library | stdlib.lambda |
 | Full monolith (archive) | FULL_DOC.md |
+| Tiny Haskell-style monad layer | docs/LANGUAGE.md (Functor/Monad dictionaries) |
 
 ## Quick Start
 

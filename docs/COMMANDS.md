@@ -12,6 +12,7 @@ Sections
 - Native Debug / IO Helpers
 - Structural Equality / Test Counters
 - Practical Workflows
+ - Library Patterns: Maybe / Either / Monads
 
 ---
 
@@ -258,6 +259,18 @@ Notes:
 
 - Respects `:pretty` mode.
 - Forces argument (may realize large lazy structures).
+
+---
+
+## 7. Library Patterns: Maybe / Either / Monads
+
+These are standard library helpers (not commands) but are frequently used with the REPL tools above.
+
+- Maybe / Either monadic helpers (`maybeBind`/`maybeAp`/`maybeMap2`, `eitherBind`/`eitherAp`/`eitherMap`/`eitherMapLeft`/`eitherMap2`) for error/absence handling.
+- Tiny Haskell-style Functor/Applicative/Monad dictionaries and instances (`Functor`, `Applicative`, `MonadCls`, `functorList` / `monadList`, `functorMaybe` / `monadMaybe`, `functorEither` / `monadEither`, `monadState`).
+- Generic monadic combinators `mapM` / `sequenceM` and small helpers `bindMOp` / `thenM` plus do-style helpers `doM` / `doMaybe` / `doList` / `doEither` / `doState`.
+
+For syntax, laws, and extended examples see the "Tiny Haskell-style Functor / Monad Dictionaries" section in docs/LANGUAGE.md.
 - Logging destination integrates with `:log` if enabled.
 
 Pipeline example:
