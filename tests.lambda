@@ -429,13 +429,13 @@ alphaEq (bindM   monadEither (left  1) (λx.right (plus x 1))) (left 1)
 alphaEq (returnM monadList 5) [5]
 alphaEq (bindM   monadList [1,2] (λx.[x,x])) [1,1,2,2]
 
-# Infix-style helpers (>>=, >>) with explicit dictionaries
-alphaEq (>>= monadMaybe (just 3) (λx.just (plus x 1))) (just 4)
-alphaEq (>>  monadMaybe (just 3) (just 9)) (just 9)
-alphaEq (>>= monadEither (right 2) (λx.right (mult x 3))) (right 6)
-alphaEq (>>  monadEither (left "err") (right 5)) (left "err")
-alphaEq (>>= monadList [1,2] (λx.[x,x])) [1,1,2,2]
-alphaEq (>>  monadList [1,2] [3]) [3,3]
+# Infix-style helpers (>>=, >>) via explicit helpers
+alphaEq (bindMOp monadMaybe (just 3) (λx.just (plus x 1))) (just 4)
+alphaEq (thenM   monadMaybe (just 3) (just 9)) (just 9)
+alphaEq (bindMOp monadEither (right 2) (λx.right (mult x 3))) (right 6)
+alphaEq (thenM   monadEither (left "err") (right 5)) (left "err")
+alphaEq (bindMOp monadList [1,2] (λx.[x,x])) [1,1,2,2]
+alphaEq (thenM   monadList [1,2] [3]) [3,3]
 
 # State monad dictionary sanity
 alphaEq (runState (returnM monadState 42) 0) (pair 42 0)
@@ -520,37 +520,45 @@ choosePair = λxs ys.\
 alphaEq (choosePair [1,2] [10,20])\
         [pair 1 10, pair 1 20, pair 2 10, pair 2 20]
 
-# Do-notation style macros over dictionaries
+# Do-style sequencing helpers over dictionaries (function-based)
 
 # Generic doM (dictionary-polymorphic)
-alphaEq (doM monadMaybe (just 3) x -> just (plus x 1)) (just 4)
-alphaEq (doM monadList [1,2] x -> [x, succ x]) [1,2,2,3]
+alphaEq (doM monadMaybe (just 3) (λx.just (plus x 1))) (just 4)
+alphaEq (doM monadList [1,2] (λx.[x, succ x])) [1,2,2,3]
 
-# Multi-step doMaybe / doList chaining
-alphaEq (doMaybe (just 3) x -> (just (plus x 1)) y -> (just (mult x y)))\
+# Multi-step doMaybe / doList chaining via nesting
+alphaEq (doMaybe (just 3)\
+                 (λx. doMaybe (just (plus x 1))\
+                             (λy. just (mult x y))))\
   (just (mult 3 4))
 
-alphaEq (doList [1,2] x -> [10,20] y -> [pair x y])\
+alphaEq (doList [1,2]\
+               (λx. doList [10,20]\
+                           (λy. [pair x y])))\
   [pair 1 10, pair 1 20, pair 2 10, pair 2 20]
 
 # doEither: short-circuit on first Left
-alphaEq (doEither (right 3) x -> (right (succ x))) (right 4)
-alphaEq (doEither (left "err") x -> (right (succ x))) (left "err")
+alphaEq (doEither (right 3) (λx.right (succ x))) (right 4)
+alphaEq (doEither (left "err") (λx.right (succ x))) (left "err")
 
-# doState: thread state through two increments
+# doState: thread state through two increments via nesting
 incState = λn.λs.pair (plus n s) (succ s)
-alphaEq (runState (doState (returnState 0) a -> incState a b -> returnState b) 1)\
+alphaEq (runState\
+          (doState (returnState 0)\
+                   (λa. doState (incState a)\
+                               (λb.returnState b)))\
+          1)\
   (pair 2 3)
 
 # Either: accumulate a single failing step in a pipeline
-stepOk   = λn.if (lt n 10) (right (succ n)) (left "too-big")
+stepOk   = λn.if (lt n 10) (right (succ n)) (left "tooBig")
 pipelineEither = λn.\
   bindM monadEither (stepOk n) (λa.\
   bindM monadEither (stepOk a) (λb.\
   returnM monadEither (plus a b)))
 
 alphaEq (pipelineEither 3) (right (plus 4 5))
-alphaEq (pipelineEither 10) (left "too-big")
+alphaEq (pipelineEither 10) (left "tooBig")
 
 # -----------------------------------------------------------------------------
 # Capture-avoidance, Strategy Cross-Checks, and Binder Mode Tests

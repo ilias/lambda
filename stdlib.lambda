@@ -1112,21 +1112,18 @@ mapM = λmonad f xs.\
 
 sequenceM = λmonad ms. mapM monad (λx.x) ms
 
-# Infix-style helpers (Haskell-inspired)
+## Monadic helper aliases (Haskell-inspired semantics)
 #
-#   (>>=) : Monad m -> m a -> (a -> m b) -> m b
-#   (>>)  : Monad m -> m a -> m b -> m b
+# We avoid redefining symbolic operators like `>>=` / `>>` directly,
+# since the parser already uses `>=` and `>` and would mis-tokenize
+# those names. Instead we provide clear helpers with the same
+# parameter order and behaviour:
 #
-# These keep the dictionary explicit but provide a familiar operator
-# surface. Typical use:
-#   >>=
-#     monadMaybe
-#     (just 3)
-#     (λx.just (plus x 1))
-# or via macros below for do-style notation.
+#   bindMOp dict m f  ≈  bindM dict m f       -- (>>=)
+#   thenM  dict m k  ≈  bindM dict m (λ_. k)  -- (>>)
 
->>= = λmonad m f.bindM monad m f
->>  = λmonad m k.bindM monad m (λ_.k)
+bindMOp = λmonad m f.bindM monad m f
+thenM   = λmonad m k.bindM monad m (λ_.k)
 
 
 # -----------------------------------------------------------------------------
@@ -1166,6 +1163,28 @@ monadEither       = MonadCls pureEither bindEither
 
 # State monad instance (state already threaded via helpers)
 monadState = MonadCls returnState bindState
+
+# -----------------------------------------------------------------------------
+# 5.5.2. Do-style sequencing helpers
+#
+# These provide a lightweight, dictionary-based "do" style. Instead of
+# introducing complex macros that interact with `->` parsing, we keep the
+# core primitives as ordinary functions that take an explicit continuation
+# (a lambda) as their last argument.
+#
+#   doM dict m (λx. body)      == bindM dict m (λx. body)
+#   doMaybe m (λx. body)       == bindM monadMaybe  m (λx. body)
+#   doList  m (λx. body)       == bindM monadList   m (λx. body)
+#   doEither m (λx. body)      == bindM monadEither m (λx. body)
+#   doState m (λx. body)       == bindM monadState  m (λx. body)
+#
+# Multi-step workflows can be expressed by nesting these helpers.
+
+doM      = λdict m k.bindM dict m k
+doMaybe  = λm k.bindM monadMaybe  m k
+doList   = λm k.bindM monadList   m k
+doEither = λm k.bindM monadEither m k
+doState  = λm k.bindM monadState  m k
 
 # -----------------------------------------------------------------------------
 # Roadmap Item 2: Show / pretty helpers to disambiguate common encodings.
@@ -1690,33 +1709,6 @@ eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft
 :macro (case2 $expr $v1 $r1 $v2 $r2) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 error)))
 :macro (case3 $expr $v1 $r1 $v2 $r2 :else $r3) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 $r3)))
 :macro (case3 $expr $v1 $r1 $v2 $r2 $v3 $r3) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 (if (eq x $v3) $r3 error))))
-
-# -----------------------------------------------------------------------------
-# 9.1.1. Monad-aware Do-notation (dictionary-based)
-#
-# These macros provide lightweight, Haskell-style "do" notation over the
-# explicit Monad dictionaries defined in Section 5.5. The core macro `doM`
-# is dictionary-polymorphic; specialized wrappers (`doMaybe`, `doList`,
-# `doEither`, `doState`) fix the dictionary for common monads.
-#
-# Grammar (conceptual):
-#   doM dict m1 x1 -> m2 x2 -> ... mn xn -> result
-#
-# Desugaring (two-step example):
-#   doM dict m1 x -> m2 y -> result
-#   ==> bindM dict m1 (λx. bindM dict m2 (λy. result))
-#
-# Base case: a single bind followed by a pure body.
-:macro (doM $dict $m $x -> $body) => (bindM $dict $m (λ$x.$body))
-
-# Recursive case: first bind plus remaining steps; uses variadic rest capture.
-:macro (doM $dict $m $x -> $rest...) => (bindM $dict $m (λ$x.doM $dict $rest...))
-
-# Specialized convenience wrappers for common monads
-:macro (doMaybe $rest...) => (doM monadMaybe $rest...)
-:macro (doList $rest...)  => (doM monadList  $rest...)
-:macro (doEither $rest...) => (doM monadEither $rest...)
-:macro (doState $rest...)  => (doM monadState $rest...)
 
 # -----------------------------------------------------------------------------
 # 9.2. Math and Comparison Macros
