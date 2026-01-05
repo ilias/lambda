@@ -1062,6 +1062,112 @@ mbind = maybeBind
 ebind = eitherBind
 
 # -----------------------------------------------------------------------------
+# 5.5. Tiny Haskell-Style Typeclass Dictionaries
+#
+# This section encodes a minimal subset of Haskell's typeclass hierarchy
+# (Functor, Applicative, Monad) using explicit dictionary passing.
+#
+# ENCODING STRATEGY:
+#   - Each "class" is a Church-encoded record (nested pairs) of methods.
+#   - Callers pass dictionaries explicitly, enabling ad-hoc polymorphism.
+#   - Instances are ordinary values (functorList, monadMaybe, ...).
+#
+# DICTIONARY SHAPES (records as nested pairs):
+#   Functor     = { fmap }
+#   Applicative = { pure, ap }
+#   Monad       = { return, bind }
+#
+# SELECTORS:
+#   fmapF   fun   = fun.fmap
+#   pureA   app   = app.pure
+#   apA     app   = app.ap
+#   returnM monad = monad.return
+#   bindM   monad = monad.bind
+#
+# These shapes are intentionally simple and mirror the standard class
+# signatures in Haskell, but remain fully first-class lambda values.
+# -----------------------------------------------------------------------------
+
+# Class dictionary constructors
+Functor     = λfmap.            pair fmap nil
+Applicative = λpureF apF.       pair pureF (pair apF nil)
+MonadCls    = λret bindF.       pair ret (pair bindF nil)
+
+# Selectors
+fmapF   = λfunDict.  first funDict
+pureA   = λappDict.  first appDict
+apA     = λappDict.  first (second appDict)
+returnM = λmonDict.  first monDict
+bindM   = λmonDict.  first (second monDict)
+
+# Generic monadic helpers (dictionary-passing style)
+# mapM      : Monad m -> (a -> m b) -> [a] -> m [b]
+# sequenceM : Monad m -> [m a] -> m [a]
+mapM = λmonad f xs.\
+    foldr (λx acc.\
+        bindM monad (f x)\
+            (λy. bindM monad acc (λys. returnM monad (cons y ys))))\
+          (returnM monad nil)\
+          xs
+
+sequenceM = λmonad ms. mapM monad (λx.x) ms
+
+# Infix-style helpers (Haskell-inspired)
+#
+#   (>>=) : Monad m -> m a -> (a -> m b) -> m b
+#   (>>)  : Monad m -> m a -> m b -> m b
+#
+# These keep the dictionary explicit but provide a familiar operator
+# surface. Typical use:
+#   >>=
+#     monadMaybe
+#     (just 3)
+#     (λx.just (plus x 1))
+# or via macros below for do-style notation.
+
+>>= = λmonad m f.bindM monad m f
+>>  = λmonad m k.bindM monad m (λ_.k)
+
+
+# -----------------------------------------------------------------------------
+# 5.5.1. Core Instances
+#
+# Minimal instances for common data types, mirroring Haskell's defaults.
+#
+# List ([])  : Functor, Applicative, Monad
+# Maybe      : Functor, Applicative, Monad
+# Either e   : Functor, Applicative, Monad (right-biased)
+# State s    : Monad (already encoded via returnState/bindState)
+# -----------------------------------------------------------------------------
+
+# List instances
+functorList      = Functor map
+pureList         = λx.cons x nil
+apList           = λfs xs.concat (map (λf.map f xs) fs)    # all combinations
+applicativeList  = Applicative pureList apList
+bindList         = λxs f.concat (map f xs)
+monadList        = MonadCls pureList bindList
+
+# Maybe instances (right-biased option type)
+functorMaybe     = Functor maybeMap
+pureMaybe        = maybeReturn
+apMaybe          = maybeAp
+applicativeMaybe = Applicative pureMaybe apMaybe
+bindMaybe        = maybeBind
+monadMaybe       = MonadCls pureMaybe bindMaybe
+
+# Either instances (right-biased error type)
+functorEither     = Functor eitherMap
+pureEither        = eitherReturn
+apEither          = eitherAp
+applicativeEither = Applicative pureEither apEither
+bindEither        = eitherBind
+monadEither       = MonadCls pureEither bindEither
+
+# State monad instance (state already threaded via helpers)
+monadState = MonadCls returnState bindState
+
+# -----------------------------------------------------------------------------
 # Roadmap Item 2: Show / pretty helpers to disambiguate common encodings.
 # Problem: Church encodings can make 0 / false / nil / nothing ambiguous when
 # printed raw. These helpers build tagged textual representations so users can
@@ -1584,6 +1690,33 @@ eitherEq = λeqL.λeqR.λe1.λe2.if (and (isLeft e1) (isLeft e2)) (eqL (fromLeft
 :macro (case2 $expr $v1 $r1 $v2 $r2) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 error)))
 :macro (case3 $expr $v1 $r1 $v2 $r2 :else $r3) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 $r3)))
 :macro (case3 $expr $v1 $r1 $v2 $r2 $v3 $r3) => (let x = $expr in (if (eq x $v1) $r1 (if (eq x $v2) $r2 (if (eq x $v3) $r3 error))))
+
+# -----------------------------------------------------------------------------
+# 9.1.1. Monad-aware Do-notation (dictionary-based)
+#
+# These macros provide lightweight, Haskell-style "do" notation over the
+# explicit Monad dictionaries defined in Section 5.5. The core macro `doM`
+# is dictionary-polymorphic; specialized wrappers (`doMaybe`, `doList`,
+# `doEither`, `doState`) fix the dictionary for common monads.
+#
+# Grammar (conceptual):
+#   doM dict m1 x1 -> m2 x2 -> ... mn xn -> result
+#
+# Desugaring (two-step example):
+#   doM dict m1 x -> m2 y -> result
+#   ==> bindM dict m1 (λx. bindM dict m2 (λy. result))
+#
+# Base case: a single bind followed by a pure body.
+:macro (doM $dict $m $x -> $body) => (bindM $dict $m (λ$x.$body))
+
+# Recursive case: first bind plus remaining steps; uses variadic rest capture.
+:macro (doM $dict $m $x -> $rest...) => (bindM $dict $m (λ$x.doM $dict $rest...))
+
+# Specialized convenience wrappers for common monads
+:macro (doMaybe $rest...) => (doM monadMaybe $rest...)
+:macro (doList $rest...)  => (doM monadList  $rest...)
+:macro (doEither $rest...) => (doM monadEither $rest...)
+:macro (doState $rest...)  => (doM monadState $rest...)
 
 # -----------------------------------------------------------------------------
 # 9.2. Math and Comparison Macros

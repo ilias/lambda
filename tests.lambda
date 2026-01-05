@@ -402,6 +402,156 @@ alphaEq (maybeMap succ nothing) nothing
 # --- Maybe Monadic / Applicative Helpers (new 2025-09) ---
 alphaEq (maybeBind (just 3) (λx.just (plus x 1))) (just 4)
 
+# --- Tiny Haskell-style Typeclass Dictionaries & Helpers ---
+
+# Functor instances
+alphaEq (fmapF functorList succ [1,2,3]) [2,3,4]
+alphaEq (fmapF functorMaybe succ (just 4)) (just 5)
+alphaEq (fmapF functorMaybe succ nothing) nothing
+alphaEq (fmapF functorEither (λx.plus x 1) (right 4)) (right 5)
+alphaEq (fmapF functorEither (λx.plus x 1) (left 1)) (left 1)
+
+# Applicative instances (via dictionaries)
+alphaEq (pureA applicativeMaybe 7) (just 7)
+alphaEq (apA   applicativeMaybe (just succ) (just 3)) (just 4)
+alphaEq (pureA applicativeList 9) [9]
+alphaEq (apA   applicativeList [succ, (λx.plus x 10)] [1,2]) [2,3,11,12]
+
+# Monad instances (via dictionaries)
+alphaEq (returnM monadMaybe 5) (just 5)
+alphaEq (bindM   monadMaybe (just 3) (λx.just (plus x 1))) (just 4)
+alphaEq (bindM   monadMaybe nothing (λx.just (plus x 1))) nothing
+
+alphaEq (returnM monadEither 5) (right 5)
+alphaEq (bindM   monadEither (right 3) (λx.right (plus x 1))) (right 4)
+alphaEq (bindM   monadEither (left  1) (λx.right (plus x 1))) (left 1)
+
+alphaEq (returnM monadList 5) [5]
+alphaEq (bindM   monadList [1,2] (λx.[x,x])) [1,1,2,2]
+
+# Infix-style helpers (>>=, >>) with explicit dictionaries
+alphaEq (>>= monadMaybe (just 3) (λx.just (plus x 1))) (just 4)
+alphaEq (>>  monadMaybe (just 3) (just 9)) (just 9)
+alphaEq (>>= monadEither (right 2) (λx.right (mult x 3))) (right 6)
+alphaEq (>>  monadEither (left "err") (right 5)) (left "err")
+alphaEq (>>= monadList [1,2] (λx.[x,x])) [1,1,2,2]
+alphaEq (>>  monadList [1,2] [3]) [3,3]
+
+# State monad dictionary sanity
+alphaEq (runState (returnM monadState 42) 0) (pair 42 0)
+alphaEq (runState (bindM monadState (returnM monadState 5)\
+             (λx.returnM monadState (succ x))) 0)\
+  (runState (returnM monadState 6) 0)
+
+# mapM / sequenceM generic helpers
+alphaEq (mapM monadMaybe (λn.if (iszero n) nothing (just (succ n))) [1,2,3])\
+  (just [2,3,4])
+alphaEq (mapM monadMaybe (λn.if (iszero n) nothing (just (succ n))) [0,1])\
+  nothing
+
+alphaEq (sequenceM monadMaybe [just 1, just 2]) (just [1,2])
+alphaEq (sequenceM monadMaybe [just 1, nothing, just 3]) nothing
+
+alphaEq (sequenceM monadEither [right 1, right 2]) (right [1,2])
+alphaEq (sequenceM monadEither [right 1, left 0, right 3]) (left 0)
+
+alphaEq (sequenceM monadList [[1,2],[3,4]]) [[1,3],[1,4],[2,3],[2,4]]
+
+# Functor laws (identity & composition) via dictionaries
+
+functorIdLaw = λdict xs.alphaEq (fmapF dict I xs) xs
+functorCompLaw = λdict f g xs.\
+  alphaEq (fmapF dict (λx.f (g x)) xs)\
+          (fmapF dict f (fmapF dict g xs))
+
+alphaEq (functorIdLaw functorList [1,2,3]) true
+alphaEq (functorIdLaw functorMaybe (just 5)) true
+alphaEq (functorIdLaw functorMaybe nothing) true
+
+alphaEq (functorCompLaw functorList (λx.plus x 10) succ [1,2]) true
+alphaEq (functorCompLaw functorMaybe (λx.plus x 10) succ (just 3)) true
+
+# Monad laws (left/right identity & associative bind) via dictionaries
+
+monadLeftId = λdict a f.\
+  alphaEq (bindM dict (returnM dict a) f)\
+          (f a)
+
+monadRightId = λdict m.\
+  alphaEq (bindM dict m (returnM dict))\
+          m
+
+monadAssoc = λdict m f g.\
+  alphaEq (bindM dict (bindM dict m f) g)\
+          (bindM dict m (λx.bindM dict (f x) g))
+
+# Maybe monad laws
+alphaEq (monadLeftId monadMaybe 5 (λx.just (plus x 1))) true
+alphaEq (monadRightId monadMaybe (just 7)) true
+alphaEq (monadAssoc monadMaybe (just 3)\
+                    (λx.just (plus x 1))\
+                    (λy.just (mult y 2))) true
+
+# List monad laws (on small finite lists)
+alphaEq (monadLeftId monadList 3 (λx.[x, succ x])) true
+alphaEq (monadRightId monadList [1,2]) true
+alphaEq (monadAssoc monadList [1,2]\
+                    (λx.[x, succ x])\
+                    (λy.[y, mult y 2])) true
+
+# Either monad left/right identity (simple success path)
+alphaEq (monadLeftId monadEither 4 (λx.right (succ x))) true
+alphaEq (monadRightId monadEither (right 9)) true
+
+# Tiny Haskell-style pipelines using mapM / sequenceM
+
+# Maybe: validate & increment a list of inputs, short-circuiting on failure
+validatePos = λn.if (leq 1 n) (just n) nothing
+incM        = λn.maybeBind (validatePos n) (λx.just (succ x))
+alphaEq (mapM monadMaybe incM [1,2,3]) (just [2,3,4])
+alphaEq (mapM monadMaybe incM [0,1,2]) nothing
+
+# List: nondeterministic "comprehension" style using monadList
+choosePair = λxs ys.\
+  bindM monadList xs (λx.\
+    bindM monadList ys (λy.\
+      returnM monadList (pair x y)))
+
+alphaEq (choosePair [1,2] [10,20])\
+        [pair 1 10, pair 1 20, pair 2 10, pair 2 20]
+
+# Do-notation style macros over dictionaries
+
+# Generic doM (dictionary-polymorphic)
+alphaEq (doM monadMaybe (just 3) x -> just (plus x 1)) (just 4)
+alphaEq (doM monadList [1,2] x -> [x, succ x]) [1,2,2,3]
+
+# Multi-step doMaybe / doList chaining
+alphaEq (doMaybe (just 3) x -> (just (plus x 1)) y -> (just (mult x y)))\
+  (just (mult 3 4))
+
+alphaEq (doList [1,2] x -> [10,20] y -> [pair x y])\
+  [pair 1 10, pair 1 20, pair 2 10, pair 2 20]
+
+# doEither: short-circuit on first Left
+alphaEq (doEither (right 3) x -> (right (succ x))) (right 4)
+alphaEq (doEither (left "err") x -> (right (succ x))) (left "err")
+
+# doState: thread state through two increments
+incState = λn.λs.pair (plus n s) (succ s)
+alphaEq (runState (doState (returnState 0) a -> incState a b -> returnState b) 1)\
+  (pair 2 3)
+
+# Either: accumulate a single failing step in a pipeline
+stepOk   = λn.if (lt n 10) (right (succ n)) (left "too-big")
+pipelineEither = λn.\
+  bindM monadEither (stepOk n) (λa.\
+  bindM monadEither (stepOk a) (λb.\
+  returnM monadEither (plus a b)))
+
+alphaEq (pipelineEither 3) (right (plus 4 5))
+alphaEq (pipelineEither 10) (left "too-big")
+
 # -----------------------------------------------------------------------------
 # Capture-avoidance, Strategy Cross-Checks, and Binder Mode Tests
 # -----------------------------------------------------------------------------
