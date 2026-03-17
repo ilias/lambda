@@ -886,13 +886,13 @@ dotnet build -c Release
 
 ```bash
 # Start interactive mode
-./lambda-cek
+./lambda
 
 # Load specific files
-./lambda-cek stdlib.lambda tests.lambda
+./lambda stdlib.lambda tests.lambda
 
 # Run with native arithmetic enabled by default
-./lambda-cek
+./lambda
 :native on
 ```
 
@@ -1038,7 +1038,7 @@ Contributions are welcome! To get started:
 
     ```bash
     git clone <repo-url>
-    cd lambda-cek-Y
+    cd lambda
     dotnet build
     ```
 
@@ -1120,19 +1120,19 @@ This section summarizes how to build and run each form of the interpreter: core 
 Build only:
 
 ```powershell
-dotnet build src/lambda-cek.csproj -c Release
+dotnet build src/lambda.csproj -c Release
 ```
 
 Pack (produces `.nupkg` in `artifacts`):
 
 ```powershell
-dotnet pack src/lambda-cek.csproj -c Release -o artifacts
+dotnet pack src/lambda.csproj -c Release -o artifacts
 ```
 
 Override version:
 
 ```powershell
-dotnet pack src/lambda-cek.csproj -c Release -o artifacts /p:PackageVersion=0.1.1
+dotnet pack src/lambda.csproj -c Release -o artifacts /p:PackageVersion=0.1.1
 ```
 
 Consume in another project:
@@ -1146,19 +1146,19 @@ dotnet add package LambdaCalculus.Interpreter --version 0.1.0
 Run (Debug):
 
 ```powershell
-dotnet run --project src-cli/lambda-cek.cli.csproj
+dotnet run --project src-cli/lambda.cli.csproj
 ```
 
 Run (Release):
 
 ```powershell
-dotnet run -c Release --project src-cli/lambda-cek.cli.csproj
+dotnet run -c Release --project src-cli/lambda.cli.csproj
 ```
 
 Load extra lambda files at startup:
 
 ```powershell
-dotnet run --project src-cli/lambda-cek.cli.csproj -- mydefs.lambda tests.lambda
+dotnet run --project src-cli/lambda.cli.csproj -- mydefs.lambda tests.lambda
 ```
 
 Inside REPL: use `:help`, exit with `:quit` / `:exit`.
@@ -1168,7 +1168,7 @@ Inside REPL: use `:help`, exit with `:quit` / `:exit`.
 Starts a minimal HTTP host (e.g., evaluation endpoints if implemented):
 
 ```powershell
-dotnet run --project src-web/lambda-cek.web.csproj
+dotnet run --project src-web/lambda.web.csproj
 ```
 
 If HTTPS dev cert not trusted:
@@ -1180,7 +1180,7 @@ dotnet dev-certs https --trust
 Override URL/port:
 
 ```powershell
-dotnet run --project src-web/lambda-cek.web.csproj -- --urls http://localhost:5055
+dotnet run --project src-web/lambda.web.csproj -- --urls http://localhost:5055
 ```
 
 ### 4. Web UI (`src-webui`)
@@ -1190,7 +1190,7 @@ Interactive browser-based REPL with multi-tab output, search, filters.
 Run:
 
 ```powershell
-dotnet run --project src-webui/lambda-cek.webui.csproj
+dotnet run --project src-webui/lambda.webui.csproj
 ```
 
 Navigate to the printed local URL (commonly <http://localhost:5000>).
@@ -1206,8 +1206,8 @@ Using the build script (includes Docker unless `-NoDocker`):
 Manual build & run:
 
 ```powershell
-docker build -t lambda-cek-webui -f src-webui/Dockerfile .
-docker run -p 8080:8080 --name lambda-cek-webui lambda-cek-webui
+docker build -t lambda-webui -f src-webui/Dockerfile .
+docker run -p 8080:8080 --name lambda-webui lambda-webui
 ```
 
 Open <http://localhost:8080>.
@@ -1233,14 +1233,14 @@ Examples:
 Outputs:
 
 - NuGet package → `artifacts/*.nupkg`
-- Docker image → `lambda-cek-webui` (run with `docker run -p 8080:8080 lambda-cek-webui`)
+- Docker image → `lambda-webui` (run with `docker run -p 8080:8080 lambda-webui`)
 
 ### 7. Running `tests.lambda`
 
 CLI:
 
 ```powershell
-dotnet run --project src-cli/lambda-cek.cli.csproj -- tests.lambda
+dotnet run --project src-cli/lambda.cli.csproj -- tests.lambda
 ```
 
 In REPL: `:load tests.lambda`
@@ -1249,7 +1249,7 @@ In REPL: `:load tests.lambda`
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| NU5019 README not found | Wrong relative path in `.csproj` | Confirm `src/lambda-cek.csproj` uses `..\README.md` |
+| NU5019 README not found | Wrong relative path in `.csproj` | Confirm `src/lambda.csproj` uses `..\README.md` |
 | NETSDK1057 preview warning | net9.0 preview | Ignore or remove `net9.0` from `TargetFrameworks` |
 | HTTPS trust prompt | Dev cert untrusted | `dotnet dev-certs https --trust` |
 | Port in use | Conflict with existing process | Use `--urls` to pick another port |
@@ -1259,10 +1259,11 @@ In REPL: `:load tests.lambda`
 | Target | Command |
 |--------|---------|
 | Build all | `dotnet build -c Release` |
-| Pack | `dotnet pack src/lambda-cek.csproj -c Release -o artifacts` |
-| CLI REPL | `dotnet run --project src-cli/lambda-cek.cli.csproj` |
-| Web UI | `dotnet run --project src-webui/lambda-cek.webui.csproj` |
-| Web API | `dotnet run --project src-web/lambda-cek.web.csproj` |
-| Docker image | `docker build -t lambda-cek-webui -f src-webui/Dockerfile .` |
+| Pack | `dotnet pack src/lambda.csproj -c Release -o artifacts` |
+| CLI REPL | `dotnet run --project src-cli/lambda.cli.csproj` |
+| Web UI | `dotnet run --project src-webui/lambda.webui.csproj` |
+| Web API | `dotnet run --project src-web/lambda.web.csproj` |
+| Docker image | `docker build -t lambda-webui -f src-webui/Dockerfile .` |
 
 ---
+

@@ -3,11 +3,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>lambda.webui</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\src\lambda-cek.csproj" />
+    <ProjectReference Include="..\src\lambda.csproj" />
     <Content Include="..\stdlib.lambda">
       <Link>stdlib.lambda</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

@@ -22,7 +22,7 @@ if ($CleanArtifacts -and (Test-Path $Output)) {
 if (-not $NoBuild) {
 	Write-Host "[build] Restoring & compiling solution (Release)" -ForegroundColor Cyan
 	dotnet restore | Out-Null
-	dotnet build lambda-cek.sln --configuration Release --no-restore
+	dotnet build lambda.sln --configuration Release --no-restore
 }
 else {
 	Write-Host "[build] Skipping dotnet build (NoBuild flag)." -ForegroundColor Yellow
@@ -156,15 +156,15 @@ if ($Pack) {
 	}
 
 	# Construct pack args
-	$packArgs = @('pack', 'src/lambda-cek.csproj', '-c', 'Release', '-o', $Output, '--no-build')
+	$packArgs = @('pack', 'src/lambda.csproj', '-c', 'Release', '-o', $Output, '--no-build')
 	if ($Version) { $packArgs += "/p:PackageVersion=$Version" }
 	Write-Host "[pack] dotnet $($packArgs -join ' ')" -ForegroundColor Cyan
 	dotnet @packArgs
 }
 
 if (-not $NoDocker) {
-	$name = 'lambda-cek-webui'
-	$altName = 'lambda-webui'
+	$name = 'lambda-webui'
+	$altName = 'lambda-cek-webui'
 
 	Write-Host "[docker] Preparing image build" -ForegroundColor Cyan
 	$containers = @(docker ps -aq -f "name=^(${name}|${altName})$" 2>$null)
@@ -195,6 +195,6 @@ Write-Host "[done] Build pipeline completed." -ForegroundColor Green
 # CLI: dotnet run --project src-cli
 # Web API: dotnet run --project src-web
 # Web UI: dotnet run --project src-webui
-# Pack: dotnet pack src/lambda-cek.csproj -c Release -o artifacts
+# Pack: dotnet pack src/lambda.csproj -c Release -o artifacts
 # All-in-one: .\build.ps1 -Pack (add -NoDocker if you don’t need the image)
 # Validate only: .\build.ps1 -Pack -Validate -SkipPackOnError

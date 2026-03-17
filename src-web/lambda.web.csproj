@@ -3,10 +3,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>lambda.web</AssemblyName>
   <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\src\lambda-cek.csproj" />
+    <ProjectReference Include="..\src\lambda.csproj" />
     <Content Include="..\stdlib.lambda">
       <Link>stdlib.lambda</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

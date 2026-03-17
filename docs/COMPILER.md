@@ -22,10 +22,10 @@ Sections
 
 | Project | Type | Path | Purpose |
 |---------|------|------|---------|
-| `lambda-cek` | Class Library (`net8.0;net9.0`) | `src/` | Core interpreter (parser, CEK, macros, natives) |
-| `lambda-cek.cli` | Console App | `src-cli/` | Interactive REPL / file runner |
-| `lambda-cek.web` | Minimal Web API | `src-web/` | HTTP endpoints (eval/load/health) |
-| `lambda-cek.webui` | ASP.NET Core + Static UI | `src-webui/` | Browser REPL + streaming logs |
+| `lambda` | Class Library (`net8.0;net9.0`) | `src/` | Core interpreter (parser, CEK, macros, natives) |
+| `lambda.cli` | Console App | `src-cli/` | Interactive REPL / file runner |
+| `lambda.web` | Minimal Web API | `src-web/` | HTTP endpoints (eval/load/health) |
+| `lambda.webui` | ASP.NET Core + Static UI | `src-webui/` | Browser REPL + streaming logs |
 
 ## Prerequisites
 
@@ -57,8 +57,8 @@ dotnet build
 CLI REPL:
 
 ```powershell
-dotnet run --project src-cli/lambda-cek.cli.csproj
-dotnet run --project src-cli/lambda-cek.cli.csproj -- myfile.lambda tests.lambda
+dotnet run --project src-cli/lambda.cli.csproj
+dotnet run --project src-cli/lambda.cli.csproj -- myfile.lambda tests.lambda
 ```
 
 ### Non-Interactive Script Mode (`--no-repl`)
@@ -67,10 +67,10 @@ For CI, smoke tests, or batch processing you can run the CLI without entering th
 
 ```powershell
 # Single script
-dotnet run --project src-cli/lambda-cek.cli.csproj -- --no-repl tests/sprint1-smoke.lambda
+dotnet run --project src-cli/lambda.cli.csproj -- --no-repl tests/sprint1-smoke.lambda
 
 # Multiple scripts (executed in order)
-dotnet run --project src-cli/lambda-cek.cli.csproj -- --no-repl tests/module-export-hide.lambda tests/module-export-hide-smoke.lambda
+dotnet run --project src-cli/lambda.cli.csproj -- --no-repl tests/module-export-hide.lambda tests/module-export-hide-smoke.lambda
 ```
 
 Behaviors & Notes:
@@ -90,21 +90,21 @@ Minimal scripted doc export example:
 Run with:
 
 ```powershell
-dotnet run --project src-cli/lambda-cek.cli.csproj -- --no-repl script.lambda
+dotnet run --project src-cli/lambda.cli.csproj -- --no-repl script.lambda
 ```
 
 Web API:
 
 ```powershell
-dotnet run --project src-web/lambda-cek.web.csproj
+dotnet run --project src-web/lambda.web.csproj
 # Override port
-dotnet run --project src-web/lambda-cek.web.csproj -- --urls http://localhost:5055
+dotnet run --project src-web/lambda.web.csproj -- --urls http://localhost:5055
 ```
 
 Web UI:
 
 ```powershell
-dotnet run --project src-webui/lambda-cek.webui.csproj
+dotnet run --project src-webui/lambda.webui.csproj
 ```
 
 Navigate to the printed URL (typically <http://localhost:5000>). Toggle streaming / WebSocket in UI.
@@ -180,25 +180,25 @@ choco install pandoc
 Build image:
 
 ```powershell
-docker build -t lambda-cek-webui -f src-webui/Dockerfile .
+docker build -t lambda-webui -f src-webui/Dockerfile .
 ```
 
 Run:
 
 ```powershell
-docker run --rm -p 8080:8080 --name lambda-cek lambda-cek-webui
+docker run --rm -p 8080:8080 --name lambda-webui lambda-webui
 ```
 
 Bind mount repo (read-only) for dynamic file loading:
 
 ```powershell
-docker run --rm -p 8080:8080 -v $PWD:/data:ro --name lambda-cek lambda-cek-webui
+docker run --rm -p 8080:8080 -v $PWD:/data:ro --name lambda-webui lambda-webui
 ```
 
 Custom port:
 
 ```powershell
-docker run --rm -e ASPNETCORE_URLS=http://0.0.0.0:5005 -p 5005:5005 lambda-cek-webui
+docker run --rm -e ASPNETCORE_URLS=http://0.0.0.0:5005 -p 5005:5005 lambda-webui
 ```
 
 Security considerations:
@@ -213,13 +213,13 @@ Security considerations:
 Pack core library:
 
 ```powershell
-dotnet pack src/lambda-cek.csproj -c Release -o artifacts
+dotnet pack src/lambda.csproj -c Release -o artifacts
 ```
 
 Override version:
 
 ```powershell
-dotnet pack src/lambda-cek.csproj -c Release -o artifacts /p:PackageVersion=0.1.1
+dotnet pack src/lambda.csproj -c Release -o artifacts /p:PackageVersion=0.1.1
 ```
 
 Consume:
@@ -351,10 +351,11 @@ Practical guidance:
 | Target | Command |
 |--------|---------|
 | Build all | `dotnet build -c Release` |
-| Pack NuGet | `dotnet pack src/lambda-cek.csproj -c Release -o artifacts` |
-| CLI REPL | `dotnet run --project src-cli/lambda-cek.cli.csproj` |
-| Web UI | `dotnet run --project src-webui/lambda-cek.webui.csproj` |
-| Web API | `dotnet run --project src-web/lambda-cek.web.csproj` |
-| Docker image | `docker build -t lambda-cek-webui -f src-webui/Dockerfile .` |
+| Pack NuGet | `dotnet pack src/lambda.csproj -c Release -o artifacts` |
+| CLI REPL | `dotnet run --project src-cli/lambda.cli.csproj` |
+| Web UI | `dotnet run --project src-webui/lambda.webui.csproj` |
+| Web API | `dotnet run --project src-web/lambda.web.csproj` |
+| Docker image | `docker build -t lambda-webui -f src-webui/Dockerfile .` |
 
 See `LANGUAGE.md` for syntax / macros and `COMMANDS.md` for interactive reference.
+
