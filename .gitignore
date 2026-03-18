@@ -14,6 +14,8 @@ artifacts/
 # visual studio
 .vs/
 *.user
+# release folder
+release/
 
 .fake
 readme.html

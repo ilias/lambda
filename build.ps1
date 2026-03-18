@@ -23,6 +23,54 @@ if (-not $NoBuild) {
 	Write-Host "[build] Restoring & compiling solution (Release)" -ForegroundColor Cyan
 	dotnet restore | Out-Null
 	dotnet build lambda.sln --configuration Release --no-restore
+
+	$releaseDir = Join-Path $PSScriptRoot 'release'
+	if (-not (Test-Path $releaseDir)) {
+		New-Item -ItemType Directory -Path $releaseDir | Out-Null
+	}
+
+	$exeCandidates = Get-ChildItem -Path $PSScriptRoot -Recurse -File -Filter *.exe |
+		Where-Object { $_.FullName -match "\\bin\\Release\\" }
+	if ($exeCandidates.Count -gt 0) {
+		Write-Host "[release] Copying executables to '$releaseDir'" -ForegroundColor Cyan
+		foreach ($exe in $exeCandidates) {
+			Copy-Item $exe.FullName -Destination $releaseDir -Force
+		}
+	} else {
+		Write-Host "[release] No Release executables found to copy." -ForegroundColor DarkGray
+	}
+
+	$dllCandidates = Get-ChildItem -Path $PSScriptRoot -Recurse -File -Filter *.dll |
+		Where-Object { $_.FullName -match "\\bin\\Release\\" }
+	if ($dllCandidates.Count -gt 0) {
+		Write-Host "[release] Copying DLLs to '$releaseDir'" -ForegroundColor Cyan
+		foreach ($dll in $dllCandidates) {
+			Copy-Item $dll.FullName -Destination $releaseDir -Force
+		}
+	} else {
+		Write-Host "[release] No Release DLLs found to copy." -ForegroundColor DarkGray
+	}
+
+	$releaseLambdaFiles = @(
+		Join-Path $PSScriptRoot 'stdlib.lambda',
+		Join-Path $PSScriptRoot 'tests.lambda'
+	)
+	foreach ($lambdaFile in $releaseLambdaFiles) {
+		if (Test-Path $lambdaFile) {
+			Write-Host "[release] Copying $(Split-Path -Leaf $lambdaFile) to '$releaseDir'" -ForegroundColor Cyan
+			Copy-Item $lambdaFile -Destination $releaseDir -Force
+		} else {
+			Write-Host "[release] Missing $(Split-Path -Leaf $lambdaFile); skipping." -ForegroundColor Yellow
+		}
+	}
+
+	$stdlibDir = Join-Path $PSScriptRoot 'stdlib'
+	if (Test-Path $stdlibDir) {
+		Write-Host "[release] Copying stdlib/ to '$releaseDir'" -ForegroundColor Cyan
+		Copy-Item $stdlibDir -Destination (Join-Path $releaseDir 'stdlib') -Recurse -Force
+	} else {
+		Write-Host "[release] stdlib/ directory not found; skipping." -ForegroundColor DarkGray
+	}
 }
 else {
 	Write-Host "[build] Skipping dotnet build (NoBuild flag)." -ForegroundColor Yellow
